@@ -1,4 +1,4 @@
-package com.droidclaw.droidclaw
+package com.droidclaw.app
 
 import io.flutter.embedding.android.FlutterActivity
 
