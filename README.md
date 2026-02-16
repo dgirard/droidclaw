@@ -27,7 +27,7 @@ DroidClaw is a port of [PicoClaw](https://github.com/sipeed/picoclaw), a Go-base
 
 - **Agent Loop**: the agentic loop (LLM -> tool calls -> iteration)
 - **LLM Providers**: multi-provider abstraction (Anthropic, OpenAI, OpenRouter, Groq, Gemini)
-- **Tools**: web_search (Brave/DuckDuckGo), web_fetch, file (sandboxed), subagent, message
+- **Tools**: web_search (Brave), web_fetch, file (sandboxed), get_location (GPS), subagent, message
 - **Sessions**: conversation history with Hive persistence
 - **Memory**: long-term MEMORY.md + daily notes
 - **Skills**: three-tier loading (builtin -> global -> workspace)
@@ -81,7 +81,7 @@ graph TB
     AL --> SM
     AL --> CB
     LP --> LLM["LLM APIs (Anthropic, OpenRouter, ...)"]
-    TR --> Tools["web_search / web_fetch / file / subagent"]
+    TR --> Tools["web_search / web_fetch / file / get_location / subagent"]
 ```
 
 ### Agent Loop
@@ -162,7 +162,7 @@ lib/
 └── shared/                      # Constants
 ```
 
-**43 Dart files** in total.
+**50 Dart files** in total.
 
 ---
 
@@ -249,6 +249,36 @@ Both interfaces (chat UI and Telegram) consume the same `Stream<AgentEvent>`. Th
 
 ---
 
+## Tools
+
+The agent has access to 6 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
+
+Users can **enable or disable** individual tools from Settings > Tools > Manage Tools.
+
+| Tool | Name | Description |
+|------|------|-------------|
+| **Web Search** | `web_search` | Searches the web via the Brave Search API. Returns titles, URLs, and snippets. Requires a Brave API key configured in settings. |
+| **Web Fetch** | `web_fetch` | Fetches a web page via HTTP GET, strips HTML tags, and returns plain text content (max 50K chars). Follows redirects (max 5). Uses the Dart `http` package. Does not execute JavaScript. |
+| **File** | `file` | Sandboxed file operations within the app workspace: `read_file`, `write_file`, `list_dir`. Path validation prevents directory traversal outside the sandbox. |
+| **GPS Location** | `get_location` | Returns the device's current GPS coordinates (latitude, longitude, accuracy, altitude). Uses Android's `FusedLocationProviderClient` via the `geolocator` package, with automatic fallback from GPS to network location. Handles permission requests and service availability checks. |
+| **Sub-agent** | `subagent` | Spawns a sub-task with a fresh session. The main agent delegates a focused task to a sub-agent, which processes it independently and returns the result. The sub-agent session is cleaned up after completion. |
+| **Message** | `message` | Internal tool for sending messages directly to the user interface. Always enabled (not toggleable). Returns a silent result — the LLM sees no output, but the user sees the message. |
+
+### Tool Registration Flow
+
+```
+AppConfig.tools.disabledTools (persisted in SharedPreferences)
+    ↓
+toolRegistryProvider (rebuilds on config change)
+    ↓ only registers enabled tools
+ToolRegistry
+    ↓
+ContextBuilder (system prompt lists available tools)
+AgentLoop (sends tool definitions to LLM, executes tool calls)
+```
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -290,7 +320,7 @@ adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
 | | |
 |---|---|
-| **Dart files** | 43 |
+| **Dart files** | 50 |
 | **Analysis issues** | 0 |
 | **APK size (arm64)** | 18.8 MB |
 | **Native code** | None (pure Dart/Flutter) |

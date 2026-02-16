@@ -12,6 +12,7 @@ import '../core/session/session_manager.dart';
 import '../core/skills/skill_installer.dart';
 import '../core/skills/skill_loader.dart';
 import '../core/tools/file_tool.dart';
+import '../core/tools/location_tool.dart';
 import '../core/tools/message_tool.dart';
 import '../core/tools/subagent_tool.dart';
 import '../core/tools/tool.dart';
@@ -78,15 +79,28 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   final workspacePath = await storage.workspacePath;
   final braveApiKey = await configStorage.getBraveApiKey();
   final registry = ToolRegistry();
+  final disabled = config.tools.disabledTools;
 
-  registry.register(WebSearchTool(
-    braveApiKey: braveApiKey,
-    maxResults: config.tools.webSearchMaxResults,
-  ));
-  registry.register(WebFetchTool());
-  registry.register(FileTool(workspacePath: workspacePath));
+  if (!disabled.contains('web_search')) {
+    registry.register(WebSearchTool(
+      braveApiKey: braveApiKey,
+      maxResults: config.tools.webSearchMaxResults,
+    ));
+  }
+  if (!disabled.contains('web_fetch')) {
+    registry.register(WebFetchTool());
+  }
+  if (!disabled.contains('file')) {
+    registry.register(FileTool(workspacePath: workspacePath));
+  }
+  // MessageTool is always registered (internal UI mechanism).
   registry.register(MessageTool());
-  registry.register(SubagentTool());
+  if (!disabled.contains('get_location')) {
+    registry.register(LocationTool());
+  }
+  if (!disabled.contains('subagent')) {
+    registry.register(SubagentTool());
+  }
 
   return registry;
 });

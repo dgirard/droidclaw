@@ -57,6 +57,14 @@ class SettingsScreen extends ConsumerWidget {
           // Tools section
           _SectionHeader(title: 'Tools'),
           ListTile(
+            leading: const Icon(Icons.build_outlined),
+            title: const Text('Manage Tools'),
+            subtitle: const Text('Enable or disable agent tools'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () =>
+                Navigator.pushNamed(context, '/settings/tools'),
+          ),
+          ListTile(
             leading: const Icon(Icons.search_outlined),
             title: const Text('Web Search'),
             subtitle: Text(
