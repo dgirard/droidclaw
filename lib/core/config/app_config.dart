@@ -142,32 +142,27 @@ class ProviderConfig {
 }
 
 /// Tools-specific configuration.
+/// Note: Brave API key is stored in SecureStorage, not here.
 class ToolsConfig {
-  final String? braveApiKey;
   final int webSearchMaxResults;
 
   const ToolsConfig({
-    this.braveApiKey,
     this.webSearchMaxResults = AppConstants.webSearchMaxResults,
   });
 
   factory ToolsConfig.fromJson(Map<String, dynamic> json) => ToolsConfig(
-        braveApiKey: json['brave_api_key'] as String?,
         webSearchMaxResults: json['web_search_max_results'] as int? ??
             AppConstants.webSearchMaxResults,
       );
 
   Map<String, dynamic> toJson() => {
-        if (braveApiKey != null) 'brave_api_key': braveApiKey,
         'web_search_max_results': webSearchMaxResults,
       };
 
   ToolsConfig copyWith({
-    String? braveApiKey,
     int? webSearchMaxResults,
   }) =>
       ToolsConfig(
-        braveApiKey: braveApiKey ?? this.braveApiKey,
         webSearchMaxResults: webSearchMaxResults ?? this.webSearchMaxResults,
       );
 }

@@ -32,6 +32,13 @@ class ConfigStorage {
   Future<void> deleteApiKey(String providerName) =>
       _storage.deleteSecure('api_key_$providerName');
 
+  /// Get Brave Search API key from secure storage.
+  Future<String?> getBraveApiKey() => _storage.getSecure('brave_api_key');
+
+  /// Save Brave Search API key to secure storage.
+  Future<void> setBraveApiKey(String apiKey) =>
+      _storage.setSecure('brave_api_key', apiKey);
+
   /// Check if onboarding has been completed.
   bool get isOnboardingComplete =>
       _storage.getBool(AppConstants.onboardingCompleteKey) ?? false;

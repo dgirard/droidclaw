@@ -54,6 +54,23 @@ class SettingsScreen extends ConsumerWidget {
 
           const Divider(),
 
+          // Tools section
+          _SectionHeader(title: 'Tools'),
+          ListTile(
+            leading: const Icon(Icons.search_outlined),
+            title: const Text('Web Search'),
+            subtitle: Text(
+              config.tools.webSearchMaxResults > 0
+                  ? 'Configure Brave Search API'
+                  : 'Configure Brave Search API',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () =>
+                Navigator.pushNamed(context, '/settings/web-search'),
+          ),
+
+          const Divider(),
+
           // Telegram section
           _SectionHeader(title: 'Channels'),
           Builder(

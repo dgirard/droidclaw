@@ -97,40 +97,76 @@ class WebSearchTool extends Tool {
   }
 
   Future<ToolResult> _searchDuckDuckGo(String query) async {
-    final uri = Uri.parse('https://api.duckduckgo.com/').replace(
-      queryParameters: {'q': query, 'format': 'json', 'no_html': '1'},
-    );
+    // Use DuckDuckGo HTML search endpoint (the JSON Instant Answer API
+    // only returns results for well-known entities, not general queries).
+    final uri = Uri.parse('https://html.duckduckgo.com/html/');
 
-    final response = await http.get(uri);
+    final response = await http.post(uri, body: {'q': query}, headers: {
+      'User-Agent': 'DroidClaw/1.0',
+    });
+
     if (response.statusCode != 200) {
       return ToolResult.error(
           'DuckDuckGo search error: ${response.statusCode}');
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final buffer = StringBuffer();
+    final html = response.body;
 
-    final abstract_ = data['Abstract'] as String?;
-    if (abstract_ != null && abstract_.isNotEmpty) {
-      buffer.writeln('Summary: $abstract_');
-      buffer.writeln('Source: ${data['AbstractURL']}');
-      buffer.writeln();
-    }
+    // Parse search results from HTML.
+    // Each result is in a <div class="result..."> with:
+    //   <a class="result__a" href="...">title</a>
+    //   <a class="result__snippet">description</a>
+    final resultPattern = RegExp(
+      r'class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)</a>'
+      r'[\s\S]*?'
+      r'class="result__snippet"[^>]*>(.*?)</a>',
+    );
 
-    final relatedTopics = data['RelatedTopics'] as List? ?? [];
-    for (final topic in relatedTopics.take(maxResults)) {
-      if (topic is Map && topic.containsKey('Text')) {
-        buffer.writeln('- ${topic['Text']}');
-        if (topic['FirstURL'] != null) {
-          buffer.writeln('  URL: ${topic['FirstURL']}');
-        }
-      }
-    }
+    final matches = resultPattern.allMatches(html).take(maxResults).toList();
 
-    final content = buffer.toString().trimRight();
-    if (content.isEmpty) {
+    if (matches.isEmpty) {
       return ToolResult.simple('No results found for: $query');
     }
-    return ToolResult.simple(content);
+
+    final llmBuffer = StringBuffer();
+    final userBuffer = StringBuffer();
+
+    for (final match in matches) {
+      var url = match.group(1) ?? '';
+      final title = _stripHtml(match.group(2) ?? 'No title');
+      final desc = _stripHtml(match.group(3) ?? 'No description');
+
+      // DuckDuckGo wraps URLs through a redirect — extract the real URL.
+      final uddgMatch = RegExp(r'uddg=([^&]+)').firstMatch(url);
+      if (uddgMatch != null) {
+        url = Uri.decodeComponent(uddgMatch.group(1)!);
+      }
+
+      llmBuffer.writeln('Title: $title');
+      llmBuffer.writeln('URL: $url');
+      llmBuffer.writeln('Description: $desc');
+      llmBuffer.writeln();
+
+      userBuffer.writeln('**[$title]($url)**');
+      userBuffer.writeln('$desc\n');
+    }
+
+    return ToolResult.dual(
+      forLLM: llmBuffer.toString().trimRight(),
+      forUser: userBuffer.toString().trimRight(),
+    );
+  }
+
+  /// Strip HTML tags and decode common HTML entities.
+  static String _stripHtml(String html) {
+    return html
+        .replaceAll(RegExp(r'<[^>]*>'), '')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#x27;', "'")
+        .replaceAll('&nbsp;', ' ')
+        .trim();
   }
 }

@@ -7,6 +7,7 @@ import 'features/settings/provider_config_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/settings/skills_screen.dart';
 import 'features/settings/telegram_config_screen.dart';
+import 'features/settings/web_search_config_screen.dart';
 import 'providers/app_providers.dart';
 
 /// Root MaterialApp with Material 3 theme and routing.
@@ -33,6 +34,7 @@ class DroidClawApp extends ConsumerWidget {
         '/settings/provider': (context) => const ProviderConfigScreen(),
         '/settings/skills': (context) => const SkillsScreen(),
         '/settings/telegram': (context) => const TelegramConfigScreen(),
+        '/settings/web-search': (context) => const WebSearchConfigScreen(),
       },
     );
   }

@@ -73,12 +73,14 @@ final skillInstallerProvider = Provider<SkillInstaller>((ref) {
 /// Tool registry with all tools registered.
 final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   final config = ref.watch(appConfigProvider);
+  final configStorage = ref.watch(configStorageProvider);
   final storage = ref.watch(storageServiceProvider);
   final workspacePath = await storage.workspacePath;
+  final braveApiKey = await configStorage.getBraveApiKey();
   final registry = ToolRegistry();
 
   registry.register(WebSearchTool(
-    braveApiKey: config.tools.braveApiKey,
+    braveApiKey: braveApiKey,
     maxResults: config.tools.webSearchMaxResults,
   ));
   registry.register(WebFetchTool());
