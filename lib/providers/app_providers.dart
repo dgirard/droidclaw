@@ -14,6 +14,7 @@ import '../core/skills/skill_loader.dart';
 import '../core/tools/file_tool.dart';
 import '../core/tools/location_tool.dart';
 import '../core/tools/message_tool.dart';
+import '../core/tools/reverse_geocode_tool.dart';
 import '../core/tools/subagent_tool.dart';
 import '../core/tools/tool.dart';
 import '../core/tools/web_scrape_js_tool.dart';
@@ -101,6 +102,9 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   registry.register(MessageTool());
   if (!disabled.contains('get_location')) {
     registry.register(LocationTool());
+  }
+  if (!disabled.contains('get_address')) {
+    registry.register(ReverseGeocodeTool());
   }
   if (!disabled.contains('subagent')) {
     registry.register(SubagentTool());

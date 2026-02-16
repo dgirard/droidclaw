@@ -50,6 +50,12 @@ const _tools = [
     icon: Icons.location_on_outlined,
   ),
   _ToolInfo(
+    name: 'get_address',
+    label: 'Reverse Geocoding',
+    description: 'Convert GPS coordinates to address',
+    icon: Icons.pin_drop_outlined,
+  ),
+  _ToolInfo(
     name: 'subagent',
     label: 'Sub-agent',
     description: 'Spawn sub-tasks for complex queries',
