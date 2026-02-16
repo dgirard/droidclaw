@@ -1,6 +1,6 @@
 # DroidClaw
 
-> Assistant IA personnel sur Android — agent loop + tool calling + double interface Chat & Telegram
+> Personal AI assistant on Android — agent loop + tool calling + dual Chat & Telegram interface
 
 ![Flutter](https://img.shields.io/badge/Flutter-3.38-02569B?logo=flutter)
 ![Dart](https://img.shields.io/badge/Dart-3.10-0175C2?logo=dart)
@@ -8,48 +8,51 @@
 
 ---
 
-## Qu'est-ce que DroidClaw ?
+## What is DroidClaw?
 
-DroidClaw est un assistant IA personnel qui tourne **entièrement sur un téléphone Android**, sans serveur externe.
+DroidClaw is a personal AI assistant that runs **entirely on an Android phone**, with no external server.
 
-- **Agent-based** : boucle agentique LLM + tool calling itératif
-- **Multi-provider** : Anthropic (Claude), OpenRouter, OpenAI, Groq
-- **Deux interfaces** : chat Flutter intégré **+ bot Telegram**
-- **On-device only** : tout tourne sur le téléphone — LLM API calls, tool execution, session management
+- **Agent-based**: agentic LLM loop + iterative tool calling
+- **Multi-provider**: Anthropic (Claude), OpenRouter, OpenAI, Groq, Google Gemini
+- **Dual interface**: built-in Flutter chat **+ Telegram bot**
+- **On-device only**: everything runs on the phone — LLM API calls, tool execution, session management
 
 ---
 
-## Origine — De PicoClaw à DroidClaw
 
-DroidClaw est un port de [PicoClaw](https://github.com/sipeed/picoclaw), un assistant IA en Go (~16K lignes) conçu pour tourner en CLI/gateway sur du hardware Linux léger.
+---
 
-### Ce qui a été conservé
+## Origin — From PicoClaw to DroidClaw
 
-- **Agent Loop** : la boucle agentique (LLM → tool calls → itération)
-- **Providers LLM** : abstraction multi-fournisseurs (Anthropic, OpenAI, OpenRouter, Groq)
-- **Outils** : web_search (Brave/DuckDuckGo), web_fetch, file (sandboxed), subagent, message
-- **Sessions** : historique de conversation avec persistence Hive
-- **Mémoire** : MEMORY.md long-terme + daily notes
-- **Skills** : chargement trois-tier (builtin → global → workspace)
-- **Summarization** : résumé automatique des conversations longues
+DroidClaw is a port of [PicoClaw](https://github.com/sipeed/picoclaw), a Go-based AI assistant (~16K lines) designed to run as a CLI/gateway on lightweight Linux hardware.
 
-### Ce qui a été supprimé
+### What Was Kept
 
-- Shell/exec tools (pas d'exécution shell sur Android)
-- I2C/SPI/USB monitoring (hardware Linux only)
-- HTTP health server (pas de serveur sur mobile)
-- Gateway/CLI (remplacé par l'UI Flutter)
+- **Agent Loop**: the agentic loop (LLM -> tool calls -> iteration)
+- **LLM Providers**: multi-provider abstraction (Anthropic, OpenAI, OpenRouter, Groq, Gemini)
+- **Tools**: web_search (Brave/DuckDuckGo), web_fetch, file (sandboxed), subagent, message
+- **Sessions**: conversation history with Hive persistence
+- **Memory**: long-term MEMORY.md + daily notes
+- **Skills**: three-tier loading (builtin -> global -> workspace)
+- **Summarization**: automatic summarization of long conversations
 
-### Ce qui a été ajouté
+### What Was Removed
 
-- **Flutter chat UI** : interface principale avec rendu Markdown, indicateurs d'outils en temps réel
-- **Bot Telegram via Android foreground service** : innovation DroidClaw. PicoClaw avait un channel Telegram côté serveur (webhook). DroidClaw fait tourner le polling **directement sur le téléphone Android** via un foreground service avec long polling, sans aucun serveur externe. C'est un changement d'architecture fondamental.
+- Shell/exec tools (no shell execution on Android)
+- I2C/SPI/USB monitoring (Linux hardware only)
+- HTTP health server (no server on mobile)
+- Gateway/CLI (replaced by Flutter UI)
+
+### What Was Added
+
+- **Flutter chat UI**: main interface with Markdown rendering, real-time tool indicators
+- **Telegram bot via Android foreground service**: a DroidClaw innovation. PicoClaw had a server-side Telegram channel (webhook). DroidClaw runs polling **directly on the Android phone** via a foreground service with long polling, with no external server whatsoever. This is a fundamental architecture shift.
 
 ---
 
 ## Architecture
 
-### Vue d'ensemble
+### Overview
 
 ```mermaid
 graph TB
@@ -84,7 +87,7 @@ graph TB
     TR --> Tools["web_search / web_fetch / file / subagent"]
 ```
 
-### Boucle agentique
+### Agent Loop
 
 ```mermaid
 sequenceDiagram
@@ -111,7 +114,7 @@ sequenceDiagram
     end
 ```
 
-### Architecture Telegram dual-isolate
+### Telegram Dual-Isolate Architecture
 
 ```mermaid
 graph LR
@@ -135,105 +138,105 @@ graph LR
 
 ---
 
-## Structure du projet
+## Project Structure
 
 ```
 lib/
-├── main.dart                    # Point d'entree, init Hive + SharedPrefs
-├── app.dart                     # MaterialApp, routing, theme Material 3
+├── main.dart                    # Entry point, init Hive + SharedPrefs
+├── app.dart                     # MaterialApp, routing, Material 3 theme
 │
-├── core/                        # Logique metier (pas d'import Flutter UI)
+├── core/                        # Business logic (no Flutter UI imports)
 │   ├── agent/                   # Agent loop, context builder, memory
 │   ├── config/                  # AppConfig, ConfigStorage
-│   ├── providers/               # Abstraction LLM (Anthropic, HTTP, factory)
-│   ├── session/                 # Persistence des conversations (Hive)
-│   ├── skills/                  # Loader trois-tier et installeur
-│   └── tools/                   # Interface Tool + implementations
+│   ├── providers/               # LLM abstraction (Anthropic, HTTP, factory)
+│   ├── session/                 # Conversation persistence (Hive)
+│   ├── skills/                  # Three-tier loader and installer
+│   └── tools/                   # Tool interface + implementations
 │
-├── features/                    # Ecrans et fonctionnalites plateforme
-│   ├── chat/                    # Ecran principal + composants
-│   ├── onboarding/              # Setup au premier lancement
-│   ├── settings/                # Config provider, skills, Telegram
+├── features/                    # Screens and platform features
+│   ├── chat/                    # Main screen + components
+│   ├── onboarding/              # First-launch setup
+│   ├── settings/                # Provider, skills, Telegram config
 │   ├── telegram/                # Bot API, task handler, bot manager
-│   └── voice/                   # Input vocal (STT via Groq Whisper)
+│   └── voice/                   # Voice input (STT via Groq Whisper)
 │
-├── providers/                   # State management Riverpod
-├── data/local/                  # StorageService unifie
+├── providers/                   # Riverpod state management
+├── data/local/                  # Unified StorageService
 └── shared/                      # Constants
 ```
 
-**43 fichiers Dart** au total.
+**43 Dart files** in total.
 
 ---
 
-## Double interface — Chat + Telegram
+## Dual Interface — Chat + Telegram
 
-### Pourquoi deux interfaces ?
+### Why Two Interfaces?
 
-- **Chat Flutter** : interaction directe sur l'appareil, avec rendu Markdown, indicateur d'outils en cours, et historique de session
-- **Bot Telegram** : acces a distance, depuis n'importe quel appareil (PC, tablette, autre telephone), meme quand le telephone Android est dans une poche ou eteint. L'utilisateur envoie un message sur Telegram, le telephone le traite en arriere-plan et repond.
+- **Flutter chat**: direct on-device interaction with Markdown rendering, real-time tool indicators, and session history
+- **Telegram bot**: remote access from any device (PC, tablet, another phone), even when the Android phone is in a pocket or turned off. The user sends a message on Telegram, the phone processes it in the background and replies.
 
-Les deux interfaces utilisent le **meme AgentLoop**. Telegram utilise des session keys separees (`telegram_<chat_id>`) pour que les conversations ne se melangent pas. D'autres utilisateurs (famille, equipe) peuvent aussi parler au bot si le whitelist le permet.
+Both interfaces use the **same AgentLoop**. Telegram uses separate session keys (`telegram_<chat_id>`) so conversations don't mix. Other users (family, team) can also talk to the bot if the whitelist allows it.
 
-### Pourquoi Telegram et pas WhatsApp ?
+### Why Telegram and Not WhatsApp?
 
-Trois raisons concretes :
+Three concrete reasons:
 
-1. **Pas d'API publique** : WhatsApp Business API necessite une verification Meta, un serveur heberge, et des endpoints webhook (HTTPS avec IP publique). Un telephone Android derriere NAT/4G ne peut pas recevoir de webhooks.
+1. **No public API**: WhatsApp Business API requires Meta verification, a hosted server, and webhook endpoints (HTTPS with a public IP). An Android phone behind NAT/4G cannot receive webhooks.
 
-2. **Le long polling n'existe pas** : WhatsApp n'a pas d'equivalent au `getUpdates` de Telegram. C'est webhook-only.
+2. **Long polling doesn't exist**: WhatsApp has no equivalent to Telegram's `getUpdates`. It's webhook-only.
 
-3. **Complexite vs. valeur** : WhatsApp Business Cloud API demande un enregistrement OAuth, une validation de webhook, des message templates, et un serveur pour recevoir les callbacks. Ca annule le principe d'une app 100% on-device.
+3. **Complexity vs. value**: WhatsApp Business Cloud API requires OAuth registration, webhook validation, message templates, and a server to receive callbacks. This negates the principle of a 100% on-device app.
 
-Telegram a gagne parce que : long polling HTTP simple (fonctionne derriere n'importe quel NAT), pas de serveur necessaire, Bot API ouverte, gratuit, et largement utilise.
+Telegram won because: simple HTTP long polling (works behind any NAT), no server needed, open Bot API, free, and widely used.
 
 ---
 
-## Contraintes Android et choix techniques
+## Android Constraints and Technical Choices
 
-### Pas de serveur sur Android
+### No Server on Android
 
-Android ne peut pas heberger de serveur HTTP fiable :
+Android cannot reliably host an HTTP server:
 
-- Pas d'IP publique fixe (NAT, reseaux cellulaires, IPs dynamiques)
-- Android tue agressivement les processus en arriere-plan
-- Meme les foreground services ont des restrictions (limites Android 12+, cap `dataSync` de 6h sur Android 15)
+- No fixed public IP (NAT, cellular networks, dynamic IPs)
+- Android aggressively kills background processes
+- Even foreground services have restrictions (Android 12+ limits, `dataSync` 6h cap on Android 15)
 
-**Solution** : long polling (requetes HTTP initiees par le client) au lieu de webhooks (cote serveur). Le telephone demande a Telegram "des nouveaux messages ?" toutes les 30 secondes — pas de port entrant, pas de serveur, fonctionne derriere n'importe quel NAT.
+**Solution**: long polling (client-initiated HTTP requests) instead of webhooks (server-side). The phone asks Telegram "any new messages?" every 30 seconds — no inbound port, no server, works behind any NAT.
 
 ```
-Modele webhook (impossible) :     Modele long polling (DroidClaw) :
-Telegram -> telephone:8443        Telephone -> Telegram API
-(bloque par NAT/firewall)         (fonctionne de partout)
+Webhook model (impossible):       Long polling model (DroidClaw):
+Telegram -> phone:8443            Phone -> Telegram API
+(blocked by NAT/firewall)         (works from anywhere)
 ```
 
-### Foreground Service : `remoteMessaging` et non `dataSync`
+### Foreground Service: `remoteMessaging` Not `dataSync`
 
-- `dataSync` a une **limite de 6 heures d'execution par 24h** sur Android 15+
-- `remoteMessaging` n'a **aucune limite de temps** — concu pour les apps de messagerie
-- Le foreground service affiche une notification persistante ("DroidClaw Bot - Active")
-- Le service survit a la mise en arriere-plan et au kill de l'app
+- `dataSync` has a **6-hour execution limit per 24h** on Android 15+
+- `remoteMessaging` has **no time limit** — designed for messaging apps
+- The foreground service displays a persistent notification ("DroidClaw Bot - Active")
+- The service survives backgrounding and app kill
 
 ---
 
-## Patterns techniques cles
+## Key Technical Patterns
 
-### Dual ToolResult (pattern du codebase Go)
+### Dual ToolResult (Pattern from the Go Codebase)
 
 ```dart
 class ToolResult {
-  final String forLLM;   // Contexte pour le modele (donnees completes)
-  final String forUser;  // Affichage UI (formate, tronque)
+  final String forLLM;   // Context for the model (complete data)
+  final String forUser;  // UI display (formatted, truncated)
 }
 ```
 
-Le LLM recoit les donnees brutes dont il a besoin pour raisonner. L'utilisateur voit une version propre et formatee.
+The LLM receives the raw data it needs to reason. The user sees a clean, formatted version.
 
-### Summarization automatique
+### Automatic Summarization
 
-Declenchee quand : **20+ messages** OU **tokens estimes > 75% de maxTokens**.
-Garde les 4 derniers messages intacts, resume le reste via appel LLM, prepend en contexte systeme.
-Empeche le debordement de la fenetre de contexte dans les conversations longues.
+Triggered when: **20+ messages** OR **estimated tokens > 75% of maxTokens**.
+Keeps the last 4 messages intact, summarizes the rest via an LLM call, prepends as system context.
+Prevents context window overflow in long conversations.
 
 ### Sealed Event Stream
 
@@ -245,13 +248,13 @@ class ToolResultEvent extends AgentEvent { ... }
 class ResponseEvent extends AgentEvent { ... }
 ```
 
-Les deux interfaces (chat UI et Telegram) consomment le meme `Stream<AgentEvent>`. Le chat UI rend chaque event en temps reel. Telegram n'envoie que le `ResponseEvent` final.
+Both interfaces (chat UI and Telegram) consume the same `Stream<AgentEvent>`. The chat UI renders each event in real time. Telegram only sends the final `ResponseEvent`.
 
 ---
 
 ## Getting Started
 
-### Prerequis
+### Prerequisites
 
 - Flutter 3.38+
 - Android SDK (API 24+)
@@ -270,19 +273,19 @@ flutter build apk --release --split-per-abi
 adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
-### Premier lancement
+### First Launch
 
-1. Onboarding : choisir le provider LLM (OpenRouter, Anthropic, OpenAI, Groq)
-2. Entrer la cle API
-3. Tester la connexion
-4. Commencer a chatter
+1. Onboarding: choose your LLM provider (OpenRouter, Anthropic, OpenAI, Groq, Gemini)
+2. Enter the API key
+3. Test the connection
+4. Start chatting
 
-### Configurer Telegram (optionnel)
+### Configure Telegram (Optional)
 
-1. Ouvrir Telegram et chercher @BotFather
-2. Envoyer `/newbot` et suivre les instructions
-3. Copier le token du bot
-4. Dans DroidClaw : Settings → Telegram Bot → coller le token → Test → Enable
+1. Open Telegram and search for @BotFather
+2. Send `/newbot` and follow the instructions
+3. Copy the bot token
+4. In DroidClaw: Settings -> Telegram Bot -> paste the token -> Test -> Enable
 
 ---
 
@@ -290,9 +293,29 @@ adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
 | | |
 |---|---|
-| **Fichiers Dart** | 43 |
-| **Issues d'analyse** | 0 |
-| **Taille APK (arm64)** | 18.8 MB |
-| **Code natif** | Aucun (pure Dart/Flutter) |
+| **Dart files** | 43 |
+| **Analysis issues** | 0 |
+| **APK size (arm64)** | 18.8 MB |
+| **Native code** | None (pure Dart/Flutter) |
 | **minSdkVersion** | 24 (Android 7.0) |
 | **targetSdkVersion** | 34 (Android 14) |
+
+## Why ARaccoon?
+
+DroidClaw is pronounced **"ARaccoon"** — The Raccoon. This is the name shown in the Android launcher and the project's mascot.
+
+### The Raccoon as a Metaphor for the AI Agent
+
+- **The claws**: raccoons are famous for their extremely dexterous front paws, capable of manipulating objects, picking locks, and rummaging everywhere. They are the perfect embodiment of **iterative tool calling** — the agent that calls web_search, parses the results, follows up with web_fetch, extracts the info, and loops until it finds the answer.
+
+- **Intelligence and resourcefulness**: clever, adaptable, they always find a solution. Exactly what an AI agent does when it loops, fails, adjusts its strategy, and eventually solves the problem.
+
+- **The nocturnal and discreet side**: active at night, a bit "bandit-like" (in the cute sense). This evokes the **off-grid** nature of the application — everything runs locally on the phone, no data is sent to a central server, total privacy.
+
+### Visual Design Concept
+
+A raccoon with a **techwear / cyberpunk** look:
+
+- Tactical vest with cables and small electronic chips
+- Tech goggles/visor (HUD-style) displaying lines of code or LLM provider icons
+- Claws prominently featured, manipulating a small holographic screen emerging from an Android phone

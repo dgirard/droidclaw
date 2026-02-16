@@ -8,47 +8,47 @@ date: 2026-02-16
 
 ## Overview
 
-Ajouter Google Gemini comme provider LLM de premier plan dans DroidClaw. Gemini n'est pas supporte actuellement — seuls OpenRouter, Anthropic, OpenAI et Groq le sont. L'ajout est trivial car Google fournit un endpoint OpenAI-compatible (`https://generativelanguage.googleapis.com/v1beta/openai`) qui parle le meme protocole que le `HttpProvider` existant.
+Add Google Gemini as a first-class LLM provider in DroidClaw. Gemini is not currently supported — only OpenRouter, Anthropic, OpenAI, and Groq are. The addition is trivial because Google provides an OpenAI-compatible endpoint (`https://generativelanguage.googleapis.com/v1beta/openai`) that speaks the same protocol as the existing `HttpProvider`.
 
-**Aucun nouveau fichier Dart n'est necessaire.** Le `HttpProvider` gere deja le trafic Gemini. Il faut simplement l'enregistrer comme provider nomme dans 3-4 fichiers.
+**No new Dart files are needed.** The `HttpProvider` already handles Gemini traffic. It just needs to be registered as a named provider in 3-4 files.
 
 ## Problem Statement / Motivation
 
-- Gemini propose un **free tier genereux** (15 req/min sur Gemini 2.0 Flash) — ideal pour les nouveaux utilisateurs qui veulent tester DroidClaw sans payer
-- Gemini 2.5 Pro/Flash sont des modeles tres capables, avec support natif du tool calling
-- PicoClaw Go supportait Gemini via son provider generique — DroidClaw devrait faire de meme
-- Un utilisateur peut deja utiliser Gemini via OpenRouter, mais un acces direct evite les frais OpenRouter et simplifie l'onboarding
+- Gemini offers a **generous free tier** (15 req/min on Gemini 2.0 Flash) — ideal for new users who want to try DroidClaw without paying
+- Gemini 2.5 Pro/Flash are very capable models with native tool calling support
+- PicoClaw Go supported Gemini via its generic provider — DroidClaw should do the same
+- A user can already use Gemini via OpenRouter, but direct access avoids OpenRouter fees and simplifies onboarding
 
 ## Proposed Solution
 
-Ajouter `'gemini'` aux listes de providers existantes et configurer le API base + modele par defaut. Le `HttpProvider` gere tout le reste (auth Bearer, format OpenAI, tool calling).
+Add `'gemini'` to existing provider lists and configure the API base + default model. The `HttpProvider` handles everything else (Bearer auth, OpenAI format, tool calling).
 
-### Fichiers a modifier
+### Files to modify
 
-| Fichier | Changement |
+| File | Change |
 |---|---|
-| `lib/core/providers/provider_factory.dart` | Ajouter `'gemini'` dans `_defaultApiBase` et `_defaultModel` |
-| `lib/features/onboarding/onboard_screen.dart` | Ajouter le tuple Gemini dans `_providers` |
-| `lib/features/settings/provider_config_screen.dart` | Ajouter `'gemini'` dans `_providers` |
-| `lib/shared/constants.dart` | Ajouter `geminiApiBase` (optionnel, pour consistance) |
+| `lib/core/providers/provider_factory.dart` | Add `'gemini'` to `_defaultApiBase` and `_defaultModel` |
+| `lib/features/onboarding/onboard_screen.dart` | Add the Gemini tuple to `_providers` |
+| `lib/features/settings/provider_config_screen.dart` | Add `'gemini'` to `_providers` |
+| `lib/shared/constants.dart` | Add `geminiApiBase` (optional, for consistency) |
 
-### Changements detailles
+### Detailed changes
 
 #### `provider_factory.dart`
 
 ```dart
-// _defaultApiBase switch — ajouter :
+// _defaultApiBase switch — add:
 'gemini' => 'https://generativelanguage.googleapis.com/v1beta/openai',
 
-// _defaultModel switch — ajouter :
+// _defaultModel switch — add:
 'gemini' => 'gemini-2.0-flash',
 ```
 
-Le modele par defaut `gemini-2.0-flash` est le choix le plus sur :
-- Stable (GA, pas preview)
-- Rapide et economique
-- Supporte le tool/function calling
-- Free tier disponible
+The default model `gemini-2.0-flash` is the safest choice:
+- Stable (GA, not preview)
+- Fast and affordable
+- Supports tool/function calling
+- Free tier available
 
 #### `onboard_screen.dart`
 
@@ -68,7 +68,7 @@ static const _providers = [
 static const _providers = ['openrouter', 'anthropic', 'openai', 'groq', 'gemini'];
 ```
 
-#### `constants.dart` (optionnel)
+#### `constants.dart` (optional)
 
 ```dart
 static const String geminiApiBase = 'https://generativelanguage.googleapis.com/v1beta/openai';
@@ -76,41 +76,41 @@ static const String geminiApiBase = 'https://generativelanguage.googleapis.com/v
 
 ## Technical Considerations
 
-### Compatibilite confirmee
+### Confirmed compatibility
 
-L'endpoint OpenAI-compatible de Gemini :
-- Accepte `Authorization: Bearer <API_KEY>` (confirme par la doc Google)
-- Supporte `role: "system"` dans les messages
-- Supporte le tool/function calling au format OpenAI (`tool_calls` avec `function.name` et `function.arguments` en JSON string)
-- Accepte `max_tokens` dans le body de la requete
-- Retourne `usage` avec `prompt_tokens` / `completion_tokens` (format OpenAI)
+Gemini's OpenAI-compatible endpoint:
+- Accepts `Authorization: Bearer <API_KEY>` (confirmed by Google docs)
+- Supports `role: "system"` in messages
+- Supports tool/function calling in OpenAI format (`tool_calls` with `function.name` and `function.arguments` as JSON string)
+- Accepts `max_tokens` in the request body
+- Returns `usage` with `prompt_tokens` / `completion_tokens` (OpenAI format)
 
-### Points de vigilance
+### Points to watch
 
-1. **Rate limiting free tier** : Gemini free tier = 15 req/min sur Flash. Une conversation avec beaucoup de tool calls peut atteindre cette limite. L'erreur 429 sera affichee comme "LLM call failed: API error 429". Pas de retry automatique — c'est un enhancement futur qui beneficierait a tous les providers.
+1. **Free tier rate limiting**: Gemini free tier = 15 req/min on Flash. A conversation with many tool calls can hit this limit. The 429 error will be shown as "LLM call failed: API error 429". No automatic retry — this is a future enhancement that would benefit all providers.
 
-2. **Safety filters** : Gemini peut bloquer des reponses pour raisons de securite. Le `finish_reason` serait `"content_filter"`. Le code actuel traite ca comme un stop normal — la reponse sera vide ou partielle. Acceptable pour v1.
+2. **Safety filters**: Gemini may block responses for safety reasons. The `finish_reason` would be `"content_filter"`. The current code treats this as a normal stop — the response will be empty or partial. Acceptable for v1.
 
-3. **Parsing ToolCall** : `ToolCall.fromJson` dans `llm_response.dart` gere deja les deux formats (OpenAI `function.arguments` en string, et Anthropic `input` en map). Gemini via l'endpoint compatible devrait retourner le format OpenAI, mais le parser est resilient dans les deux cas.
+3. **ToolCall parsing**: `ToolCall.fromJson` in `llm_response.dart` already handles both formats (OpenAI `function.arguments` as string, and Anthropic `input` as map). Gemini via the compatible endpoint should return the OpenAI format, but the parser is resilient for both cases.
 
-4. **`max_tokens` vs `max_completion_tokens`** : L'endpoint compatible devrait accepter `max_tokens`. A verifier lors du test. Si probleme, c'est un fix d'une ligne dans `http_provider.dart`.
+4. **`max_tokens` vs `max_completion_tokens`**: The compatible endpoint should accept `max_tokens`. To be verified during testing. If there's an issue, it's a one-line fix in `http_provider.dart`.
 
-### Ce qui n'est PAS dans le scope
+### Out of scope
 
-- Retry/backoff sur 429 (enhancement futur, tous providers)
-- Detection des safety filter blocks (enhancement futur)
-- Noms human-readable dans le dropdown settings (pre-existant, tous providers)
-- Model picker dynamique par provider (feature futur)
+- Retry/backoff on 429 (future enhancement, all providers)
+- Safety filter block detection (future enhancement)
+- Human-readable names in the settings dropdown (pre-existing, all providers)
+- Dynamic model picker per provider (future feature)
 
 ## Acceptance Criteria
 
-- [ ] Gemini apparait dans l'onboarding (5e provider)
-- [ ] Gemini apparait dans le dropdown Settings > Provider Config
-- [ ] `flutter analyze` passe sans erreur
-- [ ] Test connection avec une cle API Gemini reussit
-- [ ] Chat simple (sans tools) fonctionne avec Gemini
-- [ ] Chat avec tool calling (web_search) fonctionne avec Gemini
-- [ ] Le modele par defaut est `gemini-2.0-flash` (pas `gpt-4o`)
+- [x] Gemini appears in onboarding (5th provider)
+- [x] Gemini appears in the Settings > Provider Config dropdown
+- [x] `flutter analyze` passes without errors
+- [ ] Test connection with a Gemini API key succeeds
+- [ ] Simple chat (no tools) works with Gemini
+- [ ] Chat with tool calling (web_search) works with Gemini
+- [x] Default model is `gemini-2.0-flash` (not `gpt-4o`)
 
 ## Files to Create/Modify
 

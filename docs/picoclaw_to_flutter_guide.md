@@ -1,92 +1,92 @@
-# PicoClaw : Guide de Conversion Go → Flutter/Dart (Android APK)
+# PicoClaw: Go → Flutter/Dart (Android APK) Conversion Guide
 
-## 1. Analyse du Projet Source
+## 1. Source Project Analysis
 
-### Vue d'ensemble
-PicoClaw est un assistant IA ultra-léger écrit en Go (~16K lignes hors tests) qui fonctionne en CLI/gateway sur des petits hardware Linux. L'objectif est d'en faire une **app Android native** en Flutter/Dart pur.
+### Overview
+PicoClaw is an ultra-lightweight AI assistant written in Go (~16K lines excluding tests) that runs as a CLI/gateway on small Linux hardware. The goal is to make it a **native Android app** in pure Flutter/Dart.
 
-### Architecture Go actuelle (modules principaux)
+### Current Go Architecture (main modules)
 
-| Package Go | Rôle | Lignes |
+| Go Package | Role | Lines |
 |---|---|---|
-| `cmd/picoclaw/main.go` | CLI, commandes (agent, gateway, onboard, cron, skills, auth) | ~1400 |
-| `pkg/agent/loop.go` | Boucle agentique : system prompt → LLM → tool calls → itération | ~780 |
-| `pkg/agent/context.go` | Construction du contexte (system prompt, mémoire, skills) | ~200 |
-| `pkg/agent/memory.go` | Gestion mémoire conversationnelle | ~150 |
-| `pkg/providers/*` | Abstraction LLM (Anthropic, OpenAI, OpenRouter, Gemini, vLLM…) | ~2200 |
-| `pkg/channels/*` | Canaux messaging (Telegram, Discord, Slack, WhatsApp, DingTalk…) | ~3500 |
-| `pkg/tools/*` | Outils agent (filesystem, shell, web search, I2C, SPI, cron, subagent) | ~2800 |
-| `pkg/config/` | Configuration JSON | ~440 |
-| `pkg/session/` | Gestion sessions/historique | ~250 |
-| `pkg/bus/` | Message bus interne (pub/sub) | ~150 |
-| `pkg/cron/` | Tâches planifiées | ~500 |
+| `cmd/picoclaw/main.go` | CLI, commands (agent, gateway, onboard, cron, skills, auth) | ~1400 |
+| `pkg/agent/loop.go` | Agentic loop: system prompt → LLM → tool calls → iteration | ~780 |
+| `pkg/agent/context.go` | Context building (system prompt, memory, skills) | ~200 |
+| `pkg/agent/memory.go` | Conversational memory management | ~150 |
+| `pkg/providers/*` | LLM abstraction (Anthropic, OpenAI, OpenRouter, Gemini, vLLM…) | ~2200 |
+| `pkg/channels/*` | Messaging channels (Telegram, Discord, Slack, WhatsApp, DingTalk…) | ~3500 |
+| `pkg/tools/*` | Agent tools (filesystem, shell, web search, I2C, SPI, cron, subagent) | ~2800 |
+| `pkg/config/` | JSON configuration | ~440 |
+| `pkg/session/` | Session/history management | ~250 |
+| `pkg/bus/` | Internal message bus (pub/sub) | ~150 |
+| `pkg/cron/` | Scheduled tasks | ~500 |
 | `pkg/auth/` | OAuth/PKCE + token store | ~900 |
-| `pkg/skills/` | Loader et installeur de skills | ~500 |
-| `pkg/heartbeat/` | Service heartbeat | ~365 |
+| `pkg/skills/` | Skills loader and installer | ~500 |
+| `pkg/heartbeat/` | Heartbeat service | ~365 |
 | `pkg/state/` | State manager | ~250 |
-| `pkg/voice/` | Transcription vocale (Groq) | ~160 |
+| `pkg/voice/` | Voice transcription (Groq) | ~160 |
 
 ---
 
-## 2. Stratégie de Conversion
+## 2. Conversion Strategy
 
-### Ce qu'il faut GARDER (cœur de l'app)
-- **Agent Loop** : la boucle agentique (LLM → tool calls → itération)
-- **Providers** : abstraction multi-LLM (Anthropic, OpenAI, OpenRouter…)
-- **Tools** : web search, web fetch (les plus utiles sur mobile)
-- **Config** : gestion de configuration
-- **Session/Memory** : historique de conversation
-- **Skills** : chargement de skills
+### What to KEEP (app core)
+- **Agent Loop**: the agentic loop (LLM → tool calls → iteration)
+- **Providers**: multi-LLM abstraction (Anthropic, OpenAI, OpenRouter…)
+- **Tools**: web search, web fetch (most useful on mobile)
+- **Config**: configuration management
+- **Session/Memory**: conversation history
+- **Skills**: skills loading
 
-### Ce qu'il faut ADAPTER
-- **Channels** → remplacé par l'UI Flutter (un seul "channel" : l'écran de chat)
-- **Bus** → remplacé par des Streams Dart ou Riverpod/Bloc
-- **Auth** → OAuth mobile via `flutter_appauth` ou `url_launcher`
-- **Storage** → `shared_preferences` + fichiers locaux via `path_provider`
-- **Cron** → `workmanager` pour tâches en arrière-plan Android
+### What to ADAPT
+- **Channels** → replaced by Flutter UI (single "channel": the chat screen)
+- **Bus** → replaced by Dart Streams or Riverpod/Bloc
+- **Auth** → Mobile OAuth via `flutter_appauth` or `url_launcher`
+- **Storage** → `shared_preferences` + local files via `path_provider`
+- **Cron** → `workmanager` for Android background tasks
 
-### Ce qu'il faut SUPPRIMER
-- **Shell/Exec tool** : pas d'exécution shell sur Android
-- **Filesystem tools** : limités au sandboxing Android (adapter avec scoped storage)
-- **I2C/SPI tools** : hardware Linux uniquement
-- **Device monitoring USB** : non pertinent sur Android
-- **Health server HTTP** : pas nécessaire pour une app mobile
-- **Migration OpenClaw** : pas pertinent
-- **Gateway/CLI** : remplacé par l'UI Flutter
+### What to REMOVE
+- **Shell/Exec tool**: no shell execution on Android
+- **Filesystem tools**: limited to Android sandboxing (adapt with scoped storage)
+- **I2C/SPI tools**: Linux hardware only
+- **USB device monitoring**: not relevant on Android
+- **HTTP health server**: not necessary for a mobile app
+- **OpenClaw migration**: not relevant
+- **Gateway/CLI**: replaced by Flutter UI
 
 ---
 
-## 3. Architecture Flutter Cible
+## 3. Target Flutter Architecture
 
 ```
 lib/
-├── main.dart                    # Point d'entrée
-├── app.dart                     # MaterialApp, routing, thème
+├── main.dart                    # Entry point
+├── app.dart                     # MaterialApp, routing, theme
 │
 ├── core/
 │   ├── config/
 │   │   ├── app_config.dart      # ← pkg/config/config.go
-│   │   └── config_storage.dart  # Persistence JSON locale
+│   │   └── config_storage.dart  # Local JSON persistence
 │   │
 │   ├── providers/               # ← pkg/providers/
-│   │   ├── llm_provider.dart    # Interface abstraite LLMProvider
-│   │   ├── llm_response.dart    # Types : LLMResponse, ToolCall, Message
-│   │   ├── http_provider.dart   # Provider générique OpenAI-compatible
+│   │   ├── llm_provider.dart    # Abstract LLMProvider interface
+│   │   ├── llm_response.dart    # Types: LLMResponse, ToolCall, Message
+│   │   ├── http_provider.dart   # Generic OpenAI-compatible provider
 │   │   ├── anthropic_provider.dart
 │   │   ├── openai_provider.dart
 │   │   ├── openrouter_provider.dart
 │   │   └── provider_factory.dart
 │   │
 │   ├── agent/                   # ← pkg/agent/
-│   │   ├── agent_loop.dart      # Boucle agentique principale
-│   │   ├── context_builder.dart # Construction system prompt + context
-│   │   └── memory_manager.dart  # Mémoire conversationnelle
+│   │   ├── agent_loop.dart      # Main agentic loop
+│   │   ├── context_builder.dart # System prompt + context building
+│   │   └── memory_manager.dart  # Conversational memory
 │   │
-│   ├── tools/                   # ← pkg/tools/ (sous-ensemble)
-│   │   ├── tool.dart            # Interface Tool + ToolRegistry
-│   │   ├── web_search_tool.dart # Recherche web (Brave/DuckDuckGo)
-│   │   ├── web_fetch_tool.dart  # Fetch URL
-│   │   └── file_tool.dart       # Lecture/écriture fichiers (sandboxed)
+│   ├── tools/                   # ← pkg/tools/ (subset)
+│   │   ├── tool.dart            # Tool interface + ToolRegistry
+│   │   ├── web_search_tool.dart # Web search (Brave/DuckDuckGo)
+│   │   ├── web_fetch_tool.dart  # URL fetch
+│   │   └── file_tool.dart       # File read/write (sandboxed)
 │   │
 │   ├── session/
 │   │   └── session_manager.dart # ← pkg/session/manager.go
@@ -97,10 +97,10 @@ lib/
 │
 ├── features/
 │   ├── chat/
-│   │   ├── chat_screen.dart     # Écran principal de chat
-│   │   ├── chat_controller.dart # Logique métier (remplace bus + channel)
-│   │   ├── message_bubble.dart  # Widget message
-│   │   └── input_bar.dart       # Barre de saisie + micro
+│   │   ├── chat_screen.dart     # Main chat screen
+│   │   ├── chat_controller.dart # Business logic (replaces bus + channel)
+│   │   ├── message_bubble.dart  # Message widget
+│   │   └── input_bar.dart       # Input bar + mic
 │   │
 │   ├── settings/
 │   │   ├── settings_screen.dart
@@ -108,10 +108,10 @@ lib/
 │   │   └── skills_screen.dart
 │   │
 │   ├── onboarding/
-│   │   └── onboard_screen.dart  # ← commande onboard
+│   │   └── onboard_screen.dart  # ← onboard command
 │   │
 │   └── voice/
-│       └── voice_input.dart     # STT via Groq ou speech_to_text
+│       └── voice_input.dart     # STT via Groq or speech_to_text
 │
 ├── data/
 │   ├── repositories/
@@ -131,9 +131,9 @@ lib/
 
 ---
 
-## 4. Conversion Module par Module
+## 4. Module-by-Module Conversion
 
-### 4.1 Types de base et Provider LLM
+### 4.1 Base Types and LLM Provider
 
 **Go (pkg/providers/types.go) → Dart**
 
@@ -154,7 +154,7 @@ class ToolCall {
   });
 
   factory ToolCall.fromJson(Map<String, dynamic> json) {
-    // Gérer les 2 formats : OpenAI (function.name) et Anthropic (name)
+    // Handle both formats: OpenAI (function.name) and Anthropic (name)
     final function = json['function'] as Map<String, dynamic>?;
     return ToolCall(
       id: json['id'] as String,
@@ -211,7 +211,7 @@ class Message {
 }
 ```
 
-**Interface Provider :**
+**Provider Interface:**
 
 ```dart
 // lib/core/providers/llm_provider.dart
@@ -343,7 +343,7 @@ class HttpProvider implements LLMProvider {
 }
 ```
 
-### 4.3 Agent Loop (le cœur)
+### 4.3 Agent Loop (the core)
 
 **Go (pkg/agent/loop.go) → Dart**
 
@@ -367,18 +367,18 @@ class AgentLoop {
     required this.contextBuilder,
   });
 
-  /// Traite un message utilisateur et retourne la réponse finale.
-  /// Gère la boucle tool-calling de manière itérative.
+  /// Processes a user message and returns the final response.
+  /// Manages the tool-calling loop iteratively.
   Stream<AgentEvent> processMessage(String userMessage, String sessionKey) async* {
     final session = sessions.getOrCreate(sessionKey);
 
-    // Construire le contexte (system prompt + skills + memory)
+    // Build context (system prompt + skills + memory)
     final systemPrompt = contextBuilder.buildSystemPrompt();
 
-    // Ajouter le message utilisateur à l'historique
+    // Add user message to history
     session.addMessage(Message(role: 'user', content: userMessage));
 
-    // Boucle agentique
+    // Agentic loop
     for (var iteration = 0; iteration < config.maxToolIterations; iteration++) {
       final messages = [
         Message(role: 'system', content: systemPrompt),
@@ -397,21 +397,21 @@ class AgentLoop {
         },
       );
 
-      // Pas de tool calls → réponse finale
+      // No tool calls → final response
       if (response.toolCalls.isEmpty) {
         session.addMessage(Message(role: 'assistant', content: response.content));
         yield AgentEvent.response(content: response.content, usage: response.usage);
         return;
       }
 
-      // Ajouter la réponse assistant avec tool calls
+      // Add assistant response with tool calls
       session.addMessage(Message(
         role: 'assistant',
         content: response.content,
         toolCalls: response.toolCalls,
       ));
 
-      // Exécuter chaque tool call
+      // Execute each tool call
       for (final toolCall in response.toolCalls) {
         yield AgentEvent.toolCall(name: toolCall.name, arguments: toolCall.arguments);
 
@@ -419,7 +419,7 @@ class AgentLoop {
 
         yield AgentEvent.toolResult(name: toolCall.name, result: result);
 
-        // Ajouter le résultat du tool à l'historique
+        // Add tool result to history
         session.addMessage(Message(
           role: 'tool',
           content: result.content,
@@ -432,7 +432,7 @@ class AgentLoop {
   }
 }
 
-/// Événements émis par l'agent loop (pour l'UI)
+/// Events emitted by the agent loop (for UI)
 sealed class AgentEvent {
   const AgentEvent();
 
@@ -627,7 +627,7 @@ class WebSearchTool extends Tool {
 
 ---
 
-## 5. Dépendances Flutter (pubspec.yaml)
+## 5. Flutter Dependencies (pubspec.yaml)
 
 ```yaml
 name: picoclaw
@@ -643,34 +643,34 @@ dependencies:
 
   # HTTP & Networking
   http: ^1.2.0
-  dio: ^5.4.0               # Alternative plus riche à http
+  dio: ^5.4.0               # Richer alternative to http
 
-  # State Management (choisir un)
-  flutter_riverpod: ^2.5.0   # Recommandé pour la réactivité
-  # OU
+  # State Management (choose one)
+  flutter_riverpod: ^2.5.0   # Recommended for reactivity
+  # OR
   # flutter_bloc: ^8.1.0
 
   # Storage
-  shared_preferences: ^2.2.0   # Config simple
-  path_provider: ^2.1.0        # Accès filesystem sandboxé
-  hive: ^4.0.0                 # Base NoSQL légère (sessions, mémoire)
+  shared_preferences: ^2.2.0   # Simple config
+  path_provider: ^2.1.0        # Sandboxed filesystem access
+  hive: ^4.0.0                 # Lightweight NoSQL database (sessions, memory)
 
   # UI
-  flutter_markdown: ^0.7.0     # Rendu Markdown dans le chat
-  flutter_highlight: ^0.7.0    # Syntax highlighting dans le code
+  flutter_markdown: ^0.7.0     # Markdown rendering in chat
+  flutter_highlight: ^0.7.0    # Syntax highlighting in code
 
   # Auth
-  flutter_secure_storage: ^9.0.0  # Stockage sécurisé des API keys
-  flutter_appauth: ^7.0.0         # OAuth PKCE (si login OpenAI)
+  flutter_secure_storage: ^9.0.0  # Secure storage for API keys
+  flutter_appauth: ^7.0.0         # OAuth PKCE (if OpenAI login)
 
   # Voice
-  speech_to_text: ^7.0.0       # STT natif Android
-  # OU pour Groq STT :
-  record: ^5.1.0               # Enregistrement audio
-  
+  speech_to_text: ^7.0.0       # Native Android STT
+  # OR for Groq STT:
+  record: ^5.1.0               # Audio recording
+
   # Notifications & Background
   flutter_local_notifications: ^17.0.0
-  workmanager: ^0.5.2          # Tâches en arrière-plan (cron)
+  workmanager: ^0.5.2          # Background tasks (cron)
 
   # Utils
   uuid: ^4.3.0
@@ -683,104 +683,104 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^4.0.0
   build_runner: ^2.4.0
-  freezed: ^2.5.0              # Génération de classes immuables
+  freezed: ^2.5.0              # Immutable class generation
   json_serializable: ^6.8.0
 ```
 
 ---
 
-## 6. Mapping Complet Go → Dart
+## 6. Complete Go → Dart Mapping
 
-### Patterns de conversion
+### Conversion patterns
 
-| Pattern Go | Équivalent Dart |
+| Go Pattern | Dart Equivalent |
 |---|---|
-| `goroutine` + `chan` | `Stream` + `StreamController` ou `Isolate` |
-| `context.Context` | `CancellationToken` custom ou timeout sur `Future` |
-| `sync.Mutex` / `sync.Map` | Pas nécessaire (single-threaded) sauf avec `Isolate` |
-| `interface{}` | `dynamic` ou `Object?` |
-| `embed.FS` | `rootBundle` (assets Flutter) |
-| `os.Signal` | `AppLifecycleState` dans Flutter |
-| `http.Server` | Pas nécessaire (app mobile) |
+| `goroutine` + `chan` | `Stream` + `StreamController` or `Isolate` |
+| `context.Context` | Custom `CancellationToken` or timeout on `Future` |
+| `sync.Mutex` / `sync.Map` | Not necessary (single-threaded) except with `Isolate` |
+| `interface{}` | `dynamic` or `Object?` |
+| `embed.FS` | `rootBundle` (Flutter assets) |
+| `os.Signal` | `AppLifecycleState` in Flutter |
+| `http.Server` | Not necessary (mobile app) |
 | `filepath.Walk` | `Directory.list(recursive: true)` |
 | `json.Marshal/Unmarshal` | `jsonEncode/jsonDecode` |
-| `fmt.Sprintf` | String interpolation `'$var'` ou `'${expr}'` |
-| `error` return | `throw Exception` ou `Result<T, E>` pattern |
-| `struct` | `class` avec constructeur nommé |
+| `fmt.Sprintf` | String interpolation `'$var'` or `'${expr}'` |
+| `error` return | `throw Exception` or `Result<T, E>` pattern |
+| `struct` | `class` with named constructor |
 | `map[string]interface{}` | `Map<String, dynamic>` |
 
-### Fichier par fichier
+### File by file
 
-| Fichier Go | Fichier Dart cible | Notes |
+| Go File | Target Dart File | Notes |
 |---|---|---|
 | `pkg/providers/types.go` | `core/providers/llm_response.dart` | Direct, 1:1 |
-| `pkg/providers/http_provider.go` | `core/providers/http_provider.dart` | Utiliser `package:http` |
-| `pkg/providers/claude_provider.go` | `core/providers/anthropic_provider.dart` | API Anthropic spécifique |
-| `pkg/providers/tool_call_extract.go` | Intégré dans chaque provider | Parsing tool calls |
-| `pkg/agent/loop.go` | `core/agent/agent_loop.dart` | Stream au lieu de callback |
-| `pkg/agent/context.go` | `core/agent/context_builder.dart` | Chargement assets Flutter |
-| `pkg/agent/memory.go` | `core/agent/memory_manager.dart` | Stockage via Hive |
+| `pkg/providers/http_provider.go` | `core/providers/http_provider.dart` | Use `package:http` |
+| `pkg/providers/claude_provider.go` | `core/providers/anthropic_provider.dart` | Anthropic-specific API |
+| `pkg/providers/tool_call_extract.go` | Integrated into each provider | Tool call parsing |
+| `pkg/agent/loop.go` | `core/agent/agent_loop.dart` | Stream instead of callback |
+| `pkg/agent/context.go` | `core/agent/context_builder.dart` | Flutter asset loading |
+| `pkg/agent/memory.go` | `core/agent/memory_manager.dart` | Storage via Hive |
 | `pkg/tools/base.go` | `core/tools/tool.dart` | Interface + registry |
-| `pkg/tools/web.go` | `core/tools/web_search_tool.dart` | HTTP pur |
-| `pkg/tools/filesystem.go` | `core/tools/file_tool.dart` | Scoped au app dir |
+| `pkg/tools/web.go` | `core/tools/web_search_tool.dart` | Pure HTTP |
+| `pkg/tools/filesystem.go` | `core/tools/file_tool.dart` | Scoped to app dir |
 | `pkg/config/config.go` | `core/config/app_config.dart` | `json_serializable` |
-| `pkg/session/manager.go` | `core/session/session_manager.dart` | Hive pour persistence |
-| `pkg/skills/loader.go` | `core/skills/skill_loader.dart` | Assets + téléchargement |
-| `pkg/bus/bus.go` | Remplacé par Riverpod/Streams | — |
-| `pkg/channels/*` | Remplacé par `features/chat/` | UI Flutter = le seul channel |
-| `pkg/cron/service.go` | `WorkManager` integration | Background tasks Android |
-| `pkg/auth/oauth.go` | `flutter_appauth` | OAuth mobile |
-| `pkg/auth/store.go` | `flutter_secure_storage` | Keychain Android |
-| `pkg/voice/transcriber.go` | `features/voice/voice_input.dart` | `speech_to_text` ou HTTP Groq |
-| `pkg/health/server.go` | **Supprimer** | Pas de serveur HTTP |
-| `pkg/heartbeat/service.go` | **Supprimer** ou `WorkManager` | Optionnel |
-| `pkg/devices/*` | **Supprimer** | USB monitoring non pertinent |
-| `pkg/migrate/*` | **Supprimer** | Pas de migration |
+| `pkg/session/manager.go` | `core/session/session_manager.dart` | Hive for persistence |
+| `pkg/skills/loader.go` | `core/skills/skill_loader.dart` | Assets + download |
+| `pkg/bus/bus.go` | Replaced by Riverpod/Streams | — |
+| `pkg/channels/*` | Replaced by `features/chat/` | Flutter UI = the only channel |
+| `pkg/cron/service.go` | `WorkManager` integration | Android background tasks |
+| `pkg/auth/oauth.go` | `flutter_appauth` | Mobile OAuth |
+| `pkg/auth/store.go` | `flutter_secure_storage` | Android Keychain |
+| `pkg/voice/transcriber.go` | `features/voice/voice_input.dart` | `speech_to_text` or Groq HTTP |
+| `pkg/health/server.go` | **Remove** | No HTTP server |
+| `pkg/heartbeat/service.go` | **Remove** or `WorkManager` | Optional |
+| `pkg/devices/*` | **Remove** | USB monitoring not relevant |
+| `pkg/migrate/*` | **Remove** | No migration |
 
 ---
 
-## 7. Plan d'Implémentation (ordre recommandé)
+## 7. Implementation Plan (recommended order)
 
-### Phase 1 : Fondations (2-3 jours)
-1. **Créer le projet Flutter** : `flutter create picoclaw --platforms android`
-2. **Config** : Convertir `config.go` → `app_config.dart` avec `json_serializable`
-3. **Types Provider** : `types.go` → `llm_response.dart`
-4. **HTTP Provider** : `http_provider.go` → `http_provider.dart`
-5. **Test** : Vérifier un appel API simple à OpenRouter
+### Phase 1: Foundations (2-3 days)
+1. **Create Flutter project**: `flutter create picoclaw --platforms android`
+2. **Config**: Convert `config.go` → `app_config.dart` with `json_serializable`
+3. **Provider Types**: `types.go` → `llm_response.dart`
+4. **HTTP Provider**: `http_provider.go` → `http_provider.dart`
+5. **Test**: Verify a simple API call to OpenRouter
 
-### Phase 2 : Agent Core (3-4 jours)
-6. **Tool abstraction** : Interface `Tool`, `ToolRegistry`, `ToolResult`
-7. **Web Search** : Convertir `web.go` → `web_search_tool.dart`
-8. **Web Fetch** : Convertir la partie fetch de `web.go`
-9. **Session Manager** : Convertir `session/manager.go` avec Hive
-10. **Context Builder** : Convertir `context.go`
-11. **Agent Loop** : Convertir `loop.go` en Stream-based
-12. **Test** : Conversation complète avec tool calling
+### Phase 2: Agent Core (3-4 days)
+6. **Tool abstraction**: `Tool` interface, `ToolRegistry`, `ToolResult`
+7. **Web Search**: Convert `web.go` → `web_search_tool.dart`
+8. **Web Fetch**: Convert the fetch part of `web.go`
+9. **Session Manager**: Convert `session/manager.go` with Hive
+10. **Context Builder**: Convert `context.go`
+11. **Agent Loop**: Convert `loop.go` to Stream-based
+12. **Test**: Complete conversation with tool calling
 
-### Phase 3 : UI Flutter (3-4 jours)
-13. **Écran de chat** : Bulles de messages, scroll, markdown
-14. **Input bar** : Saisie texte + bouton envoi
-15. **Settings** : Configuration des API keys et du modèle
-16. **Onboarding** : Premier lancement, saisie API key
-17. **État de l'agent** : Afficher thinking/tool calls en live
+### Phase 3: Flutter UI (3-4 days)
+13. **Chat screen**: Message bubbles, scroll, markdown
+14. **Input bar**: Text input + send button
+15. **Settings**: API keys and model configuration
+16. **Onboarding**: First launch, API key entry
+17. **Agent state**: Display thinking/tool calls live
 
-### Phase 4 : Polish (2-3 jours)
-18. **Skills** : Loader depuis assets ou téléchargement
-19. **Voice** : Input vocal (optionnel)
-20. **Stockage sécurisé** : API keys dans flutter_secure_storage
-21. **Thème** : Material 3, mode sombre
-22. **Build APK** : `flutter build apk --release`
+### Phase 4: Polish (2-3 days)
+18. **Skills**: Loader from assets or download
+19. **Voice**: Voice input (optional)
+20. **Secure storage**: API keys in flutter_secure_storage
+21. **Theme**: Material 3, dark mode
+22. **Build APK**: `flutter build apk --release`
 
 ---
 
-## 8. Commandes pour Démarrer
+## 8. Commands to Get Started
 
 ```bash
-# Créer le projet
+# Create project
 flutter create picoclaw --platforms android
 cd picoclaw
 
-# Ajouter les dépendances
+# Add dependencies
 flutter pub add http shared_preferences path_provider hive \
   flutter_secure_storage uuid flutter_markdown flutter_riverpod \
   connectivity_plus
@@ -800,19 +800,19 @@ flutter build apk --release
 
 ---
 
-## 9. Points d'Attention
+## 9. Points of Attention
 
-### Concurrence Go → Dart
-Go utilise des goroutines partout. En Dart/Flutter, le modèle est single-threaded avec des `Future`/`Stream`. Les appels HTTP sont déjà async. Pour les calculs lourds (parsing de gros JSON), utiliser `compute()` ou `Isolate`.
+### Go Concurrency → Dart
+Go uses goroutines everywhere. In Dart/Flutter, the model is single-threaded with `Future`/`Stream`. HTTP calls are already async. For heavy computation (parsing large JSON), use `compute()` or `Isolate`.
 
-### Taille de l'APK
-Go produit un binaire de ~10MB. L'APK Flutter fera ~15-25MB en release (inclut le moteur Flutter). C'est acceptable pour Android.
+### APK Size
+Go produces a ~10MB binary. The Flutter APK will be ~15-25MB in release (includes Flutter engine). This is acceptable for Android.
 
-### Sécurité des API Keys
-Ne jamais stocker les API keys en clair. Utiliser `flutter_secure_storage` qui utilise le Keystore Android.
+### API Key Security
+Never store API keys in plain text. Use `flutter_secure_storage` which uses the Android Keystore.
 
-### Gestion réseau
-Ajouter `connectivity_plus` pour détecter l'état réseau et gérer le mode offline gracieusement (afficher les sessions en cache, désactiver l'envoi).
+### Network Management
+Add `connectivity_plus` to detect network status and gracefully handle offline mode (display cached sessions, disable sending).
 
-### Provider Anthropic
-L'API Anthropic utilise un format légèrement différent d'OpenAI (`messages` API avec `type: "tool_use"` au lieu de `tool_calls`). Il faudra un provider dédié, pas juste le HTTP provider générique.
+### Anthropic Provider
+The Anthropic API uses a slightly different format from OpenAI (`messages` API with `type: "tool_use"` instead of `tool_calls`). A dedicated provider will be needed, not just the generic HTTP provider.

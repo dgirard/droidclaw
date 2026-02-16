@@ -1,34 +1,32 @@
 ---
-title: "docs: Create README — architecture, double IHM Chat+Telegram, long polling Android"
+title: "docs: Create README — architecture, dual Chat+Telegram UI, Android long polling"
 type: docs
 date: 2026-02-16
 ---
 
-# README du projet DroidClaw
+# DroidClaw Project README
 
 ## Overview
 
-Rédiger un `README.md` complet pour DroidClaw couvrant :
+Write a complete `README.md` for DroidClaw covering:
 
-1. **Origine** : port de PicoClaw (Go) vers Flutter/Dart Android
-2. **Architecture** : boucle agentique, providers LLM multi-fournisseurs, outils
-3. **Double IHM** : chat Flutter intégré **+ bot Telegram** comme second canal d'interaction
-4. **Ajout de Telegram** : innovation DroidClaw — PicoClaw avait un channel Telegram serveur (webhook), DroidClaw fait tourner le polling **directement sur le téléphone Android** via un foreground service, sans aucun serveur
-5. **Pourquoi pas WhatsApp** : API webhook-only, pas de long polling, nécessite un serveur
-6. **Contraintes Android** : pas de serveur possible → solution long polling
-7. **Schémas Mermaid** d'architecture (3 minimum)
-
-Le README sera rédigé en français avec les termes techniques anglais conservés.
+1. **Origin**: port from PicoClaw (Go) to Flutter/Dart Android
+2. **Architecture**: agentic loop, multi-provider LLM abstraction, tools
+3. **Dual UI**: built-in Flutter chat **+ Telegram bot** as second interaction channel
+4. **Telegram addition**: DroidClaw innovation — PicoClaw had a server-side Telegram channel (webhook), DroidClaw runs polling **directly on the Android phone** via a foreground service, with no server
+5. **Why not WhatsApp**: webhook-only API, no long polling, requires a server
+6. **Android constraints**: no server possible -> long polling solution
+7. **Mermaid architecture diagrams** (at least 3)
 
 ## Problem Statement / Motivation
 
-Le projet n'a qu'un `README_flutter.md` boilerplate. Un vrai README est nécessaire pour :
+The project only had a boilerplate `README_flutter.md`. A proper README is needed to:
 
-- Expliquer ce qu'est DroidClaw et d'où il vient (port de PicoClaw Go)
-- Documenter les choix d'architecture (agent loop, dual isolate Telegram, long polling)
-- Mettre en avant la **double interface** : chat Flutter + bot Telegram (ajout majeur)
-- Expliquer pourquoi Telegram et pas WhatsApp (contraintes techniques concrètes)
-- Fournir des schémas visuels de l'architecture (Mermaid)
+- Explain what DroidClaw is and where it comes from (port from PicoClaw Go)
+- Document architecture decisions (agent loop, dual isolate Telegram, long polling)
+- Highlight the **dual interface**: Flutter chat + Telegram bot (major addition)
+- Explain why Telegram and not WhatsApp (concrete technical constraints)
+- Provide visual architecture diagrams (Mermaid)
 
 ## Proposed Solution
 
@@ -51,10 +49,10 @@ A single `README.md` at the project root, structured as follows:
 - PicoClaw: ~16K-line Go CLI/gateway AI agent (github.com/sipeed/picoclaw)
 - Goal: port the agent core to a pure Dart/Flutter Android app
 - What was kept: agent loop, LLM providers, tools (web_search, web_fetch), sessions, skills, memory
-- What was dropped: shell/exec, I2C/SPI, USB monitoring, HTTP server, messaging channels Go (Telegram Go, Discord, Slack, WhatsApp, DingTalk)
+- What was dropped: shell/exec, I2C/SPI, USB monitoring, HTTP server, Go messaging channels (Telegram Go, Discord, Slack, WhatsApp, DingTalk)
 - What was added:
-  - **Flutter chat UI** as interface principale (remplace les channels Go)
-  - **Telegram bot via Android foreground service** — ajout majeur qui n'existait pas dans PicoClaw sous cette forme. PicoClaw avait un channel Telegram côté serveur (webhook), mais DroidClaw innove en faisant tourner le polling Telegram **directement sur le téléphone Android** sans serveur externe, grâce à un foreground service avec long polling. C'est un changement d'architecture fondamental : de serveur webhook → client long polling mobile.
+  - **Flutter chat UI** as the main interface (replaces Go channels)
+  - **Telegram bot via Android foreground service** — a major addition that didn't exist in PicoClaw in this form. PicoClaw had a server-side Telegram channel (webhook), but DroidClaw innovates by running Telegram polling **directly on the Android phone** without an external server, using a foreground service with long polling. This is a fundamental architecture shift: from server webhook -> mobile long polling client.
 
 ### Section 4: Architecture
 
@@ -168,17 +166,17 @@ lib/
 
 ### Section 6: Dual Interface — Chat + Telegram
 
-This section is central to the README. Elle doit expliquer clairement que DroidClaw a **deux moyens d'interagir** avec l'assistant IA, et que l'ajout de Telegram est une innovation propre à DroidClaw.
+This section is central to the README. It must clearly explain that DroidClaw has **two ways to interact** with the AI assistant, and that the Telegram addition is a DroidClaw innovation.
 
 #### Why Two Interfaces?
 
-- **Flutter chat UI** : interaction directe sur l'appareil, avec rendu Markdown, indicateur d'outils en cours, et historique de session
-- **Telegram bot** : accès à distance, depuis n'importe quel appareil (PC, tablette, autre téléphone), même quand le téléphone Android est dans une poche ou fermé. L'utilisateur envoie un message sur Telegram, le téléphone Android le traite en arrière-plan et répond.
+- **Flutter chat UI**: direct on-device interaction with Markdown rendering, real-time tool indicators, and session history
+- **Telegram bot**: remote access from any device (PC, tablet, another phone), even when the Android phone is in a pocket or turned off. The user sends a message on Telegram, the Android phone processes it in the background and replies.
 - Same AgentLoop processes both — different input/output channels
 - Telegram uses separate session keys (`telegram_<chat_id>`) so conversations don't mix
-- D'autres utilisateurs (famille, équipe) peuvent aussi parler au bot si le whitelist le permet
+- Other users (family, team) can also talk to the bot if the whitelist allows it
 
-Expliquer que PicoClaw Go avait des channels messaging (Telegram, Discord, Slack, WhatsApp, DingTalk) mais ils tournaient sur un **serveur**. DroidClaw a réinventé le concept pour fonctionner **entièrement depuis un téléphone Android**, sans aucun serveur, en utilisant un foreground service + long polling.
+Explain that PicoClaw Go had messaging channels (Telegram, Discord, Slack, WhatsApp, DingTalk) but they ran on a **server**. DroidClaw reinvented the concept to work **entirely from an Android phone**, with no server at all, using a foreground service + long polling.
 
 #### Why Not WhatsApp?
 
@@ -206,7 +204,7 @@ Android apps can't reliably run HTTP servers because:
 
 ```
 Webhook model (impossible):      Long polling model (DroidClaw):
-Telegram → phone:8443            Phone → Telegram API
+Telegram -> phone:8443           Phone -> Telegram API
 (blocked by NAT/firewall)        (works from anywhere)
 ```
 
@@ -264,9 +262,9 @@ flutter build apk --release
 adb install build/app/outputs/flutter-apk/app-release.apk
 ```
 
-First launch: onboarding flow → select LLM provider → enter API key → test → start chatting.
+First launch: onboarding flow -> select LLM provider -> enter API key -> test -> start chatting.
 
-For Telegram: Settings → Telegram Bot → enter @BotFather token → test → enable.
+For Telegram: Settings -> Telegram Bot -> enter @BotFather token -> test -> enable.
 
 ### Section 10: File Count & Stats
 
@@ -277,16 +275,15 @@ For Telegram: Settings → Telegram Bot → enter @BotFather token → test → 
 
 ## Acceptance Criteria
 
-- [ ] `README.md` exists at project root (replaces `README_flutter.md`)
-- [ ] Written in French with technical English terms preserved
-- [ ] Contains all 10 sections described above
-- [ ] At least 3 Mermaid diagrams (high-level arch, agent loop, Telegram isolates)
-- [ ] Explains origin from PicoClaw with what was kept/dropped/added
-- [ ] Explains why WhatsApp is not supported with concrete technical reasons
-- [ ] Explains Android server constraints and why long polling is the solution
-- [ ] Explains foreground service type choice (`remoteMessaging` vs `dataSync`)
-- [ ] Contains project directory structure
-- [ ] Contains getting started instructions
+- [x] `README.md` exists at project root (replaces `README_flutter.md`)
+- [x] Contains all 10 sections described above
+- [x] At least 3 Mermaid diagrams (high-level arch, agent loop, Telegram isolates)
+- [x] Explains origin from PicoClaw with what was kept/dropped/added
+- [x] Explains why WhatsApp is not supported with concrete technical reasons
+- [x] Explains Android server constraints and why long polling is the solution
+- [x] Explains foreground service type choice (`remoteMessaging` vs `dataSync`)
+- [x] Contains project directory structure
+- [x] Contains getting started instructions
 
 ## Files to Create/Modify
 

@@ -8,57 +8,57 @@ date: 2026-02-16
 
 ## Overview
 
-Ajouter un ecran Settings pour configurer la cle API Brave Search. Actuellement, `braveApiKey` existe dans `ToolsConfig` mais **aucune UI ne permet de la saisir**. Sans cle Brave, `web_search` utilise le fallback DuckDuckGo HTML qui est moins fiable et plus lent que l'API Brave.
+Add a Settings screen to configure the Brave Search API key. Currently, `braveApiKey` exists in `ToolsConfig` but **no UI allows it to be entered**. Without a Brave key, `web_search` uses the DuckDuckGo HTML fallback which is less reliable and slower than the Brave API.
 
 ## Problem Statement / Motivation
 
-- Le `web_search` tool est un outil central de l'agent — il doit fonctionner de maniere fiable
-- Brave Search API offre des resultats de bien meilleure qualite que le fallback DuckDuckGo
-- La cle Brave est actuellement stockee en clair dans le JSON config (`ToolsConfig.braveApiKey`) — elle devrait etre dans SecureStorage comme les cles LLM
-- L'utilisateur n'a aucun moyen de configurer cette cle sans editer manuellement le JSON
+- The `web_search` tool is a core tool of the agent — it needs to work reliably
+- Brave Search API offers much higher quality results than the DuckDuckGo fallback
+- The Brave key is currently stored in plain text in the JSON config (`ToolsConfig.braveApiKey`) — it should be in SecureStorage like the LLM provider keys
+- The user has no way to configure this key without manually editing the JSON
 
 ## Proposed Solution
 
-### 1. Nouvel ecran `WebSearchConfigScreen`
+### 1. New `WebSearchConfigScreen`
 
-Un ecran simple accessible depuis Settings > Web Search, calque sur le pattern de `provider_config_screen.dart` :
-- TextField pour la cle API Brave (obscurable, comme le champ API Key du provider)
-- Bouton "Test" qui fait une vraie recherche Brave et affiche le resultat
-- Bouton "Save" dans l'AppBar
-- Note explicative : la recherche fonctionne sans cle (fallback DuckDuckGo) mais Brave donne de meilleurs resultats
+A simple screen accessible from Settings > Web Search, modeled after the `provider_config_screen.dart` pattern:
+- TextField for the Brave API key (obscurable, like the provider API Key field)
+- "Test" button that performs a real Brave search and displays the result
+- "Save" button in the AppBar
+- Explanatory note: search works without a key (DuckDuckGo fallback) but Brave gives better results
 
-### 2. Migration du stockage de la cle Brave
+### 2. Migrate Brave key storage
 
-Deplacer `braveApiKey` de `ToolsConfig` (JSON en clair) vers `FlutterSecureStorage` :
-- Ajouter `getSecure('brave_api_key')` / `setSecure('brave_api_key')` dans `ConfigStorage`
-- Supprimer `braveApiKey` de `ToolsConfig`
-- Le `toolRegistryProvider` charge la cle depuis SecureStorage au lieu de `config.tools.braveApiKey`
+Move `braveApiKey` from `ToolsConfig` (plain text JSON) to `FlutterSecureStorage`:
+- Add `getSecure('brave_api_key')` / `setSecure('brave_api_key')` to `ConfigStorage`
+- Remove `braveApiKey` from `ToolsConfig`
+- `toolRegistryProvider` loads the key from SecureStorage instead of `config.tools.braveApiKey`
 
-### 3. Wiring dans Settings + routes
+### 3. Wire into Settings + routes
 
-- Ajouter une entree "Web Search" dans `settings_screen.dart` (section Tools)
-- Ajouter la route `/settings/web-search` dans `app.dart`
+- Add a "Web Search" entry in `settings_screen.dart` (Tools section)
+- Add the `/settings/web-search` route in `app.dart`
 
-## Fichiers a modifier
+## Files to modify
 
-| Fichier | Changement |
+| File | Change |
 |---|---|
-| `lib/features/settings/web_search_config_screen.dart` | **Nouveau** — ecran de config Brave API key |
-| `lib/features/settings/settings_screen.dart` | Ajouter section "Tools" avec entree "Web Search" |
-| `lib/app.dart` | Ajouter route `/settings/web-search` + import |
-| `lib/core/config/config_storage.dart` | Ajouter `getBraveApiKey()` / `setBraveApiKey()` (SecureStorage) |
-| `lib/core/config/app_config.dart` | Retirer `braveApiKey` de `ToolsConfig` |
-| `lib/providers/app_providers.dart` | `toolRegistryProvider` : charger braveApiKey depuis ConfigStorage |
+| `lib/features/settings/web_search_config_screen.dart` | **New** — Brave API key config screen |
+| `lib/features/settings/settings_screen.dart` | Add "Tools" section with "Web Search" entry |
+| `lib/app.dart` | Add route `/settings/web-search` + import |
+| `lib/core/config/config_storage.dart` | Add `getBraveApiKey()` / `setBraveApiKey()` (SecureStorage) |
+| `lib/core/config/app_config.dart` | Remove `braveApiKey` from `ToolsConfig` |
+| `lib/providers/app_providers.dart` | `toolRegistryProvider`: load braveApiKey from ConfigStorage |
 
-## Changements detailles
+## Detailed changes
 
-### `web_search_config_screen.dart` (nouveau)
+### `web_search_config_screen.dart` (new)
 
-Pattern identique a `provider_config_screen.dart` :
-- `ConsumerStatefulWidget` avec `_apiKeyController`
-- `_loadCurrentKey()` au `initState` via `configStorage.getBraveApiKey()`
-- `_testSearch()` : cree un `WebSearchTool(braveApiKey: key)`, appelle `execute({'query': 'test'})`, affiche le resultat
-- `_save()` : `configStorage.setBraveApiKey(key)`, met a jour le provider, pop
+Same pattern as `provider_config_screen.dart`:
+- `ConsumerStatefulWidget` with `_apiKeyController`
+- `_loadCurrentKey()` at `initState` via `configStorage.getBraveApiKey()`
+- `_testSearch()`: creates a `WebSearchTool(braveApiKey: key)`, calls `execute({'query': 'test'})`, displays the result
+- `_save()`: `configStorage.setBraveApiKey(key)`, updates the provider, pops
 
 ### `config_storage.dart`
 
@@ -69,11 +69,11 @@ Future<void> setBraveApiKey(String apiKey) => _storage.setSecure('brave_api_key'
 
 ### `app_config.dart` — `ToolsConfig`
 
-Retirer `braveApiKey` du modele :
+Remove `braveApiKey` from the model:
 ```dart
 class ToolsConfig {
   final int webSearchMaxResults;
-  // braveApiKey supprime — stocke dans SecureStorage
+  // braveApiKey removed — stored in SecureStorage
 }
 ```
 
@@ -92,13 +92,13 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
     braveApiKey: braveApiKey,
     maxResults: config.tools.webSearchMaxResults,
   ));
-  // ... reste inchange
+  // ... rest unchanged
 });
 ```
 
 ### `settings_screen.dart`
 
-Ajouter entre la section "Agent" et "Channels" :
+Add between the "Agent" and "Channels" sections:
 
 ```dart
 const Divider(),
@@ -118,35 +118,35 @@ ListTile(
 '/settings/web-search': (context) => const WebSearchConfigScreen(),
 ```
 
-## Points de vigilance
+## Points to watch
 
-1. **Apres save, le toolRegistry doit se rafraichir** — comme `toolRegistryProvider` est un `FutureProvider` qui `ref.watch(appConfigProvider)`, il faut soit invalider le provider soit forcer un rebuild. Le plus simple : faire un `ref.invalidate(toolRegistryProvider)` apres le save, ou ajouter un `braveApiKeyProvider` reactif.
+1. **After save, the toolRegistry must refresh** — since `toolRegistryProvider` is a `FutureProvider` that `ref.watch(appConfigProvider)`, we need to either invalidate the provider or force a rebuild. Simplest approach: call `ref.invalidate(toolRegistryProvider)` after save, or add a reactive `braveApiKeyProvider`.
 
-2. **Migration des configs existantes** — si un utilisateur a deja un `brave_api_key` dans le JSON config, on pourrait le migrer vers SecureStorage au premier lancement. Mais comme personne n'a pu le configurer via l'UI, c'est peu probable — on peut simplement ignorer l'ancien champ.
+2. **Existing config migration** — if a user already has a `brave_api_key` in the JSON config, we could migrate it to SecureStorage on first launch. But since nobody has been able to configure it via the UI, this is unlikely — we can simply ignore the old field.
 
-3. **Le test doit gerer l'echec gracieusement** — erreur 401 (mauvaise cle), timeout, etc.
+3. **The test must handle failure gracefully** — 401 error (bad key), timeout, etc.
 
 ## Acceptance Criteria
 
-- [x] Ecran "Web Search" accessible depuis Settings > Tools > Web Search
-- [x] Champ API key obscurable avec toggle visibility
-- [x] Bouton "Test" qui fait une vraie recherche Brave et affiche succes/echec
-- [x] Bouton "Save" qui persiste la cle dans SecureStorage
-- [x] Note explicative visible quand pas de cle configuree
-- [x] `braveApiKey` retire de `ToolsConfig` (plus en clair dans le JSON)
-- [x] `flutter analyze` passe sans erreur
-- [ ] web_search fonctionne avec une cle Brave configuree via l'ecran
+- [x] "Web Search" screen accessible from Settings > Tools > Web Search
+- [x] Obscurable API key field with visibility toggle
+- [x] "Test" button that performs a real Brave search and shows success/failure
+- [x] "Save" button that persists the key in SecureStorage
+- [x] Explanatory note visible when no key is configured
+- [x] `braveApiKey` removed from `ToolsConfig` (no longer in plain text JSON)
+- [x] `flutter analyze` passes without errors
+- [ ] web_search works with a Brave key configured via the screen
 
 ## References
 
 ### Internal References
-- Pattern a suivre : `lib/features/settings/provider_config_screen.dart`
-- Config storage : `lib/core/config/config_storage.dart:24-33`
-- ToolsConfig actuel : `lib/core/config/app_config.dart:144-173`
-- WebSearchTool : `lib/core/tools/web_search_tool.dart:45-46`
-- Tool registry wiring : `lib/providers/app_providers.dart:80-83`
-- Settings screen : `lib/features/settings/settings_screen.dart`
-- App routes : `lib/app.dart:29-36`
+- Pattern to follow: `lib/features/settings/provider_config_screen.dart`
+- Config storage: `lib/core/config/config_storage.dart:24-33`
+- Current ToolsConfig: `lib/core/config/app_config.dart:144-173`
+- WebSearchTool: `lib/core/tools/web_search_tool.dart:45-46`
+- Tool registry wiring: `lib/providers/app_providers.dart:80-83`
+- Settings screen: `lib/features/settings/settings_screen.dart`
+- App routes: `lib/app.dart:29-36`
 
 ### External References
-- Brave Search API : https://brave.com/search/api/
+- Brave Search API: https://brave.com/search/api/
