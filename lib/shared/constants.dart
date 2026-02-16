@@ -20,6 +20,8 @@ class AppConstants {
   static const int webSearchMaxResults = 5;
   static const int webFetchMaxChars = 50000;
   static const int webFetchMaxRedirects = 5;
+  static const int webScrapeMaxChars = 15000;
+  static const int webScrapeJsTimeoutSeconds = 30;
 
   // Session
   static const String defaultSessionKey = 'default';

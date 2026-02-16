@@ -16,7 +16,8 @@ import '../core/tools/location_tool.dart';
 import '../core/tools/message_tool.dart';
 import '../core/tools/subagent_tool.dart';
 import '../core/tools/tool.dart';
-import '../core/tools/web_fetch_tool.dart';
+import '../core/tools/web_scrape_js_tool.dart';
+import '../core/tools/web_scrape_tool.dart';
 import '../core/tools/web_search_tool.dart';
 import '../data/local/storage_service.dart';
 
@@ -87,8 +88,11 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
       maxResults: config.tools.webSearchMaxResults,
     ));
   }
-  if (!disabled.contains('web_fetch')) {
-    registry.register(WebFetchTool());
+  if (!disabled.contains('web_scrape')) {
+    registry.register(WebScrapeTool());
+  }
+  if (!disabled.contains('web_scrape_js')) {
+    registry.register(WebScrapeJsTool());
   }
   if (!disabled.contains('file')) {
     registry.register(FileTool(workspacePath: workspacePath));

@@ -26,10 +26,16 @@ const _tools = [
     icon: Icons.search,
   ),
   _ToolInfo(
-    name: 'web_fetch',
-    label: 'Web Fetch',
-    description: 'Fetch and read web pages',
+    name: 'web_scrape',
+    label: 'Web Scrape',
+    description: 'Lightweight page scraping (HTTP + Markdown)',
     icon: Icons.language,
+  ),
+  _ToolInfo(
+    name: 'web_scrape_js',
+    label: 'Web Scrape (JS)',
+    description: 'Heavy JS-rendered page scraping (WebView)',
+    icon: Icons.web,
   ),
   _ToolInfo(
     name: 'file',

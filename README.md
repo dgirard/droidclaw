@@ -27,7 +27,7 @@ DroidClaw is a port of [PicoClaw](https://github.com/sipeed/picoclaw), a Go-base
 
 - **Agent Loop**: the agentic loop (LLM -> tool calls -> iteration)
 - **LLM Providers**: multi-provider abstraction (Anthropic, OpenAI, OpenRouter, Groq, Gemini)
-- **Tools**: web_search (Brave), web_fetch, file (sandboxed), get_location (GPS), subagent, message
+- **Tools**: web_search (Brave), web_scrape (HTTP+Markdown), web_scrape_js (WebView), file (sandboxed), get_location (GPS), subagent, message
 - **Sessions**: conversation history with Hive persistence
 - **Memory**: long-term MEMORY.md + daily notes
 - **Skills**: three-tier loading (builtin -> global -> workspace)
@@ -81,7 +81,7 @@ graph TB
     AL --> SM
     AL --> CB
     LP --> LLM["LLM APIs (Anthropic, OpenRouter, ...)"]
-    TR --> Tools["web_search / web_fetch / file / get_location / subagent"]
+    TR --> Tools["web_search / web_scrape / web_scrape_js / file / get_location / subagent"]
 ```
 
 ### Agent Loop
@@ -162,7 +162,7 @@ lib/
 └── shared/                      # Constants
 ```
 
-**50 Dart files** in total.
+**52 Dart files** in total.
 
 ---
 
@@ -251,18 +251,27 @@ Both interfaces (chat UI and Telegram) consume the same `Stream<AgentEvent>`. Th
 
 ## Tools
 
-The agent has access to 6 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
+The agent has access to 7 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
 
 Users can **enable or disable** individual tools from Settings > Tools > Manage Tools.
 
 | Tool | Name | Description |
 |------|------|-------------|
 | **Web Search** | `web_search` | Searches the web via the Brave Search API. Returns titles, URLs, and snippets. Requires a Brave API key configured in settings. |
-| **Web Fetch** | `web_fetch` | Fetches a web page via HTTP GET, strips HTML tags, and returns plain text content (max 50K chars). Follows redirects (max 5). Uses the Dart `http` package. Does not execute JavaScript. |
+| **Web Scrape** | `web_scrape` | Lightweight HTTP scraper. Fetches a page via HTTP GET, parses the HTML DOM with `package:html`, converts to structured Markdown via `html2md` (preserves headings, links, lists). Max 15K chars. Fast, low resources. If the result is empty, the page likely requires JavaScript. |
+| **Web Scrape (JS)** | `web_scrape_js` | Heavy WebView scraper. Loads the page in a headless `flutter_inappwebview` that executes JavaScript, waits for rendering, then extracts the DOM and converts to Markdown. For SPAs, React/Vue apps, and dynamic sites. Images disabled, 30s timeout, WebView disposed after use. |
 | **File** | `file` | Sandboxed file operations within the app workspace: `read_file`, `write_file`, `list_dir`. Path validation prevents directory traversal outside the sandbox. |
 | **GPS Location** | `get_location` | Returns the device's current GPS coordinates (latitude, longitude, accuracy, altitude). Uses Android's `FusedLocationProviderClient` via the `geolocator` package, with automatic fallback from GPS to network location. Handles permission requests and service availability checks. |
 | **Sub-agent** | `subagent` | Spawns a sub-task with a fresh session. The main agent delegates a focused task to a sub-agent, which processes it independently and returns the result. The sub-agent session is cleaned up after completion. |
 | **Message** | `message` | Internal tool for sending messages directly to the user interface. Always enabled (not toggleable). Returns a silent result — the LLM sees no output, but the user sees the message. |
+
+### Dual Scraping Strategy
+
+The LLM is guided by the tool descriptions to use a two-step approach:
+1. **Try `web_scrape` first** — fast, lightweight, works for most static sites
+2. **Fall back to `web_scrape_js`** — only when `web_scrape` returns empty (JS-rendered SPA)
+
+Both tools share a common `htmlToMarkdown()` utility that strips noise elements (`<nav>`, `<footer>`, `<aside>`, `<script>`, `<style>`) and produces clean Markdown with ATX headings and fenced code blocks.
 
 ### Tool Registration Flow
 
@@ -320,7 +329,7 @@ adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
 | | |
 |---|---|
-| **Dart files** | 50 |
+| **Dart files** | 52 |
 | **Analysis issues** | 0 |
 | **APK size (arm64)** | 18.8 MB |
 | **Native code** | None (pure Dart/Flutter) |

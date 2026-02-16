@@ -90,6 +90,12 @@ class AgentLoop {
         ...session.getMessages(),
       ];
 
+      final totalChars =
+          messages.fold<int>(0, (sum, m) => sum + m.content.length);
+      // ignore: avoid_print
+      print('[AgentLoop] iter=$iteration, msgs=${messages.length}, '
+          'chars=$totalChars, model=${config.agent.model}');
+
       yield ThinkingEvent(iteration: iteration);
 
       LLMResponse response;
@@ -103,7 +109,14 @@ class AgentLoop {
             'temperature': config.agent.temperature,
           },
         );
+        // ignore: avoid_print
+        print('[AgentLoop] LLM responded: '
+            'content=${response.content.length} chars, '
+            'toolCalls=${response.toolCalls.length}, '
+            'finish=${response.finishReason}');
       } catch (e) {
+        // ignore: avoid_print
+        print('[AgentLoop] LLM error: $e');
         yield ErrorEvent('LLM call failed: $e');
         return;
       }
@@ -129,6 +142,9 @@ class AgentLoop {
         yield ToolCallEvent(name: toolCall.name, arguments: toolCall.arguments);
 
         final result = await tools.execute(toolCall.name, toolCall.arguments);
+        // ignore: avoid_print
+        print('[AgentLoop] Tool ${toolCall.name} result: '
+            '${result.forLLM.length} chars, error=${result.isError}');
 
         yield ToolResultEvent(name: toolCall.name, result: result);
 
@@ -137,6 +153,7 @@ class AgentLoop {
           role: 'tool',
           content: result.forLLM,
           toolCallId: toolCall.id,
+          name: toolCall.name,
         ));
       }
     }

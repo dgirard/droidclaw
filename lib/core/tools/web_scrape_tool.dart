@@ -1,24 +1,29 @@
 import 'package:http/http.dart' as http;
 
 import '../../shared/constants.dart';
+import 'html_to_markdown.dart';
 import 'tool.dart';
 
-/// Fetches content from a URL, strips HTML, returns plain text.
-class WebFetchTool extends Tool {
+/// Lightweight web scraper: HTTP GET + HTML parsing + Markdown output.
+/// For static sites, blogs, news, documentation.
+class WebScrapeTool extends Tool {
   final int maxChars;
   final int maxRedirects;
 
-  WebFetchTool({
-    this.maxChars = AppConstants.webFetchMaxChars,
+  WebScrapeTool({
+    this.maxChars = AppConstants.webScrapeMaxChars,
     this.maxRedirects = AppConstants.webFetchMaxRedirects,
   });
 
   @override
-  String get name => 'web_fetch';
+  String get name => 'web_scrape';
 
   @override
   String get description =>
-      'Fetch the content of a web page. Returns the text content of the page.';
+      'Fetch a web page and extract its content as structured Markdown. '
+      'Works on static sites, blogs, news, documentation. '
+      'If the result is empty, the page likely requires JavaScript — '
+      'use web_scrape_js instead.';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -26,7 +31,7 @@ class WebFetchTool extends Tool {
         'properties': {
           'url': {
             'type': 'string',
-            'description': 'The URL to fetch',
+            'description': 'The URL to scrape',
           },
         },
         'required': ['url'],
@@ -73,52 +78,24 @@ class WebFetchTool extends Tool {
               'HTTP error ${response.statusCode} fetching $url');
         }
 
-        var content = response.body;
+        // Convert HTML to structured Markdown
+        final markdown = htmlToMarkdown(response.body, maxChars: maxChars);
 
-        // Strip HTML tags to extract text content
-        content = _stripHtml(content);
-
-        // Truncate if needed
-        if (content.length > maxChars) {
-          content =
-              '${content.substring(0, maxChars)}\n\n[Content truncated at $maxChars characters]';
-        }
-
-        if (content.trim().isEmpty) {
-          return ToolResult.simple('Page fetched but no text content found.');
+        if (markdown.isEmpty) {
+          return ToolResult.simple(
+              'Page fetched but no text content found. '
+              'The page may require JavaScript — try web_scrape_js.');
         }
 
         return ToolResult.dual(
-          forLLM: content,
-          forUser: 'Fetched ${content.length} chars from $url',
+          forLLM: markdown,
+          forUser: 'Scraped ${markdown.length} chars from $url',
         );
       } finally {
         client.close();
       }
     } catch (e) {
-      return ToolResult.error('Failed to fetch $url: $e');
+      return ToolResult.error('Failed to scrape $url: $e');
     }
-  }
-
-  /// Basic HTML stripping: remove tags, decode common entities, collapse whitespace.
-  String _stripHtml(String html) {
-    // Remove script and style blocks
-    var text = html.replaceAll(
-        RegExp(r'<(script|style)[^>]*>.*?</\1>', dotAll: true), '');
-    // Remove HTML tags
-    text = text.replaceAll(RegExp(r'<[^>]+>'), ' ');
-    // Decode common HTML entities
-    text = text
-        .replaceAll('&amp;', '&')
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&quot;', '"')
-        .replaceAll('&#39;', "'")
-        .replaceAll('&nbsp;', ' ');
-    // Collapse whitespace
-    text = text.replaceAll(RegExp(r'\s+'), ' ');
-    // Restore some line breaks
-    text = text.replaceAll(RegExp(r' {3,}'), '\n');
-    return text.trim();
   }
 }
