@@ -78,7 +78,7 @@ class HistoryScreen extends ConsumerWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => _CronExecutionsScreen(
+                            builder: (_) => CronExecutionsScreen(
                               cronName: cronName,
                               sessions: sessions,
                             ),
@@ -200,41 +200,54 @@ class _CronGroup {
 }
 
 /// Sub-screen showing individual executions of a cron.
-class _CronExecutionsScreen extends ConsumerWidget {
+class CronExecutionsScreen extends ConsumerWidget {
   final String cronName;
   final List<Session> sessions;
+  final int popCount;
 
-  const _CronExecutionsScreen({
+  const CronExecutionsScreen({
+    super.key,
     required this.cronName,
     required this.sessions,
+    this.popCount = 2,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(title: Text(cronName)),
-      body: ListView.builder(
-        itemCount: sessions.length,
-        itemBuilder: (context, index) {
-          final session = sessions[index];
-          return ListTile(
-            leading: const Icon(Icons.play_arrow_outlined),
-            title: Text(_sessionTitle(session),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text(
-              '${_formatDate(session.updated)} ${DateFormat('HH:mm').format(session.updated)}',
-              style: Theme.of(context).textTheme.bodySmall,
+      body: sessions.isEmpty
+          ? Center(
+              child: Text('No executions yet',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurfaceVariant)),
+            )
+          : ListView.builder(
+              itemCount: sessions.length,
+              itemBuilder: (context, index) {
+                final session = sessions[index];
+                return ListTile(
+                  leading: const Icon(Icons.play_arrow_outlined),
+                  title: Text(_sessionTitle(session),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    '${_formatDate(session.updated)} ${DateFormat('HH:mm').format(session.updated)}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  onTap: () {
+                    ref
+                        .read(chatProvider.notifier)
+                        .loadSession(session.key);
+                    // Pop back to chat
+                    for (var i = 0; i < popCount; i++) {
+                      Navigator.of(context).pop();
+                    }
+                  },
+                );
+              },
             ),
-            onTap: () {
-              ref.read(chatProvider.notifier).loadSession(session.key);
-              // Pop back to chat (pop this screen + history screen)
-              Navigator.of(context)
-                ..pop()
-                ..pop();
-            },
-          );
-        },
-      ),
     );
   }
 }

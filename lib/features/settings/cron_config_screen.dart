@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/config/cron_config.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/telegram_provider.dart';
+import '../../shared/constants.dart';
+import '../chat/history_screen.dart';
 
 /// Screen listing all configured crons with add/edit/delete.
 class CronConfigScreen extends ConsumerStatefulWidget {
@@ -16,11 +19,13 @@ class CronConfigScreen extends ConsumerStatefulWidget {
 
 class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
   List<CronDefinition> _crons = [];
+  bool _serviceRunning = false;
 
   @override
   void initState() {
     super.initState();
     _loadCrons();
+    _checkServiceStatus();
   }
 
   void _loadCrons() {
@@ -28,6 +33,11 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
     setState(() {
       _crons = configStorage.getCronDefinitions();
     });
+  }
+
+  Future<void> _checkServiceStatus() async {
+    final running = await FlutterForegroundTask.isRunningService;
+    if (mounted) setState(() => _serviceRunning = running);
   }
 
   Future<void> _saveCrons() async {
@@ -87,49 +97,130 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
       ),
       body: _crons.isEmpty
           ? _buildEmptyState(context)
-          : ListView.builder(
-              itemCount: _crons.length,
-              itemBuilder: (context, index) {
-                final cron = _crons[index];
-                return ListTile(
-                  leading: Icon(
-                    Icons.schedule,
-                    color: cron.enabled
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.outline,
-                  ),
-                  title: Text(cron.name),
-                  subtitle: Text(
-                    '${cron.schedule.displayText}'
-                    '${cron.lastRun != null ? ' - Last: ${DateFormat('MMM d HH:mm').format(cron.lastRun!)}' : ''}',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Switch(
-                        value: cron.enabled,
-                        onChanged: (v) => _toggleEnabled(index, v),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 20),
-                        onPressed: () => _deleteCron(index),
-                      ),
-                    ],
-                  ),
-                  onTap: () async {
-                    final result = await Navigator.pushNamed(
-                      context,
-                      '/settings/crons/edit',
-                      arguments: cron,
-                    );
-                    if (result is CronDefinition) {
-                      setState(() => _crons[index] = result);
-                      await _saveCrons();
-                    }
-                  },
-                );
-              },
+          : ListView(
+              children: [
+                _buildServiceStatus(context),
+                ...List.generate(_crons.length, (index) {
+                  final cron = _crons[index];
+                  final hasRun = cron.lastRun != null;
+                  return ListTile(
+                    leading: Icon(
+                      Icons.schedule,
+                      color: cron.enabled
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.outline,
+                    ),
+                    title: Text(cron.name),
+                    subtitle: Text(
+                      hasRun
+                          ? '${cron.schedule.displayText} - Last: ${DateFormat('MMM d HH:mm').format(cron.lastRun!)}'
+                          : '${cron.schedule.displayText} - Never ran',
+                      style: !hasRun && cron.enabled
+                          ? TextStyle(
+                              color:
+                                  Theme.of(context).colorScheme.error)
+                          : null,
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.history, size: 20),
+                          tooltip: 'View executions',
+                          onPressed: () => _viewExecutions(cron),
+                        ),
+                        Switch(
+                          value: cron.enabled,
+                          onChanged: (v) => _toggleEnabled(index, v),
+                        ),
+                        IconButton(
+                          icon:
+                              const Icon(Icons.delete_outline, size: 20),
+                          onPressed: () => _deleteCron(index),
+                        ),
+                      ],
+                    ),
+                    onTap: () async {
+                      final result = await Navigator.pushNamed(
+                        context,
+                        '/settings/crons/edit',
+                        arguments: cron,
+                      );
+                      if (result is CronDefinition) {
+                        setState(() => _crons[index] = result);
+                        await _saveCrons();
+                      }
+                    },
+                  );
+                }),
+              ],
             ),
+    );
+  }
+
+  Widget _buildServiceStatus(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasEnabledCrons = _crons.any((c) => c.enabled);
+    return Container(
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: _serviceRunning && hasEnabledCrons
+            ? theme.colorScheme.primaryContainer
+            : theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _serviceRunning && hasEnabledCrons
+                ? Icons.check_circle_outline
+                : Icons.warning_amber_rounded,
+            size: 20,
+            color: _serviceRunning && hasEnabledCrons
+                ? theme.colorScheme.onPrimaryContainer
+                : theme.colorScheme.onErrorContainer,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              !hasEnabledCrons
+                  ? 'No prompts enabled'
+                  : _serviceRunning
+                      ? 'Background service running'
+                      : 'Background service not running',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: _serviceRunning && hasEnabledCrons
+                    ? theme.colorScheme.onPrimaryContainer
+                    : theme.colorScheme.onErrorContainer,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _viewExecutions(CronDefinition cron) async {
+    final sm = await ref.read(sessionManagerProvider.future);
+
+    final prefix = '${AppConstants.cronSessionPrefix}${cron.id}';
+    final allSessions = sm.getAllSessions();
+    final cronSessions = allSessions
+        .where((s) => s.key.startsWith(prefix))
+        .toList()
+      ..sort((a, b) => b.updated.compareTo(a.updated));
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CronExecutionsScreen(
+          cronName: cron.name,
+          sessions: cronSessions,
+          popCount: 1,
+        ),
+      ),
     );
   }
 
