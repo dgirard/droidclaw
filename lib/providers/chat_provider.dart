@@ -204,6 +204,15 @@ class ChatNotifier extends Notifier<ChatState> {
     final session = sessions.createNew();
     state = ChatState(sessionKey: session.key);
   }
+
+  /// Delete a session. If it's the current one, switch to default.
+  Future<void> deleteSession(String sessionKey) async {
+    final sessions = await ref.read(sessionManagerProvider.future);
+    await sessions.deleteSession(sessionKey);
+    if (state.sessionKey == sessionKey) {
+      await loadSession(AppConstants.defaultSessionKey);
+    }
+  }
 }
 
 /// Chat state provider.

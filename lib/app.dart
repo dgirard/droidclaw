@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/chat/chat_screen.dart';
+import 'features/chat/history_screen.dart';
 import 'features/onboarding/onboard_screen.dart';
+import 'features/settings/cron_config_screen.dart';
+import 'features/settings/cron_edit_screen.dart';
 import 'features/settings/provider_config_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/settings/skills_screen.dart';
@@ -30,11 +33,14 @@ class DroidClawApp extends ConsumerWidget {
       routes: {
         '/onboard': (context) => const OnboardScreen(),
         '/chat': (context) => const ChatScreen(),
+        '/history': (context) => const HistoryScreen(),
         '/settings': (context) => const SettingsScreen(),
         '/settings/provider': (context) => const ProviderConfigScreen(),
         '/settings/skills': (context) => const SkillsScreen(),
         '/settings/telegram': (context) => const TelegramConfigScreen(),
         '/settings/web-search': (context) => const WebSearchConfigScreen(),
+        '/settings/crons': (context) => const CronConfigScreen(),
+        '/settings/crons/edit': (context) => const CronEditScreen(),
       },
     );
   }

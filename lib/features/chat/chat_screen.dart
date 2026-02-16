@@ -52,6 +52,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         title: const Text('DroidClaw'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'Conversations',
+            onPressed: () => Navigator.pushNamed(context, '/history'),
+          ),
+          IconButton(
             icon: const Icon(Icons.add_comment_outlined),
             tooltip: 'New session',
             onPressed: () => chatNotifier.newSession(),
