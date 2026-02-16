@@ -29,6 +29,7 @@ class _OnboardScreenState extends ConsumerState<OnboardScreen> {
     ('anthropic', 'Anthropic', 'Direct access to Claude models'),
     ('openai', 'OpenAI', 'Access to GPT models'),
     ('groq', 'Groq', 'Fast inference for open models'),
+    ('gemini', 'Google Gemini', 'Google AI models with free tier'),
   ];
 
   @override

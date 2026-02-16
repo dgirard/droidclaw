@@ -36,6 +36,7 @@ class AppConstants {
   static const String defaultModel = 'anthropic/claude-sonnet-4-20250514';
   static const String openRouterApiBase = 'https://openrouter.ai/api/v1';
   static const String anthropicApiBase = 'https://api.anthropic.com/v1';
+  static const String geminiApiBase = 'https://generativelanguage.googleapis.com/v1beta/openai';
   static const String anthropicVersion = '2023-06-01';
 
   // Telegram

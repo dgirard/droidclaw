@@ -25,7 +25,7 @@ class _ProviderConfigScreenState extends ConsumerState<ProviderConfigScreen> {
   bool _testing = false;
   String? _testResult;
 
-  static const _providers = ['openrouter', 'anthropic', 'openai', 'groq'];
+  static const _providers = ['openrouter', 'anthropic', 'openai', 'groq', 'gemini'];
 
   @override
   void initState() {

@@ -50,6 +50,7 @@ class ProviderFactory {
         'openrouter' => AppConstants.openRouterApiBase,
         'openai' => 'https://api.openai.com/v1',
         'groq' => 'https://api.groq.com/openai/v1',
+        'gemini' => AppConstants.geminiApiBase,
         _ => '',
       };
 
@@ -57,6 +58,7 @@ class ProviderFactory {
         'openrouter' => AppConstants.defaultModel,
         'openai' => 'gpt-4o',
         'groq' => 'llama-3.3-70b-versatile',
+        'gemini' => 'gemini-2.0-flash',
         _ => 'gpt-4o',
       };
 }
