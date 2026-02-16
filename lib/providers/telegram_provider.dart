@@ -1,6 +1,7 @@
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/agent/agent_loop.dart';
 import '../features/telegram/telegram_api.dart';
 import '../features/telegram/telegram_bot_manager.dart';
 import '../features/telegram/telegram_task_handler.dart';
@@ -181,20 +182,78 @@ class TelegramNotifier extends Notifier<TelegramState> {
   }
 
   /// Disable the Telegram bot and stop the foreground service.
+  /// Only stops the service if no crons are active.
   Future<void> disable() async {
-    await FlutterForegroundTask.stopService();
-
     final storage = ref.read(storageServiceProvider);
     await storage.setBool(AppConstants.telegramBotEnabledKey, false);
 
     _botManager?.dispose();
     _botManager = null;
 
+    // Only stop the service if no crons need it
+    final configStorage = ref.read(configStorageProvider);
+    final crons = configStorage.getCronDefinitions();
+    final hasActiveCrons = crons.any((c) => c.enabled);
+    if (!hasActiveCrons) {
+      await FlutterForegroundTask.stopService();
+    }
+
     state = state.copyWith(
       isEnabled: false,
       isRunning: false,
       clearError: true,
     );
+  }
+
+  /// Ensure the foreground service is running (for crons even without Telegram).
+  Future<void> ensureServiceRunning() async {
+    final isRunning = await FlutterForegroundTask.isRunningService;
+    if (isRunning) {
+      // Just reload cron definitions in the task handler
+      FlutterForegroundTask.sendDataToTask({'action': 'reload_crons'});
+      return;
+    }
+
+    // Start service without Telegram
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'droidclaw_telegram_bot',
+        channelName: 'DroidClaw Background Service',
+        channelDescription: 'Background service for scheduled prompts',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+        onlyAlertOnce: true,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(
+        showNotification: false,
+      ),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.repeat(1000),
+        autoRunOnBoot: true,
+        autoRunOnMyPackageReplaced: true,
+        allowWakeLock: true,
+        allowWifiLock: true,
+      ),
+    );
+
+    final permission =
+        await FlutterForegroundTask.checkNotificationPermission();
+    if (permission != NotificationPermission.granted) {
+      await FlutterForegroundTask.requestNotificationPermission();
+    }
+
+    await FlutterForegroundTask.startService(
+      serviceId: 256,
+      notificationTitle: 'DroidClaw - Active',
+      notificationText: 'Scheduled prompts running',
+      notificationButtons: [
+        const NotificationButton(id: 'btn_stop', text: 'Stop'),
+      ],
+      callback: telegramServiceCallback,
+    );
+
+    // Init bot manager if AgentLoop is available (for cron execution)
+    await _initBotManager();
   }
 
   /// Update allowed users list.
@@ -264,6 +323,42 @@ class TelegramNotifier extends Notifier<TelegramState> {
         state = state.copyWith(
           error: map['message'] as String?,
         );
+
+      case 'cron_trigger':
+        _handleCronTrigger(map);
+    }
+  }
+
+  /// Execute a cron-triggered prompt via AgentLoop.
+  Future<void> _handleCronTrigger(Map<String, dynamic> data) async {
+    final cronId = data['cron_id'] as String;
+    final prompt = data['prompt'] as String;
+    final strategy = data['session_strategy'] as String;
+
+    final agentLoop = await ref.read(agentLoopProvider.future);
+    if (agentLoop == null) return;
+
+    final sessionKey = strategy == 'sameThread'
+        ? '${AppConstants.cronSessionPrefix}$cronId'
+        : '${AppConstants.cronSessionPrefix}${cronId}_${DateTime.now().millisecondsSinceEpoch}';
+
+    try {
+      await for (final event in agentLoop.processMessage(prompt, sessionKey)) {
+        if (event is ResponseEvent || event is ErrorEvent) break;
+      }
+
+      // Save session
+      final sessions = await ref.read(sessionManagerProvider.future);
+      final session = sessions.get(sessionKey);
+      if (session != null) await sessions.save(session);
+
+      // Notify task handler that cron is done
+      FlutterForegroundTask.sendDataToTask({
+        'action': 'cron_done',
+        'cron_id': cronId,
+      });
+    } catch (e) {
+      // Cron execution failed silently — logged in session if it exists
     }
   }
 

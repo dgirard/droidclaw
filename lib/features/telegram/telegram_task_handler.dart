@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/config/cron_config.dart';
 import '../../shared/constants.dart';
 import 'telegram_api.dart';
 
@@ -28,6 +30,11 @@ class TelegramTaskHandler extends TaskHandler {
   int _messageCount = 0;
   bool _polling = false;
 
+  // Cron scheduling
+  List<CronDefinition> _cronDefinitions = [];
+  int _cronCheckCounter = 0;
+  static const _cronCheckIntervalSeconds = 60;
+
   static const _maxBackoff = Duration(seconds: 60);
   static const _baseBackoff = Duration(seconds: 2);
   static const _disconnectedThreshold = 10;
@@ -38,18 +45,15 @@ class TelegramTaskHandler extends TaskHandler {
 
     // Receive bot token from init data or stored prefs
     final token = prefs.getString(AppConstants.telegramBotTokenKey);
-    if (token == null || token.isEmpty) {
-      FlutterForegroundTask.sendDataToMain({
-        'type': 'error',
-        'message': 'No bot token configured',
-      });
-      return;
+    if (token != null && token.isNotEmpty) {
+      _api = TelegramApi(token: token);
     }
-
-    _api = TelegramApi(token: token);
 
     // Restore persisted offset
     _offset = prefs.getInt(AppConstants.telegramBotOffsetKey) ?? 0;
+
+    // Load cron definitions
+    _loadCronDefinitions(prefs);
 
     FlutterForegroundTask.sendDataToMain({
       'type': 'started',
@@ -59,6 +63,14 @@ class TelegramTaskHandler extends TaskHandler {
 
   @override
   Future<void> onRepeatEvent(DateTime timestamp) async {
+    // Check crons every ~60 seconds (counter increments every 1s)
+    _cronCheckCounter++;
+    if (_cronCheckCounter >= _cronCheckIntervalSeconds) {
+      _cronCheckCounter = 0;
+      await _checkCrons(timestamp);
+    }
+
+    // Telegram polling (skip if no token configured)
     if (_api == null || _polling) return;
     _polling = true;
 
@@ -165,6 +177,14 @@ class TelegramTaskHandler extends TaskHandler {
       _api = TelegramApi(token: token);
       _offset = 0;
       _consecutiveFailures = 0;
+    } else if (action == 'reload_crons') {
+      final prefs = await SharedPreferences.getInstance();
+      _loadCronDefinitions(prefs);
+    } else if (action == 'cron_done') {
+      // Update lastRun for the cron after main isolate finishes execution
+      final cronId = map['cron_id'] as String;
+      final prefs = await SharedPreferences.getInstance();
+      _updateCronLastRun(cronId, DateTime.now(), prefs);
     }
   }
 
@@ -205,6 +225,77 @@ class TelegramTaskHandler extends TaskHandler {
   @override
   Future<void> onNotificationDismissed() async {
     // No-op: notification is persistent for foreground service
+  }
+
+  // --- Cron scheduling ---
+
+  void _loadCronDefinitions(SharedPreferences prefs) {
+    final raw = prefs.getString(AppConstants.cronDefinitionsKey);
+    if (raw == null) {
+      _cronDefinitions = [];
+      return;
+    }
+    try {
+      final list = jsonDecode(raw) as List;
+      _cronDefinitions = list
+          .map((e) => CronDefinition.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      _cronDefinitions = [];
+    }
+  }
+
+  Future<void> _checkCrons(DateTime now) async {
+    for (final cron in _cronDefinitions) {
+      if (!cron.enabled) continue;
+      if (_isDue(cron, now)) {
+        FlutterForegroundTask.sendDataToMain({
+          'type': 'cron_trigger',
+          'cron_id': cron.id,
+          'cron_name': cron.name,
+          'prompt': cron.prompt,
+          'session_strategy': cron.sessionStrategy.name,
+        });
+        // Immediately update lastRun locally to prevent re-triggering
+        final prefs = await SharedPreferences.getInstance();
+        _updateCronLastRun(cron.id, now, prefs);
+      }
+    }
+  }
+
+  bool _isDue(CronDefinition cron, DateTime now) {
+    switch (cron.schedule.type) {
+      case ScheduleType.interval:
+        if (cron.lastRun == null) return true;
+        return now.difference(cron.lastRun!) >= cron.schedule.interval!;
+      case ScheduleType.timeOfDay:
+        for (final time in cron.schedule.times!) {
+          if (now.hour == time.hour && now.minute == time.minute) {
+            if (cron.schedule.daysOfWeek != null &&
+                !cron.schedule.daysOfWeek!.contains(now.weekday)) {
+              continue;
+            }
+            if (cron.lastRun != null &&
+                cron.lastRun!.day == now.day &&
+                cron.lastRun!.hour == time.hour &&
+                cron.lastRun!.minute == time.minute) {
+              continue;
+            }
+            return true;
+          }
+        }
+        return false;
+    }
+  }
+
+  void _updateCronLastRun(
+      String cronId, DateTime now, SharedPreferences prefs) {
+    final index = _cronDefinitions.indexWhere((c) => c.id == cronId);
+    if (index < 0) return;
+    _cronDefinitions[index] = _cronDefinitions[index].copyWith(lastRun: now);
+    // Persist updated definitions
+    final json = _cronDefinitions.map((c) => c.toJson()).toList();
+    prefs.setString(AppConstants.cronDefinitionsKey, jsonEncode(json));
   }
 
   /// Exponential backoff on failures.

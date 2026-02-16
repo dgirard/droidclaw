@@ -69,6 +69,15 @@ class SettingsScreen extends ConsumerWidget {
                 Navigator.pushNamed(context, '/settings/web-search'),
           ),
 
+          ListTile(
+            leading: const Icon(Icons.schedule_outlined),
+            title: const Text('Scheduled Prompts'),
+            subtitle: const Text('Automated recurring tasks'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () =>
+                Navigator.pushNamed(context, '/settings/crons'),
+          ),
+
           const Divider(),
 
           // Telegram section

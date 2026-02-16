@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import '../../data/local/storage_service.dart';
 import '../../shared/constants.dart';
 import 'app_config.dart';
+import 'cron_config.dart';
 
 /// Loads and saves AppConfig via StorageService.
 class ConfigStorage {
@@ -46,4 +49,21 @@ class ConfigStorage {
   /// Mark onboarding as complete.
   Future<void> setOnboardingComplete() =>
       _storage.setBool(AppConstants.onboardingCompleteKey, true);
+
+  /// Load cron definitions from SharedPreferences.
+  List<CronDefinition> getCronDefinitions() {
+    final raw = _storage.getString(AppConstants.cronDefinitionsKey);
+    if (raw == null) return [];
+    final list = jsonDecode(raw) as List;
+    return list
+        .map((e) => CronDefinition.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Save cron definitions to SharedPreferences.
+  Future<void> saveCronDefinitions(List<CronDefinition> crons) =>
+      _storage.setString(
+        AppConstants.cronDefinitionsKey,
+        jsonEncode(crons.map((c) => c.toJson()).toList()),
+      );
 }

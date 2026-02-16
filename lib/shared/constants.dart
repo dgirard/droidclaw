@@ -50,4 +50,8 @@ class AppConstants {
   static const int telegramMaxMessageLength = 4000;
   static const int telegramMaxConcurrentChats = 3;
   static const String telegramSessionPrefix = 'telegram_';
+
+  // Cron
+  static const String cronSessionPrefix = 'cron_';
+  static const String cronDefinitionsKey = 'cron_definitions';
 }
