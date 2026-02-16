@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -32,12 +31,15 @@ class TelegramTaskHandler extends TaskHandler {
 
   // Cron scheduling
   List<CronDefinition> _cronDefinitions = [];
-  int _cronCheckCounter = 0;
-  static const _cronCheckIntervalSeconds = 60;
+  int _cronCheckCounter = 14; // Start high to trigger check on first event
+  static const _cronCheckIntervalSeconds = 15;
 
   static const _maxBackoff = Duration(seconds: 60);
   static const _baseBackoff = Duration(seconds: 2);
   static const _disconnectedThreshold = 10;
+
+  // ignore: avoid_print
+  void _log(String msg) => print('[DroidClaw] $msg');
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -54,6 +56,8 @@ class TelegramTaskHandler extends TaskHandler {
 
     // Load cron definitions
     _loadCronDefinitions(prefs);
+    _log('TaskHandler started: ${_cronDefinitions.length} crons loaded, '
+        'telegram=${_api != null}');
 
     FlutterForegroundTask.sendDataToMain({
       'type': 'started',
@@ -67,7 +71,8 @@ class TelegramTaskHandler extends TaskHandler {
     _cronCheckCounter++;
     if (_cronCheckCounter >= _cronCheckIntervalSeconds) {
       _cronCheckCounter = 0;
-      await _checkCrons(timestamp);
+      // Use DateTime.now() (local time) instead of timestamp (may be UTC)
+      await _checkCrons(DateTime.now());
     }
 
     // Telegram polling (skip if no token configured)
@@ -146,13 +151,13 @@ class TelegramTaskHandler extends TaskHandler {
 
   @override
   Future<void> onReceiveData(Object data) async {
-    if (_api == null) return;
     if (data is! Map) return;
 
     final map = Map<String, dynamic>.from(data);
     final action = map['action'] as String?;
 
     if (action == 'send') {
+      if (_api == null) return;
       final chatId = map['chat_id'] as int;
       final text = map['text'] as String;
 
@@ -178,8 +183,12 @@ class TelegramTaskHandler extends TaskHandler {
       _offset = 0;
       _consecutiveFailures = 0;
     } else if (action == 'reload_crons') {
+      // SharedPreferences may be stale in this isolate — reload from disk
       final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
       _loadCronDefinitions(prefs);
+      _log('Reloaded crons: ${_cronDefinitions.length} definitions, '
+          'schedules: ${_cronDefinitions.map((c) => '${c.name}:${c.schedule.type.name}').join(', ')}');
     } else if (action == 'cron_done') {
       // Update lastRun for the cron after main isolate finishes execution
       final cronId = map['cron_id'] as String;
@@ -246,9 +255,18 @@ class TelegramTaskHandler extends TaskHandler {
   }
 
   Future<void> _checkCrons(DateTime now) async {
+    _log('Checking ${_cronDefinitions.length} crons at '
+        '${now.hour}:${now.minute.toString().padLeft(2, '0')}');
     for (final cron in _cronDefinitions) {
       if (!cron.enabled) continue;
-      if (_isDue(cron, now)) {
+      final due = _isDue(cron, now);
+      final schedInfo = cron.schedule.type == ScheduleType.timeOfDay
+          ? 'times=${cron.schedule.times?.map((t) => '${t.hour}:${t.minute.toString().padLeft(2, '0')}').join(',')}'
+          : 'interval=${cron.schedule.interval}';
+      _log('Cron "${cron.name}": due=$due, $schedInfo, '
+          'lastRun=${cron.lastRun}');
+      if (due) {
+        _log('Triggering cron "${cron.name}"');
         FlutterForegroundTask.sendDataToMain({
           'type': 'cron_trigger',
           'cron_id': cron.id,

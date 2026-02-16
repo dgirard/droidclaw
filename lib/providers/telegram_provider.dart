@@ -329,28 +329,51 @@ class TelegramNotifier extends Notifier<TelegramState> {
     }
   }
 
+  // ignore: avoid_print
+  void _cronLog(String msg) => print('[DroidClaw:Cron] $msg');
+
   /// Execute a cron-triggered prompt via AgentLoop.
   Future<void> _handleCronTrigger(Map<String, dynamic> data) async {
     final cronId = data['cron_id'] as String;
+    final cronName = data['cron_name'] as String? ?? cronId;
     final prompt = data['prompt'] as String;
     final strategy = data['session_strategy'] as String;
 
+    _cronLog('Executing "$cronName" (strategy=$strategy)');
+
     final agentLoop = await ref.read(agentLoopProvider.future);
-    if (agentLoop == null) return;
+    if (agentLoop == null) {
+      _cronLog('ERROR: AgentLoop is null (no LLM provider configured?)');
+      return;
+    }
 
     final sessionKey = strategy == 'sameThread'
         ? '${AppConstants.cronSessionPrefix}$cronId'
         : '${AppConstants.cronSessionPrefix}${cronId}_${DateTime.now().millisecondsSinceEpoch}';
 
+    _cronLog('Session key: $sessionKey');
+
     try {
       await for (final event in agentLoop.processMessage(prompt, sessionKey)) {
-        if (event is ResponseEvent || event is ErrorEvent) break;
+        if (event is ResponseEvent) {
+          _cronLog('Got response for "$cronName" '
+              '(${event.content.length} chars)');
+          break;
+        } else if (event is ErrorEvent) {
+          _cronLog('ERROR in "$cronName": ${event.message}');
+          break;
+        }
       }
 
       // Save session
       final sessions = await ref.read(sessionManagerProvider.future);
       final session = sessions.get(sessionKey);
-      if (session != null) await sessions.save(session);
+      if (session != null) {
+        await sessions.save(session);
+        _cronLog('Session saved for "$cronName"');
+      } else {
+        _cronLog('WARNING: No session found for key $sessionKey');
+      }
 
       // Notify task handler that cron is done
       FlutterForegroundTask.sendDataToTask({
@@ -358,7 +381,7 @@ class TelegramNotifier extends Notifier<TelegramState> {
         'cron_id': cronId,
       });
     } catch (e) {
-      // Cron execution failed silently — logged in session if it exists
+      _cronLog('EXCEPTION in "$cronName": $e');
     }
   }
 
