@@ -19,9 +19,6 @@ DroidClaw is a personal AI assistant that runs **entirely on an Android phone**,
 
 ---
 
-
----
-
 ## Origin — From PicoClaw to DroidClaw
 
 DroidClaw is a port of [PicoClaw](https://github.com/sipeed/picoclaw), a Go-based AI assistant (~16K lines) designed to run as a CLI/gateway on lightweight Linux hardware.
@@ -302,6 +299,10 @@ adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
 ## Why ARaccoon?
 
+<p align="center">
+  <img src="assets/ic_launcher_512.png" alt="ARaccoon — DroidClaw mascot" width="200">
+</p>
+
 DroidClaw is pronounced **"ARaccoon"** — The Raccoon. This is the name shown in the Android launcher and the project's mascot.
 
 ### The Raccoon as a Metaphor for the AI Agent
@@ -312,10 +313,4 @@ DroidClaw is pronounced **"ARaccoon"** — The Raccoon. This is the name shown i
 
 - **The nocturnal and discreet side**: active at night, a bit "bandit-like" (in the cute sense). This evokes the **off-grid** nature of the application — everything runs locally on the phone, no data is sent to a central server, total privacy.
 
-### Visual Design Concept
 
-A raccoon with a **techwear / cyberpunk** look:
-
-- Tactical vest with cables and small electronic chips
-- Tech goggles/visor (HUD-style) displaying lines of code or LLM provider icons
-- Claws prominently featured, manipulating a small holographic screen emerging from an Android phone

@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <circle cx="256" cy="256" r="248" fill="#37474F"/>
+
+  <!-- Ears -->
+  <ellipse cx="155" cy="115" rx="50" ry="60" fill="#78909C"/>
+  <ellipse cx="357" cy="115" rx="50" ry="60" fill="#78909C"/>
+  <ellipse cx="155" cy="115" rx="32" ry="40" fill="#E8A0A0"/>
+  <ellipse cx="357" cy="115" rx="32" ry="40" fill="#E8A0A0"/>
+
+  <!-- Head -->
+  <ellipse cx="256" cy="240" rx="155" ry="145" fill="#90A4AE"/>
+
+  <!-- White face center -->
+  <ellipse cx="256" cy="265" rx="75" ry="80" fill="#ECEFF1"/>
+
+  <!-- Forehead white stripe -->
+  <path d="M238 120 L256 95 L274 120 L268 195 L244 195 Z" fill="#ECEFF1"/>
+
+  <!-- Dark mask -->
+  <ellipse cx="180" cy="215" rx="65" ry="35" fill="#37474F"/>
+  <ellipse cx="332" cy="215" rx="65" ry="35" fill="#37474F"/>
+
+  <!-- Eyes (white) -->
+  <ellipse cx="185" cy="215" rx="28" ry="25" fill="white"/>
+  <ellipse cx="327" cy="215" rx="28" ry="25" fill="white"/>
+
+  <!-- Pupils -->
+  <circle cx="192" cy="213" r="14" fill="#263238"/>
+  <circle cx="334" cy="213" r="14" fill="#263238"/>
+
+  <!-- Eye shine -->
+  <circle cx="197" cy="208" r="5" fill="white"/>
+  <circle cx="339" cy="208" r="5" fill="white"/>
+
+  <!-- Nose -->
+  <ellipse cx="256" cy="285" rx="18" ry="14" fill="#263238"/>
+  <ellipse cx="256" cy="283" rx="9" ry="5" fill="#546E7A" opacity="0.5"/>
+
+  <!-- Mouth -->
+  <path d="M242 297 Q256 315 270 297" fill="none" stroke="#263238" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Cheeks -->
+  <ellipse cx="190" cy="270" rx="25" ry="15" fill="#E8A0A0" opacity="0.4"/>
+  <ellipse cx="322" cy="270" rx="25" ry="15" fill="#E8A0A0" opacity="0.4"/>
+
+  <!-- Whiskers -->
+  <line x1="215" y1="285" x2="140" y2="275" stroke="#B0BEC5" stroke-width="2" opacity="0.5"/>
+  <line x1="215" y1="295" x2="135" y2="298" stroke="#B0BEC5" stroke-width="2" opacity="0.5"/>
+  <line x1="297" y1="285" x2="372" y2="275" stroke="#B0BEC5" stroke-width="2" opacity="0.5"/>
+  <line x1="297" y1="295" x2="377" y2="298" stroke="#B0BEC5" stroke-width="2" opacity="0.5"/>
+
+  <!-- Body -->
+  <ellipse cx="256" cy="420" rx="120" ry="80" fill="#78909C"/>
+
+  <!-- White belly -->
+  <ellipse cx="256" cy="415" rx="70" ry="55" fill="#ECEFF1"/>
+
+  <!-- Paws -->
+  <ellipse cx="175" cy="440" rx="30" ry="18" fill="#607D8B"/>
+  <ellipse cx="337" cy="440" rx="30" ry="18" fill="#607D8B"/>
+</svg>
