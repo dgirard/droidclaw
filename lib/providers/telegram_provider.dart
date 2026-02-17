@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -83,6 +85,9 @@ class TelegramNotifier extends Notifier<TelegramState> {
         await _initBotManager();
       }
     }
+
+    // Check for pending cron triggers (queued while main isolate was dead)
+    await _processPendingCronTriggers();
   }
 
   /// Test bot token by calling getMe.
@@ -325,12 +330,57 @@ class TelegramNotifier extends Notifier<TelegramState> {
         );
 
       case 'cron_trigger':
+        // Remove from pending queue (we're handling it now)
+        _removePendingTrigger(map['cron_id'] as String);
         _handleCronTrigger(map);
     }
   }
 
   // ignore: avoid_print
   void _cronLog(String msg) => print('[DroidClaw:Cron] $msg');
+
+  /// Remove a trigger from the pending queue.
+  void _removePendingTrigger(String cronId) {
+    final storage = ref.read(storageServiceProvider);
+    final raw = storage.getString(AppConstants.cronPendingTriggersKey);
+    if (raw == null) return;
+    try {
+      final pending = jsonDecode(raw) as List;
+      pending.removeWhere((t) => t['cron_id'] == cronId);
+      if (pending.isEmpty) {
+        storage.remove(AppConstants.cronPendingTriggersKey);
+      } else {
+        storage.setString(
+            AppConstants.cronPendingTriggersKey, jsonEncode(pending));
+      }
+    } catch (_) {}
+  }
+
+  /// Process pending cron triggers that were queued while the main isolate
+  /// was dead (app killed by Android overnight).
+  Future<void> _processPendingCronTriggers() async {
+    final storage = ref.read(storageServiceProvider);
+    final raw = storage.getString(AppConstants.cronPendingTriggersKey);
+    if (raw == null) return;
+
+    try {
+      final pending = jsonDecode(raw) as List;
+      if (pending.isEmpty) return;
+
+      _cronLog('Found ${pending.length} pending cron trigger(s), executing...');
+
+      for (final trigger in pending) {
+        final map = Map<String, dynamic>.from(trigger as Map);
+        await _handleCronTrigger(map);
+      }
+
+      // Clear pending queue after processing
+      storage.remove(AppConstants.cronPendingTriggersKey);
+      _cronLog('All pending triggers processed');
+    } catch (e) {
+      _cronLog('ERROR processing pending triggers: $e');
+    }
+  }
 
   /// Execute a cron-triggered prompt via AgentLoop.
   Future<void> _handleCronTrigger(Map<String, dynamic> data) async {

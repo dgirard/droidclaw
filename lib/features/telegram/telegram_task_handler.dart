@@ -194,6 +194,8 @@ class TelegramTaskHandler extends TaskHandler {
       final cronId = map['cron_id'] as String;
       final prefs = await SharedPreferences.getInstance();
       _updateCronLastRun(cronId, DateTime.now(), prefs);
+      // Remove from pending queue
+      _removePendingTrigger(prefs, cronId);
     }
   }
 
@@ -267,15 +269,26 @@ class TelegramTaskHandler extends TaskHandler {
           'lastRun=${cron.lastRun}');
       if (due) {
         _log('Triggering cron "${cron.name}"');
-        FlutterForegroundTask.sendDataToMain({
+
+        final triggerData = {
           'type': 'cron_trigger',
           'cron_id': cron.id,
           'cron_name': cron.name,
           'prompt': cron.prompt,
           'session_strategy': cron.sessionStrategy.name,
-        });
-        // Immediately update lastRun locally to prevent re-triggering
+        };
+
+        // Save to pending queue (in case main isolate is dead)
         final prefs = await SharedPreferences.getInstance();
+        _addPendingTrigger(prefs, triggerData);
+
+        // Try to send to main isolate (works if app is alive)
+        FlutterForegroundTask.sendDataToMain(triggerData);
+
+        // Try to wake up the main app so it can process the trigger
+        FlutterForegroundTask.launchApp();
+
+        // Immediately update lastRun locally to prevent re-triggering
         _updateCronLastRun(cron.id, now, prefs);
       }
     }
@@ -304,6 +317,36 @@ class TelegramTaskHandler extends TaskHandler {
         }
         return false;
     }
+  }
+
+  /// Add a trigger to the pending queue in SharedPreferences.
+  void _addPendingTrigger(
+      SharedPreferences prefs, Map<String, dynamic> trigger) {
+    final raw = prefs.getString(AppConstants.cronPendingTriggersKey);
+    final List<dynamic> pending =
+        raw != null ? (jsonDecode(raw) as List) : [];
+    // Avoid duplicates by cron_id
+    pending.removeWhere((t) => t['cron_id'] == trigger['cron_id']);
+    pending.add(trigger);
+    prefs.setString(
+        AppConstants.cronPendingTriggersKey, jsonEncode(pending));
+    _log('Queued pending trigger for "${trigger['cron_name']}" '
+        '(${pending.length} pending)');
+  }
+
+  /// Remove a completed trigger from the pending queue.
+  void _removePendingTrigger(SharedPreferences prefs, String cronId) {
+    final raw = prefs.getString(AppConstants.cronPendingTriggersKey);
+    if (raw == null) return;
+    final List<dynamic> pending = jsonDecode(raw) as List;
+    pending.removeWhere((t) => t['cron_id'] == cronId);
+    if (pending.isEmpty) {
+      prefs.remove(AppConstants.cronPendingTriggersKey);
+    } else {
+      prefs.setString(
+          AppConstants.cronPendingTriggersKey, jsonEncode(pending));
+    }
+    _log('Removed pending trigger for $cronId (${pending.length} remaining)');
   }
 
   void _updateCronLastRun(

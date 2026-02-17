@@ -56,4 +56,5 @@ class AppConstants {
   // Cron
   static const String cronSessionPrefix = 'cron_';
   static const String cronDefinitionsKey = 'cron_definitions';
+  static const String cronPendingTriggersKey = 'cron_pending_triggers';
 }
