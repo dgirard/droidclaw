@@ -15,8 +15,10 @@ class StorageService {
   StorageService({
     required SharedPreferences prefs,
     FlutterSecureStorage? secure,
+    String? overrideWorkspacePath,
   })  : _prefs = prefs,
-        _secure = secure ?? const FlutterSecureStorage();
+        _secure = secure ?? const FlutterSecureStorage(),
+        _workspacePath = overrideWorkspacePath;
 
   // --- SharedPreferences (config, flags) ---
 

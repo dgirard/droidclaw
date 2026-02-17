@@ -1,0 +1,305 @@
+import 'dart:convert';
+
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../core/agent/agent_loop.dart';
+import '../core/services/background_task_handler.dart';
+import '../shared/constants.dart';
+import 'app_providers.dart';
+
+/// Background service state.
+class BackgroundServiceState {
+  final bool isRunning;
+  final String? error;
+
+  const BackgroundServiceState({
+    this.isRunning = false,
+    this.error,
+  });
+
+  BackgroundServiceState copyWith({
+    bool? isRunning,
+    String? error,
+    bool clearError = false,
+  }) =>
+      BackgroundServiceState(
+        isRunning: isRunning ?? this.isRunning,
+        error: clearError ? null : (error ?? this.error),
+      );
+}
+
+/// Manages the foreground service lifecycle and cron execution.
+/// Decoupled from Telegram — any feature that needs the background service
+/// (crons, Telegram, future services) goes through this notifier.
+class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
+  @override
+  BackgroundServiceState build() {
+    ref.onDispose(() {
+      FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
+    });
+
+    FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
+    _checkInitialState();
+
+    return const BackgroundServiceState();
+  }
+
+  Future<void> _checkInitialState() async {
+    final isRunning = await FlutterForegroundTask.isRunningService;
+    if (isRunning) {
+      state = state.copyWith(isRunning: true);
+      // Refresh cached secrets so service isolate stays up-to-date
+      await _cacheSecretsForService();
+    }
+
+    // Check for pending cron triggers (queued while main isolate was dead)
+    await _processPendingCronTriggers();
+  }
+
+  /// Ensure the foreground service is running.
+  /// Called when crons are saved or Telegram is enabled.
+  Future<void> ensureServiceRunning() async {
+    // Cache secrets so the service isolate can init its own AgentLoop
+    await _cacheSecretsForService();
+
+    final isRunning = await FlutterForegroundTask.isRunningService;
+    if (isRunning) {
+      // Just reload cron definitions in the task handler
+      FlutterForegroundTask.sendDataToTask({'action': 'reload_crons'});
+      return;
+    }
+
+    // Start the service
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'droidclaw_background_service',
+        channelName: 'DroidClaw Background Service',
+        channelDescription: 'Background service for Telegram bot and scheduled prompts',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+        onlyAlertOnce: true,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(
+        showNotification: false,
+      ),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.repeat(1000),
+        autoRunOnBoot: true,
+        autoRunOnMyPackageReplaced: true,
+        allowWakeLock: true,
+        allowWifiLock: true,
+      ),
+    );
+
+    final permission =
+        await FlutterForegroundTask.checkNotificationPermission();
+    if (permission != NotificationPermission.granted) {
+      await FlutterForegroundTask.requestNotificationPermission();
+    }
+
+    final result = await FlutterForegroundTask.startService(
+      serviceId: 256,
+      notificationTitle: 'DroidClaw - Active',
+      notificationText: 'Background service running',
+      notificationButtons: [
+        const NotificationButton(id: 'btn_stop', text: 'Stop'),
+      ],
+      callback: backgroundServiceCallback,
+    );
+
+    if (result is ServiceRequestFailure) {
+      state = state.copyWith(
+        error: 'Failed to start service: ${result.error}',
+      );
+      return;
+    }
+
+    state = state.copyWith(isRunning: true);
+  }
+
+  /// Stop the service if nothing needs it (no crons, no Telegram).
+  Future<void> stopServiceIfIdle() async {
+    final configStorage = ref.read(configStorageProvider);
+    final storage = ref.read(storageServiceProvider);
+
+    final crons = configStorage.getCronDefinitions();
+    final hasActiveCrons = crons.any((c) => c.enabled);
+    final telegramEnabled =
+        storage.getBool(AppConstants.telegramBotEnabledKey) ?? false;
+
+    if (!hasActiveCrons && !telegramEnabled) {
+      await FlutterForegroundTask.stopService();
+      state = state.copyWith(isRunning: false);
+    }
+  }
+
+  /// Cache API keys and paths in SharedPreferences so the service isolate
+  /// can initialize its own AgentLoop without FlutterSecureStorage.
+  Future<void> _cacheSecretsForService() async {
+    try {
+      final storage = ref.read(storageServiceProvider);
+      final configStorage = ref.read(configStorageProvider);
+      final config = ref.read(appConfigProvider);
+      final prefs = ref.read(sharedPreferencesProvider);
+
+      // Cache LLM API key
+      final providerName = config.agent.provider;
+      final apiKey = await configStorage.getApiKey(providerName);
+      if (apiKey != null && apiKey.isNotEmpty) {
+        await prefs.setString(AppConstants.cachedApiKeyKey, apiKey);
+        await prefs.setString(AppConstants.cachedProviderNameKey, providerName);
+      }
+
+      // Cache Brave API key
+      final braveKey = await configStorage.getBraveApiKey();
+      if (braveKey != null && braveKey.isNotEmpty) {
+        await prefs.setString(AppConstants.cachedBraveApiKeyKey, braveKey);
+      }
+
+      // Cache workspace path
+      final workspacePath = await storage.workspacePath;
+      await prefs.setString(AppConstants.cachedWorkspacePathKey, workspacePath);
+    } catch (e) {
+      // Non-critical — service isolate will fall back to pending queue
+      _cronLog('WARNING: Failed to cache secrets for service: $e');
+    }
+  }
+
+  /// Handle data received from the TaskHandler isolate (cron-related only).
+  void _onReceiveTaskData(Object data) {
+    if (data is! Map) return;
+    final map = Map<String, dynamic>.from(data);
+    final type = map['type'] as String?;
+
+    switch (type) {
+      case 'started':
+        state = state.copyWith(isRunning: true, clearError: true);
+
+      case 'stopped':
+        state = state.copyWith(isRunning: false);
+
+      case 'cron_trigger':
+        // Remove from pending queue (we're handling it now via main isolate)
+        _removePendingTrigger(map['cron_id'] as String);
+        _handleCronTrigger(map);
+
+      case 'cron_completed':
+        // Service isolate executed the cron autonomously
+        _cronLog('Service isolate completed "${map['cron_name']}" '
+            '(${map['response_length']} chars)');
+
+      case 'stop_requested':
+        _stopAll();
+    }
+  }
+
+  Future<void> _stopAll() async {
+    await FlutterForegroundTask.stopService();
+    state = state.copyWith(isRunning: false);
+  }
+
+  // ignore: avoid_print
+  void _cronLog(String msg) => print('[DroidClaw:Cron] $msg');
+
+  /// Remove a trigger from the pending queue.
+  void _removePendingTrigger(String cronId) {
+    final storage = ref.read(storageServiceProvider);
+    final raw = storage.getString(AppConstants.cronPendingTriggersKey);
+    if (raw == null) return;
+    try {
+      final pending = jsonDecode(raw) as List;
+      pending.removeWhere((t) => t['cron_id'] == cronId);
+      if (pending.isEmpty) {
+        storage.remove(AppConstants.cronPendingTriggersKey);
+      } else {
+        storage.setString(
+            AppConstants.cronPendingTriggersKey, jsonEncode(pending));
+      }
+    } catch (_) {}
+  }
+
+  /// Process pending cron triggers that were queued while the main isolate
+  /// was dead (app killed by Android overnight).
+  Future<void> _processPendingCronTriggers() async {
+    final storage = ref.read(storageServiceProvider);
+    final raw = storage.getString(AppConstants.cronPendingTriggersKey);
+    if (raw == null) return;
+
+    try {
+      final pending = jsonDecode(raw) as List;
+      if (pending.isEmpty) return;
+
+      _cronLog('Found ${pending.length} pending cron trigger(s), executing...');
+
+      for (final trigger in pending) {
+        final map = Map<String, dynamic>.from(trigger as Map);
+        await _handleCronTrigger(map);
+      }
+
+      // Clear pending queue after processing
+      storage.remove(AppConstants.cronPendingTriggersKey);
+      _cronLog('All pending triggers processed');
+    } catch (e) {
+      _cronLog('ERROR processing pending triggers: $e');
+    }
+  }
+
+  /// Execute a cron-triggered prompt via AgentLoop.
+  Future<void> _handleCronTrigger(Map<String, dynamic> data) async {
+    final cronId = data['cron_id'] as String;
+    final cronName = data['cron_name'] as String? ?? cronId;
+    final prompt = data['prompt'] as String;
+    final strategy = data['session_strategy'] as String;
+
+    _cronLog('Executing "$cronName" (strategy=$strategy)');
+
+    final agentLoop = await ref.read(agentLoopProvider.future);
+    if (agentLoop == null) {
+      _cronLog('ERROR: AgentLoop is null (no LLM provider configured?)');
+      return;
+    }
+
+    final sessionKey = strategy == 'sameThread'
+        ? '${AppConstants.cronSessionPrefix}$cronId'
+        : '${AppConstants.cronSessionPrefix}${cronId}_${DateTime.now().millisecondsSinceEpoch}';
+
+    _cronLog('Session key: $sessionKey');
+
+    try {
+      await for (final event in agentLoop.processMessage(prompt, sessionKey)) {
+        if (event is ResponseEvent) {
+          _cronLog('Got response for "$cronName" '
+              '(${event.content.length} chars)');
+          break;
+        } else if (event is ErrorEvent) {
+          _cronLog('ERROR in "$cronName": ${event.message}');
+          break;
+        }
+      }
+
+      // Save session
+      final sessions = await ref.read(sessionManagerProvider.future);
+      final session = sessions.get(sessionKey);
+      if (session != null) {
+        await sessions.save(session);
+        _cronLog('Session saved for "$cronName"');
+      } else {
+        _cronLog('WARNING: No session found for key $sessionKey');
+      }
+
+      // Notify task handler that cron is done
+      FlutterForegroundTask.sendDataToTask({
+        'action': 'cron_done',
+        'cron_id': cronId,
+      });
+    } catch (e) {
+      _cronLog('EXCEPTION in "$cronName": $e');
+    }
+  }
+}
+
+/// Background service provider.
+final backgroundServiceProvider =
+    NotifierProvider<BackgroundServiceNotifier, BackgroundServiceState>(
+        BackgroundServiceNotifier.new);

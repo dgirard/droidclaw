@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/config/cron_config.dart';
 import '../../providers/app_providers.dart';
-import '../../providers/telegram_provider.dart';
+import '../../providers/background_service_provider.dart';
 import '../../shared/constants.dart';
 import '../chat/history_screen.dart';
 
@@ -44,8 +44,8 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
     final configStorage = ref.read(configStorageProvider);
     await configStorage.saveCronDefinitions(_crons);
     // Notify the background service to reload cron definitions
-    final telegramNotifier = ref.read(telegramProvider.notifier);
-    await telegramNotifier.ensureServiceRunning();
+    final bgService = ref.read(backgroundServiceProvider.notifier);
+    await bgService.ensureServiceRunning();
   }
 
   Future<void> _toggleEnabled(int index, bool enabled) async {

@@ -57,4 +57,10 @@ class AppConstants {
   static const String cronSessionPrefix = 'cron_';
   static const String cronDefinitionsKey = 'cron_definitions';
   static const String cronPendingTriggersKey = 'cron_pending_triggers';
+
+  // Cached secrets for service isolate (SharedPreferences mirror of SecureStorage)
+  static const String cachedApiKeyKey = 'cached_api_key';
+  static const String cachedProviderNameKey = 'cached_provider_name';
+  static const String cachedBraveApiKeyKey = 'cached_brave_api_key';
+  static const String cachedWorkspacePathKey = 'cached_workspace_path';
 }

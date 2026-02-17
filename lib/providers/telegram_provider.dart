@@ -1,14 +1,11 @@
-import 'dart:convert';
-
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/agent/agent_loop.dart';
 import '../features/telegram/telegram_api.dart';
 import '../features/telegram/telegram_bot_manager.dart';
-import '../features/telegram/telegram_task_handler.dart';
 import '../shared/constants.dart';
 import 'app_providers.dart';
+import 'background_service_provider.dart';
 
 /// Telegram bot state.
 class TelegramState {
@@ -47,7 +44,8 @@ class TelegramState {
       );
 }
 
-/// Manages Telegram bot lifecycle, foreground service, and message routing.
+/// Manages Telegram bot lifecycle and message routing.
+/// Delegates foreground service lifecycle to BackgroundServiceNotifier.
 class TelegramNotifier extends Notifier<TelegramState> {
   TelegramBotManager? _botManager;
 
@@ -58,10 +56,10 @@ class TelegramNotifier extends Notifier<TelegramState> {
       _botManager?.dispose();
     });
 
-    // Register callback for data from TaskHandler isolate
+    // Register callback for Telegram-specific data from TaskHandler isolate
     FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
 
-    // Check if service is already running
+    // Check if already enabled
     _checkInitialState();
 
     return const TelegramState();
@@ -75,19 +73,16 @@ class TelegramNotifier extends Notifier<TelegramState> {
         storage.getBool(AppConstants.telegramBotEnabledKey) ?? false;
 
     if (token != null && token.isNotEmpty && enabled) {
-      final isRunning = await FlutterForegroundTask.isRunningService;
+      final bgState = ref.read(backgroundServiceProvider);
       state = state.copyWith(
         isEnabled: true,
-        isRunning: isRunning,
+        isRunning: bgState.isRunning,
       );
 
-      if (isRunning) {
+      if (bgState.isRunning) {
         await _initBotManager();
       }
     }
-
-    // Check for pending cron triggers (queued while main isolate was dead)
-    await _processPendingCronTriggers();
   }
 
   /// Test bot token by calling getMe.
@@ -124,54 +119,9 @@ class TelegramNotifier extends Notifier<TelegramState> {
       await storage.setSecure(AppConstants.telegramBotTokenKey, token);
       await storage.setBool(AppConstants.telegramBotEnabledKey, true);
 
-      // Initialize foreground task
-      FlutterForegroundTask.init(
-        androidNotificationOptions: AndroidNotificationOptions(
-          channelId: 'droidclaw_telegram_bot',
-          channelName: 'DroidClaw Telegram Bot',
-          channelDescription:
-              'Notification for the Telegram bot foreground service',
-          channelImportance: NotificationChannelImportance.LOW,
-          priority: NotificationPriority.LOW,
-          onlyAlertOnce: true,
-        ),
-        iosNotificationOptions: const IOSNotificationOptions(
-          showNotification: false,
-        ),
-        foregroundTaskOptions: ForegroundTaskOptions(
-          // Poll every 1 second — actual blocking is done by long poll timeout
-          eventAction: ForegroundTaskEventAction.repeat(1000),
-          autoRunOnBoot: true,
-          autoRunOnMyPackageReplaced: true,
-          allowWakeLock: true,
-          allowWifiLock: true,
-        ),
-      );
-
-      // Request notification permission
-      final permission =
-          await FlutterForegroundTask.checkNotificationPermission();
-      if (permission != NotificationPermission.granted) {
-        await FlutterForegroundTask.requestNotificationPermission();
-      }
-
-      // Start the service
-      final result = await FlutterForegroundTask.startService(
-        serviceId: 256,
-        notificationTitle: 'DroidClaw Bot - Starting...',
-        notificationText: 'Connecting to Telegram...',
-        notificationButtons: [
-          const NotificationButton(id: 'btn_stop', text: 'Stop'),
-        ],
-        callback: telegramServiceCallback,
-      );
-
-      if (result is ServiceRequestFailure) {
-        state = state.copyWith(
-          error: 'Failed to start service: ${result.error}',
-        );
-        return;
-      }
+      // Delegate service start to BackgroundServiceNotifier
+      final bgService = ref.read(backgroundServiceProvider.notifier);
+      await bgService.ensureServiceRunning();
 
       await _initBotManager();
 
@@ -186,8 +136,8 @@ class TelegramNotifier extends Notifier<TelegramState> {
     }
   }
 
-  /// Disable the Telegram bot and stop the foreground service.
-  /// Only stops the service if no crons are active.
+  /// Disable the Telegram bot.
+  /// The background service will stop only if no crons need it.
   Future<void> disable() async {
     final storage = ref.read(storageServiceProvider);
     await storage.setBool(AppConstants.telegramBotEnabledKey, false);
@@ -195,70 +145,15 @@ class TelegramNotifier extends Notifier<TelegramState> {
     _botManager?.dispose();
     _botManager = null;
 
-    // Only stop the service if no crons need it
-    final configStorage = ref.read(configStorageProvider);
-    final crons = configStorage.getCronDefinitions();
-    final hasActiveCrons = crons.any((c) => c.enabled);
-    if (!hasActiveCrons) {
-      await FlutterForegroundTask.stopService();
-    }
+    // Ask BackgroundService to stop if nothing else needs it
+    final bgService = ref.read(backgroundServiceProvider.notifier);
+    await bgService.stopServiceIfIdle();
 
     state = state.copyWith(
       isEnabled: false,
       isRunning: false,
       clearError: true,
     );
-  }
-
-  /// Ensure the foreground service is running (for crons even without Telegram).
-  Future<void> ensureServiceRunning() async {
-    final isRunning = await FlutterForegroundTask.isRunningService;
-    if (isRunning) {
-      // Just reload cron definitions in the task handler
-      FlutterForegroundTask.sendDataToTask({'action': 'reload_crons'});
-      return;
-    }
-
-    // Start service without Telegram
-    FlutterForegroundTask.init(
-      androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'droidclaw_telegram_bot',
-        channelName: 'DroidClaw Background Service',
-        channelDescription: 'Background service for scheduled prompts',
-        channelImportance: NotificationChannelImportance.LOW,
-        priority: NotificationPriority.LOW,
-        onlyAlertOnce: true,
-      ),
-      iosNotificationOptions: const IOSNotificationOptions(
-        showNotification: false,
-      ),
-      foregroundTaskOptions: ForegroundTaskOptions(
-        eventAction: ForegroundTaskEventAction.repeat(1000),
-        autoRunOnBoot: true,
-        autoRunOnMyPackageReplaced: true,
-        allowWakeLock: true,
-        allowWifiLock: true,
-      ),
-    );
-
-    final permission =
-        await FlutterForegroundTask.checkNotificationPermission();
-    if (permission != NotificationPermission.granted) {
-      await FlutterForegroundTask.requestNotificationPermission();
-    }
-
-    await FlutterForegroundTask.startService(
-      serviceId: 256,
-      notificationTitle: 'DroidClaw - Active',
-      notificationText: 'Scheduled prompts running',
-      notificationButtons: [
-        const NotificationButton(id: 'btn_stop', text: 'Stop'),
-      ],
-      callback: telegramServiceCallback,
-    );
-
-    // Init bot manager if AgentLoop is available (for cron execution)
-    await _initBotManager();
   }
 
   /// Update allowed users list.
@@ -292,7 +187,7 @@ class TelegramNotifier extends Notifier<TelegramState> {
     }
   }
 
-  /// Handle data received from the TaskHandler isolate.
+  /// Handle data received from the TaskHandler isolate (Telegram-specific only).
   void _onReceiveTaskData(Object data) {
     if (data is! Map) return;
     final map = Map<String, dynamic>.from(data);
@@ -308,130 +203,17 @@ class TelegramNotifier extends Notifier<TelegramState> {
           updateId: map['update_id'] as int,
         );
 
-      case 'started':
-        state = state.copyWith(isRunning: true, clearError: true);
-
-      case 'stopped':
-        state = state.copyWith(isRunning: false);
-
       case 'error':
         state = state.copyWith(
           error: map['message'] as String?,
           isRunning: false,
         );
 
-      case 'stop_requested':
-        disable();
-
       case 'send_error':
         // Log but don't stop the bot
         state = state.copyWith(
           error: map['message'] as String?,
         );
-
-      case 'cron_trigger':
-        // Remove from pending queue (we're handling it now)
-        _removePendingTrigger(map['cron_id'] as String);
-        _handleCronTrigger(map);
-    }
-  }
-
-  // ignore: avoid_print
-  void _cronLog(String msg) => print('[DroidClaw:Cron] $msg');
-
-  /// Remove a trigger from the pending queue.
-  void _removePendingTrigger(String cronId) {
-    final storage = ref.read(storageServiceProvider);
-    final raw = storage.getString(AppConstants.cronPendingTriggersKey);
-    if (raw == null) return;
-    try {
-      final pending = jsonDecode(raw) as List;
-      pending.removeWhere((t) => t['cron_id'] == cronId);
-      if (pending.isEmpty) {
-        storage.remove(AppConstants.cronPendingTriggersKey);
-      } else {
-        storage.setString(
-            AppConstants.cronPendingTriggersKey, jsonEncode(pending));
-      }
-    } catch (_) {}
-  }
-
-  /// Process pending cron triggers that were queued while the main isolate
-  /// was dead (app killed by Android overnight).
-  Future<void> _processPendingCronTriggers() async {
-    final storage = ref.read(storageServiceProvider);
-    final raw = storage.getString(AppConstants.cronPendingTriggersKey);
-    if (raw == null) return;
-
-    try {
-      final pending = jsonDecode(raw) as List;
-      if (pending.isEmpty) return;
-
-      _cronLog('Found ${pending.length} pending cron trigger(s), executing...');
-
-      for (final trigger in pending) {
-        final map = Map<String, dynamic>.from(trigger as Map);
-        await _handleCronTrigger(map);
-      }
-
-      // Clear pending queue after processing
-      storage.remove(AppConstants.cronPendingTriggersKey);
-      _cronLog('All pending triggers processed');
-    } catch (e) {
-      _cronLog('ERROR processing pending triggers: $e');
-    }
-  }
-
-  /// Execute a cron-triggered prompt via AgentLoop.
-  Future<void> _handleCronTrigger(Map<String, dynamic> data) async {
-    final cronId = data['cron_id'] as String;
-    final cronName = data['cron_name'] as String? ?? cronId;
-    final prompt = data['prompt'] as String;
-    final strategy = data['session_strategy'] as String;
-
-    _cronLog('Executing "$cronName" (strategy=$strategy)');
-
-    final agentLoop = await ref.read(agentLoopProvider.future);
-    if (agentLoop == null) {
-      _cronLog('ERROR: AgentLoop is null (no LLM provider configured?)');
-      return;
-    }
-
-    final sessionKey = strategy == 'sameThread'
-        ? '${AppConstants.cronSessionPrefix}$cronId'
-        : '${AppConstants.cronSessionPrefix}${cronId}_${DateTime.now().millisecondsSinceEpoch}';
-
-    _cronLog('Session key: $sessionKey');
-
-    try {
-      await for (final event in agentLoop.processMessage(prompt, sessionKey)) {
-        if (event is ResponseEvent) {
-          _cronLog('Got response for "$cronName" '
-              '(${event.content.length} chars)');
-          break;
-        } else if (event is ErrorEvent) {
-          _cronLog('ERROR in "$cronName": ${event.message}');
-          break;
-        }
-      }
-
-      // Save session
-      final sessions = await ref.read(sessionManagerProvider.future);
-      final session = sessions.get(sessionKey);
-      if (session != null) {
-        await sessions.save(session);
-        _cronLog('Session saved for "$cronName"');
-      } else {
-        _cronLog('WARNING: No session found for key $sessionKey');
-      }
-
-      // Notify task handler that cron is done
-      FlutterForegroundTask.sendDataToTask({
-        'action': 'cron_done',
-        'cron_id': cronId,
-      });
-    } catch (e) {
-      _cronLog('EXCEPTION in "$cronName": $e');
     }
   }
 

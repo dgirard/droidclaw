@@ -10,7 +10,7 @@ import 'providers/app_providers.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize communication port for foreground task (Telegram bot)
+  // Initialize communication port for background service
   FlutterForegroundTask.initCommunicationPort();
 
   // Initialize Hive for session storage

@@ -1,28 +1,34 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../core/config/cron_config.dart';
+import '../agent/agent_loop.dart';
+import '../agent/service_agent_factory.dart';
+import '../config/cron_config.dart';
 import '../../shared/constants.dart';
-import 'telegram_api.dart';
+import '../../features/telegram/telegram_api.dart';
 
 /// Top-level callback for the foreground service isolate.
 /// Must be a top-level function with @pragma to survive tree-shaking.
 @pragma('vm:entry-point')
-void telegramServiceCallback() {
-  FlutterForegroundTask.setTaskHandler(TelegramTaskHandler());
+void backgroundServiceCallback() {
+  FlutterForegroundTask.setTaskHandler(BackgroundTaskHandler());
 }
 
 /// Runs in the foreground service isolate.
 ///
 /// Responsibilities:
+/// - Checks cron schedules and executes them via autonomous AgentLoop
 /// - Long-polls Telegram for new messages via getUpdates
 /// - Forwards incoming messages to main isolate via sendDataToMain
 /// - Receives responses from main isolate and sends them to Telegram
 /// - Persists update offset across restarts
 /// - Implements exponential backoff on failures
-class TelegramTaskHandler extends TaskHandler {
+class BackgroundTaskHandler extends TaskHandler {
+  // Telegram
   TelegramApi? _api;
   int _offset = 0;
   int _consecutiveFailures = 0;
@@ -33,6 +39,11 @@ class TelegramTaskHandler extends TaskHandler {
   List<CronDefinition> _cronDefinitions = [];
   int _cronCheckCounter = 14; // Start high to trigger check on first event
   static const _cronCheckIntervalSeconds = 15;
+
+  // Autonomous AgentLoop for direct cron execution in service isolate
+  AgentLoop? _agentLoop;
+  bool _agentInitializing = false;
+  bool _cronExecuting = false;
 
   static const _maxBackoff = Duration(seconds: 60);
   static const _baseBackoff = Duration(seconds: 2);
@@ -59,6 +70,9 @@ class TelegramTaskHandler extends TaskHandler {
     _log('TaskHandler started: ${_cronDefinitions.length} crons loaded, '
         'telegram=${_api != null}');
 
+    // Initialize AgentLoop for autonomous cron execution
+    _initAgentLoop(prefs);
+
     FlutterForegroundTask.sendDataToMain({
       'type': 'started',
       'timestamp': timestamp.millisecondsSinceEpoch,
@@ -67,7 +81,7 @@ class TelegramTaskHandler extends TaskHandler {
 
   @override
   Future<void> onRepeatEvent(DateTime timestamp) async {
-    // Check crons every ~60 seconds (counter increments every 1s)
+    // Check crons every ~15 seconds (counter increments every 1s)
     _cronCheckCounter++;
     if (_cronCheckCounter >= _cronCheckIntervalSeconds) {
       _cronCheckCounter = 0;
@@ -189,6 +203,10 @@ class TelegramTaskHandler extends TaskHandler {
       _loadCronDefinitions(prefs);
       _log('Reloaded crons: ${_cronDefinitions.length} definitions, '
           'schedules: ${_cronDefinitions.map((c) => '${c.name}:${c.schedule.type.name}').join(', ')}');
+      // Re-init AgentLoop if config may have changed
+      if (_agentLoop == null) {
+        _initAgentLoop(prefs);
+      }
     } else if (action == 'cron_done') {
       // Update lastRun for the cron after main isolate finishes execution
       final cronId = map['cron_id'] as String;
@@ -238,6 +256,99 @@ class TelegramTaskHandler extends TaskHandler {
     // No-op: notification is persistent for foreground service
   }
 
+  // --- Autonomous AgentLoop ---
+
+  Future<void> _initAgentLoop(SharedPreferences prefs) async {
+    if (_agentInitializing || _agentLoop != null) return;
+    _agentInitializing = true;
+
+    try {
+      await prefs.reload();
+      final apiKey = prefs.getString(AppConstants.cachedApiKeyKey);
+      final providerName = prefs.getString(AppConstants.cachedProviderNameKey);
+      final workspacePath = prefs.getString(AppConstants.cachedWorkspacePathKey);
+      final configJson = prefs.getString(AppConstants.configKey);
+
+      if (apiKey == null || providerName == null ||
+          workspacePath == null || configJson == null) {
+        _log('Cannot init AgentLoop: missing cached config '
+            '(apiKey=${apiKey != null}, provider=${providerName != null}, '
+            'workspace=${workspacePath != null}, config=${configJson != null})');
+        return;
+      }
+
+      // Derive Hive path: workspace is <appDir>/droidclaw_workspace,
+      // Hive.initFlutter() uses <appDir>/app_flutter
+      final appDir = Directory(workspacePath).parent.path;
+      final hivePath = '$appDir/app_flutter';
+
+      _agentLoop = await ServiceAgentFactory.create(
+        prefs: prefs,
+        apiKey: apiKey,
+        providerName: providerName,
+        workspacePath: workspacePath,
+        hivePath: hivePath,
+        braveApiKey: prefs.getString(AppConstants.cachedBraveApiKeyKey),
+      );
+
+      _log('AgentLoop initialized in service isolate');
+    } catch (e) {
+      _log('Failed to init AgentLoop in service: $e');
+    } finally {
+      _agentInitializing = false;
+    }
+  }
+
+  Future<void> _executeCronLocally(
+      CronDefinition cron, SharedPreferences prefs) async {
+    if (_agentLoop == null) return;
+    _cronExecuting = true;
+
+    final sessionKey = cron.sessionStrategy == SessionStrategy.sameThread
+        ? '${AppConstants.cronSessionPrefix}${cron.id}'
+        : '${AppConstants.cronSessionPrefix}${cron.id}_${DateTime.now().millisecondsSinceEpoch}';
+
+    _log('Executing "${cron.name}" locally (session=$sessionKey)');
+
+    try {
+      await for (final event
+          in _agentLoop!.processMessage(cron.prompt, sessionKey)) {
+        if (event is ResponseEvent) {
+          _log('Got response for "${cron.name}" '
+              '(${event.content.length} chars)');
+          // Notify main isolate of completion (for UI update if app is open)
+          FlutterForegroundTask.sendDataToMain({
+            'type': 'cron_completed',
+            'cron_id': cron.id,
+            'cron_name': cron.name,
+            'response_length': event.content.length,
+          });
+          break;
+        } else if (event is ErrorEvent) {
+          _log('ERROR in "${cron.name}": ${event.message}');
+          break;
+        }
+      }
+
+      // Save session
+      final session = _agentLoop!.sessions.get(sessionKey);
+      if (session != null) {
+        await _agentLoop!.sessions.save(session);
+        _log('Session saved for "${cron.name}"');
+      }
+
+      // Update notification
+      FlutterForegroundTask.updateService(
+        notificationTitle: 'DroidClaw - Active',
+        notificationText: 'Last cron: ${cron.name}',
+      );
+    } catch (e) {
+      _log('EXCEPTION in "${cron.name}": $e');
+    } finally {
+      _cronExecuting = false;
+    }
+  }
+
   // --- Cron scheduling ---
 
   void _loadCronDefinitions(SharedPreferences prefs) {
@@ -269,27 +380,27 @@ class TelegramTaskHandler extends TaskHandler {
           'lastRun=${cron.lastRun}');
       if (due) {
         _log('Triggering cron "${cron.name}"');
-
-        final triggerData = {
-          'type': 'cron_trigger',
-          'cron_id': cron.id,
-          'cron_name': cron.name,
-          'prompt': cron.prompt,
-          'session_strategy': cron.sessionStrategy.name,
-        };
-
-        // Save to pending queue (in case main isolate is dead)
         final prefs = await SharedPreferences.getInstance();
-        _addPendingTrigger(prefs, triggerData);
 
-        // Try to send to main isolate (works if app is alive)
-        FlutterForegroundTask.sendDataToMain(triggerData);
-
-        // Try to wake up the main app so it can process the trigger
-        FlutterForegroundTask.launchApp();
-
-        // Immediately update lastRun locally to prevent re-triggering
+        // Immediately update lastRun to prevent re-triggering
         _updateCronLastRun(cron.id, now, prefs);
+
+        if (_agentLoop != null && !_cronExecuting) {
+          // Execute directly in service isolate (autonomous mode)
+          _executeCronLocally(cron, prefs);
+        } else {
+          // Fallback: queue for main isolate
+          final triggerData = {
+            'type': 'cron_trigger',
+            'cron_id': cron.id,
+            'cron_name': cron.name,
+            'prompt': cron.prompt,
+            'session_strategy': cron.sessionStrategy.name,
+          };
+          _addPendingTrigger(prefs, triggerData);
+          FlutterForegroundTask.sendDataToMain(triggerData);
+          FlutterForegroundTask.launchApp();
+        }
       }
     }
   }
