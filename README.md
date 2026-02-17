@@ -42,8 +42,10 @@ DroidClaw is a port of [PicoClaw](https://github.com/sipeed/picoclaw), a Go-base
 
 ### What Was Added
 
-- **Flutter chat UI**: main interface with Markdown rendering, real-time tool indicators
+- **Flutter chat UI**: main interface with Markdown rendering, real-time tool indicators, conversation history
 - **Telegram bot via Android foreground service**: a DroidClaw innovation. PicoClaw had a server-side Telegram channel (webhook). DroidClaw runs polling **directly on the Android phone** via a foreground service with long polling, with no external server whatsoever. This is a fundamental architecture shift.
+- **Scheduled Prompts (Cron)**: define recurring prompts that execute automatically (fixed interval or specific times of day, with day-of-week filtering). Each cron can use a fresh session or continue in the same thread. Managed via Settings > Scheduled Prompts.
+- **Reverse Geocoding**: `get_address` tool chains with `get_location` to resolve GPS coordinates into a street address (Nominatim/OpenStreetMap, no API key needed).
 
 ---
 
@@ -144,17 +146,17 @@ lib/
 │
 ├── core/                        # Business logic (no Flutter UI imports)
 │   ├── agent/                   # Agent loop, context builder, memory
-│   ├── config/                  # AppConfig, ConfigStorage
+│   ├── config/                  # AppConfig, ConfigStorage, CronConfig
 │   ├── providers/               # LLM abstraction (Anthropic, HTTP, factory)
 │   ├── session/                 # Conversation persistence (Hive)
 │   ├── skills/                  # Three-tier loader and installer
-│   └── tools/                   # Tool interface + implementations
+│   └── tools/                   # Tool interface + 8 implementations
 │
 ├── features/                    # Screens and platform features
-│   ├── chat/                    # Main screen + components
+│   ├── chat/                    # Main screen, message bubbles, history
 │   ├── onboarding/              # First-launch setup
-│   ├── settings/                # Provider, skills, Telegram config
-│   ├── telegram/                # Bot API, task handler, bot manager
+│   ├── settings/                # Provider, tools, skills, cron, Telegram
+│   ├── telegram/                # Bot API, task handler, bot manager, rate limiter
 │   └── voice/                   # Voice input (STT via Groq Whisper)
 │
 ├── providers/                   # Riverpod state management
@@ -247,6 +249,19 @@ class ResponseEvent extends AgentEvent { ... }
 
 Both interfaces (chat UI and Telegram) consume the same `Stream<AgentEvent>`. The chat UI renders each event in real time. Telegram only sends the final `ResponseEvent`.
 
+### Scheduled Prompts (Cron)
+
+```dart
+class CronDefinition {
+  final String name;
+  final String prompt;
+  final CronSchedule schedule;      // interval or timeOfDay
+  final SessionStrategy sessionStrategy; // newEach or sameThread
+}
+```
+
+Users define recurring prompts from Settings > Scheduled Prompts. Each cron runs on its configured schedule (fixed interval with min 15 minutes, or specific times of day with optional day-of-week filtering). The agent processes the prompt like a normal user message, with full tool access.
+
 ---
 
 ## Tools
@@ -332,7 +347,7 @@ adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 |---|---|
 | **Dart files** | 53 |
 | **Analysis issues** | 0 |
-| **APK size (arm64)** | 18.8 MB |
+| **APK size (arm64)** | 19.9 MB |
 | **Native code** | None (pure Dart/Flutter) |
 | **minSdkVersion** | 24 (Android 7.0) |
 | **targetSdkVersion** | 34 (Android 14) |
@@ -347,7 +362,7 @@ DroidClaw is pronounced **"ARaccoon"** — The Raccoon. This is the name shown i
 
 ### The Raccoon as a Metaphor for the AI Agent
 
-- **The claws**: raccoons are famous for their extremely dexterous front paws, capable of manipulating objects, picking locks, and rummaging everywhere. They are the perfect embodiment of **iterative tool calling** — the agent that calls web_search, parses the results, follows up with web_fetch, extracts the info, and loops until it finds the answer.
+- **The claws**: raccoons are famous for their extremely dexterous front paws, capable of manipulating objects, picking locks, and rummaging everywhere. They are the perfect embodiment of **iterative tool calling** — the agent that calls web_search, parses the results, follows up with web_scrape, extracts the info, and loops until it finds the answer.
 
 - **Intelligence and resourcefulness**: clever, adaptable, they always find a solution. Exactly what an AI agent does when it loops, fails, adjusts its strategy, and eventually solves the problem.
 
