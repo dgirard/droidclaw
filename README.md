@@ -45,6 +45,7 @@ DroidClaw is a port of [PicoClaw](https://github.com/sipeed/picoclaw), a Go-base
 - **Flutter chat UI**: main interface with Markdown rendering, real-time tool indicators, conversation history
 - **Telegram bot via Android foreground service**: a DroidClaw innovation. PicoClaw had a server-side Telegram channel (webhook). DroidClaw runs polling **directly on the Android phone** via a foreground service with long polling, with no external server whatsoever. This is a fundamental architecture shift.
 - **Scheduled Prompts (Cron)**: define recurring prompts that execute automatically (fixed interval or specific times of day, with day-of-week filtering). Each cron can use a fresh session or continue in the same thread. Managed via Settings > Scheduled Prompts.
+- **Autonomous cron execution**: the foreground service isolate initializes its own AgentLoop (`ServiceAgentFactory`) and executes crons at exact scheduled time — even when Android kills the main app overnight. Falls back to a pending trigger queue if the service AgentLoop isn't available.
 - **Reverse Geocoding**: `get_address` tool chains with `get_location` to resolve GPS coordinates into a street address (Nominatim/OpenStreetMap, no API key needed).
 
 ---
@@ -59,6 +60,7 @@ graph TB
         subgraph "Main Isolate"
             UI["Flutter Chat UI"]
             TM["TelegramBotManager"]
+            BG["BackgroundServiceNotifier"]
             AL["AgentLoop"]
             CB["ContextBuilder"]
             SM["SessionManager"]
@@ -66,22 +68,26 @@ graph TB
             LP["LLMProvider"]
             RP["Riverpod Providers"]
         end
-        subgraph "TaskHandler Isolate"
-            TH["TelegramTaskHandler"]
+        subgraph "Service Isolate (Foreground Service)"
+            BTH["BackgroundTaskHandler"]
             TA["TelegramApi"]
+            SAL["Service AgentLoop\n(autonomous cron)"]
         end
     end
 
     User1["User (app)"] --> UI
     User2["User (Telegram)"] --> TG["Telegram API"]
-    TG --> TH
-    TH <-->|"port comm"| TM
+    TG --> BTH
+    BTH <-->|"port comm"| BG
+    BTH <-->|"port comm"| TM
+    BTH -->|"cron trigger"| SAL
     UI --> AL
     TM --> AL
     AL --> LP
     AL --> TR
     AL --> SM
     AL --> CB
+    SAL --> LLM
     LP --> LLM["LLM APIs (Anthropic, OpenRouter, ...)"]
     TR --> Tools["web_search / web_scrape / web_scrape_js / file / get_location / get_address / subagent"]
 ```
@@ -113,16 +119,19 @@ sequenceDiagram
     end
 ```
 
-### Telegram Dual-Isolate Architecture
+### Dual-Isolate Architecture
 
 ```mermaid
 graph LR
-    subgraph "TaskHandler Isolate (Foreground Service)"
+    subgraph "Service Isolate (Foreground Service)"
         GP["getUpdates\n(long poll 30s)"]
         SM2["sendMessage"]
+        CR["Cron Scheduler"]
+        SAL2["Service AgentLoop"]
     end
 
     subgraph "Main Isolate"
+        BGN["BackgroundServiceNotifier"]
         BM["TelegramBotManager\nper-chat queues\nmax 3 concurrent"]
         AL2["AgentLoop"]
     end
@@ -133,6 +142,9 @@ graph LR
     BM -->|"processMessage"| AL2
     AL2 -->|"response"| BM
     BM -->|"sendDataToTask"| SM2
+    CR -->|"autonomous"| SAL2
+    CR -->|"fallback\nsendDataToMain"| BGN
+    BGN -->|"processMessage"| AL2
 ```
 
 ---
@@ -145,9 +157,10 @@ lib/
 ├── app.dart                     # MaterialApp, routing, Material 3 theme
 │
 ├── core/                        # Business logic (no Flutter UI imports)
-│   ├── agent/                   # Agent loop, context builder, memory
+│   ├── agent/                   # Agent loop, context builder, memory, ServiceAgentFactory
 │   ├── config/                  # AppConfig, ConfigStorage, CronConfig
 │   ├── providers/               # LLM abstraction (Anthropic, HTTP, factory)
+│   ├── services/                # BackgroundTaskHandler (foreground service isolate)
 │   ├── session/                 # Conversation persistence (Hive)
 │   ├── skills/                  # Three-tier loader and installer
 │   └── tools/                   # Tool interface + 8 implementations
@@ -156,15 +169,15 @@ lib/
 │   ├── chat/                    # Main screen, message bubbles, history
 │   ├── onboarding/              # First-launch setup
 │   ├── settings/                # Provider, tools, skills, cron, Telegram
-│   ├── telegram/                # Bot API, task handler, bot manager, rate limiter
+│   ├── telegram/                # Bot API, bot manager, rate limiter
 │   └── voice/                   # Voice input (STT via Groq Whisper)
 │
-├── providers/                   # Riverpod state management
+├── providers/                   # Riverpod: app, chat, background service, Telegram
 ├── data/local/                  # Unified StorageService
 └── shared/                      # Constants
 ```
 
-**53 Dart files** in total.
+**55 Dart files** in total.
 
 ---
 
@@ -262,6 +275,8 @@ class CronDefinition {
 
 Users define recurring prompts from Settings > Scheduled Prompts. Each cron runs on its configured schedule (fixed interval with min 15 minutes, or specific times of day with optional day-of-week filtering). The agent processes the prompt like a normal user message, with full tool access.
 
+**Autonomous execution**: the service isolate initializes its own AgentLoop via `ServiceAgentFactory` — no main app needed. API keys are cached in SharedPreferences (read from `FlutterSecureStorage` on main isolate, since service isolate can't use platform channels). If the service AgentLoop init fails, crons fall back to a persistent pending queue that replays when the app is opened.
+
 ---
 
 ## Tools
@@ -345,9 +360,9 @@ adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
 | | |
 |---|---|
-| **Dart files** | 53 |
+| **Dart files** | 55 |
 | **Analysis issues** | 0 |
-| **APK size (arm64)** | 19.9 MB |
+| **APK size (arm64)** | 20.8 MB |
 | **Native code** | None (pure Dart/Flutter) |
 | **minSdkVersion** | 24 (Android 7.0) |
 | **targetSdkVersion** | 34 (Android 14) |
