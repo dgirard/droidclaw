@@ -290,6 +290,8 @@ class BackgroundTaskHandler extends TaskHandler {
         hivePath: hivePath,
         braveApiKey: prefs.getString(AppConstants.cachedBraveApiKeyKey),
         orsApiKey: prefs.getString(AppConstants.cachedOrsApiKeyKey),
+        sncfApiKey: prefs.getString(AppConstants.cachedSncfApiKeyKey),
+        primApiKey: prefs.getString(AppConstants.cachedPrimApiKeyKey),
       );
 
       _log('AgentLoop initialized in service isolate');

@@ -139,6 +139,12 @@ const _tools = [
     description: 'Route calculation (car, bike, walk) via OpenRouteService',
     icon: Icons.directions_outlined,
   ),
+  _ToolInfo(
+    name: 'get_transit',
+    label: 'Public Transit',
+    description: 'Metro, RER, bus, train routes (SNCF + IDFM)',
+    icon: Icons.directions_transit_outlined,
+  ),
 ];
 
 /// Screen to enable/disable individual agent tools.

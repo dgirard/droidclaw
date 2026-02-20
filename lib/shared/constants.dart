@@ -63,5 +63,7 @@ class AppConstants {
   static const String cachedProviderNameKey = 'cached_provider_name';
   static const String cachedBraveApiKeyKey = 'cached_brave_api_key';
   static const String cachedOrsApiKeyKey = 'cached_ors_api_key';
+  static const String cachedSncfApiKeyKey = 'cached_sncf_api_key';
+  static const String cachedPrimApiKeyKey = 'cached_prim_api_key';
   static const String cachedWorkspacePathKey = 'cached_workspace_path';
 }

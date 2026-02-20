@@ -49,6 +49,20 @@ class ConfigStorage {
   Future<void> setOrsApiKey(String apiKey) =>
       _storage.setSecure('ors_api_key', apiKey);
 
+  /// Get SNCF API key from secure storage.
+  Future<String?> getSncfApiKey() => _storage.getSecure('sncf_api_key');
+
+  /// Save SNCF API key to secure storage.
+  Future<void> setSncfApiKey(String apiKey) =>
+      _storage.setSecure('sncf_api_key', apiKey);
+
+  /// Get PRIM (IDFM) API key from secure storage.
+  Future<String?> getPrimApiKey() => _storage.getSecure('prim_api_key');
+
+  /// Save PRIM (IDFM) API key to secure storage.
+  Future<void> setPrimApiKey(String apiKey) =>
+      _storage.setSecure('prim_api_key', apiKey);
+
   /// Check if onboarding has been completed.
   bool get isOnboardingComplete =>
       _storage.getBool(AppConstants.onboardingCompleteKey) ?? false;

@@ -28,6 +28,7 @@ import '../core/tools/reverse_geocode_tool.dart';
 import '../core/tools/set_alarm_tool.dart';
 import '../core/tools/speak_tool.dart';
 import '../core/tools/subagent_tool.dart';
+import '../core/tools/transit_tool.dart';
 import '../core/tools/volume_control_tool.dart';
 import '../core/tools/tool.dart';
 import '../core/tools/web_scrape_js_tool.dart';
@@ -94,6 +95,8 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   final workspacePath = await storage.workspacePath;
   final braveApiKey = await configStorage.getBraveApiKey();
   final orsApiKey = await configStorage.getOrsApiKey();
+  final sncfApiKey = await configStorage.getSncfApiKey();
+  final primApiKey = await configStorage.getPrimApiKey();
   final registry = ToolRegistry();
   final disabled = config.tools.disabledTools;
 
@@ -161,6 +164,9 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   }
   if (!disabled.contains('get_directions')) {
     registry.register(DirectionsTool(apiKey: orsApiKey));
+  }
+  if (!disabled.contains('get_transit')) {
+    registry.register(TransitTool(sncfApiKey: sncfApiKey, primApiKey: primApiKey));
   }
 
   return registry;

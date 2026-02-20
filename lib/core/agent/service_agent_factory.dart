@@ -17,6 +17,7 @@ import '../tools/ocr_tool.dart';
 import '../tools/qr_generate_tool.dart';
 import '../tools/reverse_geocode_tool.dart';
 import '../tools/tool.dart';
+import '../tools/transit_tool.dart';
 import '../tools/web_scrape_tool.dart';
 import '../tools/web_search_tool.dart';
 import 'agent_loop.dart';
@@ -45,6 +46,8 @@ class ServiceAgentFactory {
     required String hivePath,
     String? braveApiKey,
     String? orsApiKey,
+    String? sncfApiKey,
+    String? primApiKey,
   }) async {
     // 1. Initialize Hive (plain Dart — no initFlutter)
     Hive.init(hivePath);
@@ -100,6 +103,9 @@ class ServiceAgentFactory {
     }
     if (!disabled.contains('get_directions')) {
       registry.register(DirectionsTool(apiKey: orsApiKey));
+    }
+    if (!disabled.contains('get_transit')) {
+      registry.register(TransitTool(sncfApiKey: sncfApiKey, primApiKey: primApiKey));
     }
     if (!disabled.contains('ocr')) {
       registry.register(OcrTool(workspacePath: workspacePath));

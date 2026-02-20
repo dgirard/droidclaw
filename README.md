@@ -27,7 +27,7 @@ DroidClaw is a port of [PicoClaw](https://github.com/sipeed/picoclaw), a Go-base
 
 - **Agent Loop**: the agentic loop (LLM -> tool calls -> iteration)
 - **LLM Providers**: multi-provider abstraction (Anthropic, OpenAI, OpenRouter, Groq, Gemini)
-- **Tools**: web_search (Brave), web_scrape (HTTP+Markdown), web_scrape_js (WebView), file (sandboxed), get_location (GPS), get_address (reverse geocoding), subagent, message, clipboard, device_info, speak (TTS), open_app (URL/intent launcher), set_alarm, notifications (local notifications/reminders), contacts (read-only), calendar (read/write), ocr (on-device text extraction), qr_generate (QR code images), pick_image (gallery/camera), volume_control (audio levels), get_directions (ORS routing)
+- **Tools**: web_search (Brave), web_scrape (HTTP+Markdown), web_scrape_js (WebView), file (sandboxed), get_location (GPS), get_address (reverse geocoding), subagent, message, clipboard, device_info, speak (TTS), open_app (URL/intent launcher), set_alarm, notifications (local notifications/reminders), contacts (read-only), calendar (read/write), ocr (on-device text extraction), qr_generate (QR code images), pick_image (gallery/camera), volume_control (audio levels), get_directions (ORS routing), get_transit (SNCF + IDFM public transit)
 - **Sessions**: conversation history with Hive persistence
 - **Memory**: long-term MEMORY.md + daily notes
 - **Skills**: three-tier loading (builtin -> global -> workspace)
@@ -89,7 +89,7 @@ graph TB
     AL --> CB
     SAL --> LLM
     LP --> LLM["LLM APIs (Anthropic, OpenRouter, ...)"]
-    TR --> Tools["web_search / web_scrape / web_scrape_js / file / get_location / get_address / subagent / clipboard / device_info / speak / open_app / set_alarm / notifications / contacts / calendar / ocr / qr_generate / pick_image / volume_control / get_directions"]
+    TR --> Tools["web_search / web_scrape / web_scrape_js / file / get_location / get_address / subagent / clipboard / device_info / speak / open_app / set_alarm / notifications / contacts / calendar / ocr / qr_generate / pick_image / volume_control / get_directions / get_transit"]
 ```
 
 ### Agent Loop
@@ -163,7 +163,7 @@ lib/
 │   ├── services/                # BackgroundTaskHandler (foreground service isolate)
 │   ├── session/                 # Conversation persistence (Hive)
 │   ├── skills/                  # Three-tier loader and installer
-│   └── tools/                   # Tool interface + 21 implementations
+│   └── tools/                   # Tool interface + 22 implementations
 │
 ├── features/                    # Screens and platform features
 │   ├── chat/                    # Main screen, message bubbles, history
@@ -177,7 +177,7 @@ lib/
 └── shared/                      # Constants
 ```
 
-**70 Dart files** in total.
+**71 Dart files** in total.
 
 ---
 
@@ -302,14 +302,15 @@ Users define recurring prompts from Settings > Scheduled Prompts. Each cron runs
 | `pick_image` | Yes | **No** — image picker UI needs Activity |
 | `volume_control` | Yes | **No** — MethodChannel on Activity engine only |
 | `get_directions` | Yes | Yes — pure HTTP (OpenRouteService API) |
+| `get_transit` | Yes | Yes — pure HTTP (SNCF + PRIM APIs) |
 
-The service isolate runs on a separate FlutterEngine with platform channel access (via `GeneratedPluginRegistrant`). It can use `web_search`, `web_scrape`, `file`, `get_location`, `get_address`, `device_info`, `ocr`, `qr_generate`, and `get_directions`. WebView-based tools, UI-dependent tools, permission-requiring tools (contacts, calendar, notifications), and tools with real-world side effects (TTS, app launches, alarms) are excluded. `get_location` requires that the user has granted location permission from the app at least once. When Android kills the app overnight and a cron triggers at 3 AM, the service isolate executes it autonomously. If the service AgentLoop init fails, crons fall back to a persistent pending queue that replays when the app is opened.
+The service isolate runs on a separate FlutterEngine with platform channel access (via `GeneratedPluginRegistrant`). It can use `web_search`, `web_scrape`, `file`, `get_location`, `get_address`, `device_info`, `ocr`, `qr_generate`, `get_directions`, and `get_transit`. WebView-based tools, UI-dependent tools, permission-requiring tools (contacts, calendar, notifications), and tools with real-world side effects (TTS, app launches, alarms) are excluded. `get_location` requires that the user has granted location permission from the app at least once. When Android kills the app overnight and a cron triggers at 3 AM, the service isolate executes it autonomously. If the service AgentLoop init fails, crons fall back to a persistent pending queue that replays when the app is opened.
 
 ---
 
 ## Tools
 
-The agent has access to 21 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
+The agent has access to 22 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
 
 Users can **enable or disable** individual tools from Settings > Tools > Manage Tools.
 
@@ -336,6 +337,7 @@ Users can **enable or disable** individual tools from Settings > Tools > Manage 
 | **Image Picker** | `pick_image` | Open the system image picker to select a photo from the gallery or take a new photo with the camera. The image is copied to the workspace `images/` directory for further processing (e.g. OCR). Requires CAMERA permission for camera source. Disabled by default. |
 | **Volume Control** | `volume_control` | Read and adjust device volume levels for alarm, media, ringtone, and notification streams. Reports ringer mode (normal/vibrate/silent). Use before `set_alarm` to verify alarm volume is audible. Supports human-readable levels (mute/low/medium/high/max). First custom MethodChannel to Android AudioManager. |
 | **Directions** | `get_directions` | Route calculation between two GPS coordinates via OpenRouteService API v2. Supports car, bike, road bike, mountain bike, walk, hike, and wheelchair profiles. Returns distance, duration, elevation gain/loss, and turn-by-turn instructions. Also supports isochrone calculation (reachable area within a time budget). Requires a free ORS API key. |
+| **Public Transit** | `get_transit` | Find public transit routes in France. Auto-routes between two APIs: **PRIM/IDFM** for Ile-de-France (Metro, RER, Bus, Tram, Transilien) and **SNCF** for national trains (TGV, TER, Intercites). Returns top 3 journey options with departure/arrival times, transfers, CO2 emissions, and section-by-section itinerary. Supports departure/arrival time constraints and wheelchair-accessible routes. Both APIs use Navitia technology with shared response parsing. |
 
 ### Dual Scraping Strategy
 
@@ -401,7 +403,7 @@ adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
 | | |
 |---|---|
-| **Dart files** | 70 |
+| **Dart files** | 71 |
 | **Analysis issues** | 0 |
 | **APK size (arm64)** | 34.6 MB |
 | **Native code** | Kotlin (AudioChannelPlugin — volume control) |

@@ -167,6 +167,18 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
         await prefs.setString(AppConstants.cachedOrsApiKeyKey, orsKey);
       }
 
+      // Cache SNCF API key
+      final sncfKey = await configStorage.getSncfApiKey();
+      if (sncfKey != null && sncfKey.isNotEmpty) {
+        await prefs.setString(AppConstants.cachedSncfApiKeyKey, sncfKey);
+      }
+
+      // Cache PRIM API key
+      final primKey = await configStorage.getPrimApiKey();
+      if (primKey != null && primKey.isNotEmpty) {
+        await prefs.setString(AppConstants.cachedPrimApiKeyKey, primKey);
+      }
+
       // Cache workspace path
       final workspacePath = await storage.workspacePath;
       await prefs.setString(AppConstants.cachedWorkspacePathKey, workspacePath);

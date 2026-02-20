@@ -80,7 +80,7 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.directions_outlined),
             title: const Text('Routing'),
-            subtitle: const Text('Configure OpenRouteService API'),
+            subtitle: const Text('Configure routing & transit APIs'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () =>
                 Navigator.pushNamed(context, '/settings/routing'),
