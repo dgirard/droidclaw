@@ -15,6 +15,7 @@ import '../core/tools/calendar_tool.dart';
 import '../core/tools/clipboard_tool.dart';
 import '../core/tools/contacts_tool.dart';
 import '../core/tools/device_info_tool.dart';
+import '../core/tools/directions_tool.dart';
 import '../core/tools/file_tool.dart';
 import '../core/tools/location_tool.dart';
 import '../core/tools/message_tool.dart';
@@ -92,6 +93,7 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   final storage = ref.watch(storageServiceProvider);
   final workspacePath = await storage.workspacePath;
   final braveApiKey = await configStorage.getBraveApiKey();
+  final orsApiKey = await configStorage.getOrsApiKey();
   final registry = ToolRegistry();
   final disabled = config.tools.disabledTools;
 
@@ -156,6 +158,9 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   }
   if (!disabled.contains('volume_control')) {
     registry.register(VolumeControlTool());
+  }
+  if (!disabled.contains('get_directions')) {
+    registry.register(DirectionsTool(apiKey: orsApiKey));
   }
 
   return registry;

@@ -11,6 +11,7 @@ import 'features/settings/settings_screen.dart';
 import 'features/settings/skills_screen.dart';
 import 'features/settings/tools_config_screen.dart';
 import 'features/settings/telegram_config_screen.dart';
+import 'features/settings/routing_config_screen.dart';
 import 'features/settings/web_search_config_screen.dart';
 import 'providers/app_providers.dart';
 
@@ -41,6 +42,7 @@ class DroidClawApp extends ConsumerWidget {
         '/settings/telegram': (context) => const TelegramConfigScreen(),
         '/settings/tools': (context) => const ToolsConfigScreen(),
         '/settings/web-search': (context) => const WebSearchConfigScreen(),
+        '/settings/routing': (context) => const RoutingConfigScreen(),
         '/settings/crons': (context) => const CronConfigScreen(),
         '/settings/crons/edit': (context) => const CronEditScreen(),
       },

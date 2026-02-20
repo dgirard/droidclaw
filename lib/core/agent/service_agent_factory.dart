@@ -10,6 +10,7 @@ import '../providers/provider_factory.dart';
 import '../session/session_manager.dart';
 import '../skills/skill_loader.dart';
 import '../tools/device_info_tool.dart';
+import '../tools/directions_tool.dart';
 import '../tools/file_tool.dart';
 import '../tools/location_tool.dart';
 import '../tools/ocr_tool.dart';
@@ -43,6 +44,7 @@ class ServiceAgentFactory {
     required String workspacePath,
     required String hivePath,
     String? braveApiKey,
+    String? orsApiKey,
   }) async {
     // 1. Initialize Hive (plain Dart — no initFlutter)
     Hive.init(hivePath);
@@ -95,6 +97,9 @@ class ServiceAgentFactory {
     }
     if (!disabled.contains('device_info')) {
       registry.register(DeviceInfoTool());
+    }
+    if (!disabled.contains('get_directions')) {
+      registry.register(DirectionsTool(apiKey: orsApiKey));
     }
     if (!disabled.contains('ocr')) {
       registry.register(OcrTool(workspacePath: workspacePath));

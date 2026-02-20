@@ -78,6 +78,15 @@ class SettingsScreen extends ConsumerWidget {
           ),
 
           ListTile(
+            leading: const Icon(Icons.directions_outlined),
+            title: const Text('Routing'),
+            subtitle: const Text('Configure OpenRouteService API'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () =>
+                Navigator.pushNamed(context, '/settings/routing'),
+          ),
+
+          ListTile(
             leading: const Icon(Icons.schedule_outlined),
             title: const Text('Scheduled Prompts'),
             subtitle: const Text('Automated recurring tasks'),

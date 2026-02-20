@@ -133,6 +133,12 @@ const _tools = [
     description: 'Read and adjust device volume levels (alarm, media, etc.)',
     icon: Icons.volume_up_outlined,
   ),
+  _ToolInfo(
+    name: 'get_directions',
+    label: 'Directions',
+    description: 'Route calculation (car, bike, walk) via OpenRouteService',
+    icon: Icons.directions_outlined,
+  ),
 ];
 
 /// Screen to enable/disable individual agent tools.

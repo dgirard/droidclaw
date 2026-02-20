@@ -161,6 +161,12 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
         await prefs.setString(AppConstants.cachedBraveApiKeyKey, braveKey);
       }
 
+      // Cache ORS API key
+      final orsKey = await configStorage.getOrsApiKey();
+      if (orsKey != null && orsKey.isNotEmpty) {
+        await prefs.setString(AppConstants.cachedOrsApiKeyKey, orsKey);
+      }
+
       // Cache workspace path
       final workspacePath = await storage.workspacePath;
       await prefs.setString(AppConstants.cachedWorkspacePathKey, workspacePath);

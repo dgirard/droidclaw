@@ -42,6 +42,13 @@ class ConfigStorage {
   Future<void> setBraveApiKey(String apiKey) =>
       _storage.setSecure('brave_api_key', apiKey);
 
+  /// Get OpenRouteService API key from secure storage.
+  Future<String?> getOrsApiKey() => _storage.getSecure('ors_api_key');
+
+  /// Save OpenRouteService API key to secure storage.
+  Future<void> setOrsApiKey(String apiKey) =>
+      _storage.setSecure('ors_api_key', apiKey);
+
   /// Check if onboarding has been completed.
   bool get isOnboardingComplete =>
       _storage.getBool(AppConstants.onboardingCompleteKey) ?? false;
