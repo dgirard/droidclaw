@@ -61,6 +61,78 @@ const _tools = [
     description: 'Spawn sub-tasks for complex queries',
     icon: Icons.account_tree_outlined,
   ),
+  _ToolInfo(
+    name: 'clipboard',
+    label: 'Clipboard',
+    description: 'Read and write device clipboard',
+    icon: Icons.content_paste,
+  ),
+  _ToolInfo(
+    name: 'device_info',
+    label: 'Device Info',
+    description: 'Battery, connectivity, device model',
+    icon: Icons.phone_android,
+  ),
+  _ToolInfo(
+    name: 'speak',
+    label: 'Text to Speech',
+    description: 'Speak text aloud (foreground only)',
+    icon: Icons.volume_up,
+  ),
+  _ToolInfo(
+    name: 'open_app',
+    label: 'Open App / URL',
+    description: 'Open URLs, phone, maps, email on device',
+    icon: Icons.open_in_new,
+  ),
+  _ToolInfo(
+    name: 'set_alarm',
+    label: 'Alarm / Timer',
+    description: 'Set alarms and timers via system Clock app',
+    icon: Icons.alarm,
+  ),
+  _ToolInfo(
+    name: 'notifications',
+    label: 'Notifications',
+    description: 'Create and schedule local notifications / reminders',
+    icon: Icons.notifications_outlined,
+  ),
+  _ToolInfo(
+    name: 'contacts',
+    label: 'Contacts',
+    description: 'Search and read device contacts (read-only)',
+    icon: Icons.contacts_outlined,
+  ),
+  _ToolInfo(
+    name: 'calendar',
+    label: 'Calendar',
+    description: 'Read and create calendar events',
+    icon: Icons.calendar_month_outlined,
+  ),
+  _ToolInfo(
+    name: 'ocr',
+    label: 'OCR',
+    description: 'Extract text from images (on-device ML Kit)',
+    icon: Icons.document_scanner_outlined,
+  ),
+  _ToolInfo(
+    name: 'qr_generate',
+    label: 'QR Code',
+    description: 'Generate QR code images from text or URLs',
+    icon: Icons.qr_code,
+  ),
+  _ToolInfo(
+    name: 'pick_image',
+    label: 'Image Picker',
+    description: 'Pick photos from gallery or take with camera',
+    icon: Icons.image_outlined,
+  ),
+  _ToolInfo(
+    name: 'volume_control',
+    label: 'Volume Control',
+    description: 'Read and adjust device volume levels (alarm, media, etc.)',
+    icon: Icons.volume_up_outlined,
+  ),
 ];
 
 /// Screen to enable/disable individual agent tools.

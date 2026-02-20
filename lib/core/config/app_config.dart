@@ -147,9 +147,15 @@ class ToolsConfig {
   final int webSearchMaxResults;
   final Set<String> disabledTools;
 
+  static const _defaultDisabledTools = {
+    'speak', 'open_app', 'set_alarm',
+    'notifications', 'contacts', 'calendar',
+    'pick_image',
+  };
+
   const ToolsConfig({
     this.webSearchMaxResults = AppConstants.webSearchMaxResults,
-    this.disabledTools = const {},
+    this.disabledTools = _defaultDisabledTools,
   });
 
   factory ToolsConfig.fromJson(Map<String, dynamic> json) => ToolsConfig(
@@ -158,7 +164,7 @@ class ToolsConfig {
         disabledTools: (json['disabled_tools'] as List<dynamic>?)
                 ?.map((e) => e as String)
                 .toSet() ??
-            const {},
+            _defaultDisabledTools,
       );
 
   Map<String, dynamic> toJson() => {

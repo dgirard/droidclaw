@@ -11,11 +11,23 @@ import '../core/providers/provider_factory.dart';
 import '../core/session/session_manager.dart';
 import '../core/skills/skill_installer.dart';
 import '../core/skills/skill_loader.dart';
+import '../core/tools/calendar_tool.dart';
+import '../core/tools/clipboard_tool.dart';
+import '../core/tools/contacts_tool.dart';
+import '../core/tools/device_info_tool.dart';
 import '../core/tools/file_tool.dart';
 import '../core/tools/location_tool.dart';
 import '../core/tools/message_tool.dart';
+import '../core/tools/notifications_tool.dart';
+import '../core/tools/ocr_tool.dart';
+import '../core/tools/open_app_tool.dart';
+import '../core/tools/pick_image_tool.dart';
+import '../core/tools/qr_generate_tool.dart';
 import '../core/tools/reverse_geocode_tool.dart';
+import '../core/tools/set_alarm_tool.dart';
+import '../core/tools/speak_tool.dart';
 import '../core/tools/subagent_tool.dart';
+import '../core/tools/volume_control_tool.dart';
 import '../core/tools/tool.dart';
 import '../core/tools/web_scrape_js_tool.dart';
 import '../core/tools/web_scrape_tool.dart';
@@ -108,6 +120,42 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   }
   if (!disabled.contains('subagent')) {
     registry.register(SubagentTool());
+  }
+  if (!disabled.contains('clipboard')) {
+    registry.register(ClipboardTool());
+  }
+  if (!disabled.contains('device_info')) {
+    registry.register(DeviceInfoTool());
+  }
+  if (!disabled.contains('speak')) {
+    registry.register(SpeakTool());
+  }
+  if (!disabled.contains('open_app')) {
+    registry.register(OpenAppTool());
+  }
+  if (!disabled.contains('set_alarm')) {
+    registry.register(SetAlarmTool());
+  }
+  if (!disabled.contains('notifications')) {
+    registry.register(NotificationsTool());
+  }
+  if (!disabled.contains('contacts')) {
+    registry.register(ContactsTool());
+  }
+  if (!disabled.contains('calendar')) {
+    registry.register(CalendarTool());
+  }
+  if (!disabled.contains('ocr')) {
+    registry.register(OcrTool(workspacePath: workspacePath));
+  }
+  if (!disabled.contains('qr_generate')) {
+    registry.register(QrGenerateTool(workspacePath: workspacePath));
+  }
+  if (!disabled.contains('pick_image')) {
+    registry.register(PickImageTool(workspacePath: workspacePath));
+  }
+  if (!disabled.contains('volume_control')) {
+    registry.register(VolumeControlTool());
   }
 
   return registry;

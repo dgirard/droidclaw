@@ -100,6 +100,10 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
 
     final result = await FlutterForegroundTask.startService(
       serviceId: 256,
+      serviceTypes: [
+        ForegroundServiceTypes.remoteMessaging,
+        ForegroundServiceTypes.location,
+      ],
       notificationTitle: 'DroidClaw - Active',
       notificationText: 'Background service running',
       notificationButtons: [

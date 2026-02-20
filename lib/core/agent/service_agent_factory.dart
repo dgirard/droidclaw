@@ -9,7 +9,12 @@ import '../config/app_config.dart';
 import '../providers/provider_factory.dart';
 import '../session/session_manager.dart';
 import '../skills/skill_loader.dart';
+import '../tools/device_info_tool.dart';
 import '../tools/file_tool.dart';
+import '../tools/location_tool.dart';
+import '../tools/ocr_tool.dart';
+import '../tools/qr_generate_tool.dart';
+import '../tools/reverse_geocode_tool.dart';
 import '../tools/tool.dart';
 import '../tools/web_scrape_tool.dart';
 import '../tools/web_search_tool.dart';
@@ -19,8 +24,10 @@ import 'memory_manager.dart';
 
 /// Creates an AgentLoop from plain Dart types for the foreground service isolate.
 ///
-/// The service isolate has no Flutter engine — no platform channels, no rootBundle,
-/// no FlutterSecureStorage. All secrets and paths must be pre-resolved and passed in.
+/// The service isolate runs on a separate FlutterEngine with platform channel
+/// access (via GeneratedPluginRegistrant). SharedPreferences, geolocator, etc.
+/// work. Only FlutterSecureStorage, WebView, and UI-dependent features are
+/// unavailable. All secrets and paths must be pre-resolved and passed in.
 class ServiceAgentFactory {
   ServiceAgentFactory._();
 
@@ -80,12 +87,34 @@ class ServiceAgentFactory {
     if (!disabled.contains('file')) {
       registry.register(FileTool(workspacePath: workspacePath));
     }
-    // Excluded from service isolate (require platform channels or Flutter engine):
+    if (!disabled.contains('get_location')) {
+      registry.register(LocationTool(canRequestPermission: false));
+    }
+    if (!disabled.contains('get_address')) {
+      registry.register(ReverseGeocodeTool());
+    }
+    if (!disabled.contains('device_info')) {
+      registry.register(DeviceInfoTool());
+    }
+    if (!disabled.contains('ocr')) {
+      registry.register(OcrTool(workspacePath: workspacePath));
+    }
+    if (!disabled.contains('qr_generate')) {
+      registry.register(QrGenerateTool(workspacePath: workspacePath));
+    }
+    // Excluded from service isolate:
     // - WebScrapeJsTool (WebView needs Activity)
-    // - LocationTool (GPS platform channel)
-    // - ReverseGeocodeTool (geocoder platform channel)
     // - SubagentTool (self-referential, complex lifecycle)
     // - MessageTool (no UI in service isolate)
+    // - ClipboardTool (read requires foreground on Android 10+)
+    // - SpeakTool (audio focus, no user context)
+    // - OpenAppTool (launches Activity, jarring from background)
+    // - SetAlarmTool (opens Clock app, jarring from background)
+    // - NotificationsTool (initialization requires Activity context)
+    // - ContactsTool (ContentProvider unreliable from background)
+    // - CalendarTool (ContentProvider unreliable from background)
+    // - PickImageTool (image picker UI needs Activity)
+    // - VolumeControlTool (MethodChannel registered on Activity FlutterEngine only)
 
     // 5. Create StorageService with pre-resolved workspace path
     final storageService = StorageService(

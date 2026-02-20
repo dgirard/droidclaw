@@ -4,6 +4,12 @@ import 'tool.dart';
 
 /// Tool that returns the device's current GPS/network location.
 class LocationTool extends Tool {
+  /// When false (service isolate), skip requestPermission() — return an error
+  /// if permission was not pre-granted from the app.
+  final bool canRequestPermission;
+
+  LocationTool({this.canRequestPermission = true});
+
   @override
   String get name => 'get_location';
 
@@ -31,6 +37,11 @@ class LocationTool extends Tool {
       // Check permission
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
+        if (!canRequestPermission) {
+          return ToolResult.error(
+              'Location permission not granted. '
+              'Please open the app and use get_location once to grant permission.');
+        }
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
           return ToolResult.error('Location permission denied by user.');

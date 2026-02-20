@@ -27,7 +27,7 @@ DroidClaw is a port of [PicoClaw](https://github.com/sipeed/picoclaw), a Go-base
 
 - **Agent Loop**: the agentic loop (LLM -> tool calls -> iteration)
 - **LLM Providers**: multi-provider abstraction (Anthropic, OpenAI, OpenRouter, Groq, Gemini)
-- **Tools**: web_search (Brave), web_scrape (HTTP+Markdown), web_scrape_js (WebView), file (sandboxed), get_location (GPS), get_address (reverse geocoding), subagent, message
+- **Tools**: web_search (Brave), web_scrape (HTTP+Markdown), web_scrape_js (WebView), file (sandboxed), get_location (GPS), get_address (reverse geocoding), subagent, message, clipboard, device_info, speak (TTS), open_app (URL/intent launcher), set_alarm, notifications (local notifications/reminders), contacts (read-only), calendar (read/write), ocr (on-device text extraction), qr_generate (QR code images), pick_image (gallery/camera), volume_control (audio levels)
 - **Sessions**: conversation history with Hive persistence
 - **Memory**: long-term MEMORY.md + daily notes
 - **Skills**: three-tier loading (builtin -> global -> workspace)
@@ -89,7 +89,7 @@ graph TB
     AL --> CB
     SAL --> LLM
     LP --> LLM["LLM APIs (Anthropic, OpenRouter, ...)"]
-    TR --> Tools["web_search / web_scrape / web_scrape_js / file / get_location / get_address / subagent"]
+    TR --> Tools["web_search / web_scrape / web_scrape_js / file / get_location / get_address / subagent / clipboard / device_info / speak / open_app / set_alarm / notifications / contacts / calendar / ocr / qr_generate / pick_image / volume_control"]
 ```
 
 ### Agent Loop
@@ -163,7 +163,7 @@ lib/
 │   ├── services/                # BackgroundTaskHandler (foreground service isolate)
 │   ├── session/                 # Conversation persistence (Hive)
 │   ├── skills/                  # Three-tier loader and installer
-│   └── tools/                   # Tool interface + 8 implementations
+│   └── tools/                   # Tool interface + 20 implementations
 │
 ├── features/                    # Screens and platform features
 │   ├── chat/                    # Main screen, message bubbles, history
@@ -177,7 +177,7 @@ lib/
 └── shared/                      # Constants
 ```
 
-**55 Dart files** in total.
+**68 Dart files** in total.
 
 ---
 
@@ -222,10 +222,10 @@ Telegram -> phone:8443            Phone -> Telegram API
 (blocked by NAT/firewall)         (works from anywhere)
 ```
 
-### Foreground Service: `remoteMessaging` Not `dataSync`
+### Foreground Service: `remoteMessaging|location` Not `dataSync`
 
 - `dataSync` has a **6-hour execution limit per 24h** on Android 15+
-- `remoteMessaging` has **no time limit** — designed for messaging apps
+- `remoteMessaging|location` has **no time limit** — `remoteMessaging` for Telegram polling, `location` for GPS access from background crons
 - The foreground service displays a persistent notification ("DroidClaw Bot - Active")
 - The service survives backgrounding and app kill
 
@@ -273,15 +273,42 @@ class CronDefinition {
 }
 ```
 
-Users define recurring prompts from Settings > Scheduled Prompts. Each cron runs on its configured schedule (fixed interval with min 15 minutes, or specific times of day with optional day-of-week filtering). The agent processes the prompt like a normal user message, with full tool access.
+Users define recurring prompts from Settings > Scheduled Prompts. Each cron runs on its configured schedule (fixed interval with min 15 minutes, or specific times of day with optional day-of-week filtering). The agent processes the prompt like a normal user message.
 
-**Autonomous execution**: the service isolate initializes its own AgentLoop via `ServiceAgentFactory` — no main app needed. API keys are cached in SharedPreferences (read from `FlutterSecureStorage` on main isolate, since service isolate can't use platform channels). If the service AgentLoop init fails, crons fall back to a persistent pending queue that replays when the app is opened.
+**Autonomous execution**: the service isolate initializes its own AgentLoop via `ServiceAgentFactory` — no main app needed. API keys are cached in SharedPreferences (read from `FlutterSecureStorage` on main isolate, since service isolate can't use `FlutterSecureStorage`). If the service AgentLoop init fails, crons fall back to a persistent pending queue that replays when the app is opened.
+
+**Tool availability depends on execution context**:
+
+| Tool | App running (main isolate) | Cron autonomous (service isolate) |
+|------|:---:|:---:|
+| `web_search` | Yes | Yes |
+| `web_scrape` | Yes | Yes |
+| `web_scrape_js` | Yes | **No** — requires WebView (Flutter Activity) |
+| `file` | Yes | Yes |
+| `get_location` | Yes | Yes — permission must be pre-granted from app |
+| `get_address` | Yes | Yes — pure HTTP (Nominatim) |
+| `subagent` | Yes | **No** — complex lifecycle |
+| `message` | Yes | **No** — no UI in service isolate |
+| `clipboard` | Yes | **No** — read requires foreground (Android 10+) |
+| `device_info` | Yes | Yes |
+| `speak` | Yes | **No** — audio focus, no user context |
+| `open_app` | Yes | **No** — launches Activity, jarring from background |
+| `set_alarm` | Yes | **No** — opens Clock app, jarring from background |
+| `notifications` | Yes | **No** — initialization requires Activity context |
+| `contacts` | Yes | **No** — ContentProvider unreliable from background |
+| `calendar` | Yes | **No** — ContentProvider unreliable from background |
+| `ocr` | Yes | Yes — ML Kit via platform channels |
+| `qr_generate` | Yes | Yes — dart:ui rendering on FlutterEngine |
+| `pick_image` | Yes | **No** — image picker UI needs Activity |
+| `volume_control` | Yes | **No** — MethodChannel on Activity engine only |
+
+The service isolate runs on a separate FlutterEngine with platform channel access (via `GeneratedPluginRegistrant`). It can use `web_search`, `web_scrape`, `file`, `get_location`, `get_address`, `device_info`, `ocr`, and `qr_generate`. WebView-based tools, UI-dependent tools, permission-requiring tools (contacts, calendar, notifications), and tools with real-world side effects (TTS, app launches, alarms) are excluded. `get_location` requires that the user has granted location permission from the app at least once. When Android kills the app overnight and a cron triggers at 3 AM, the service isolate executes it autonomously. If the service AgentLoop init fails, crons fall back to a persistent pending queue that replays when the app is opened.
 
 ---
 
 ## Tools
 
-The agent has access to 8 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
+The agent has access to 20 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
 
 Users can **enable or disable** individual tools from Settings > Tools > Manage Tools.
 
@@ -295,6 +322,18 @@ Users can **enable or disable** individual tools from Settings > Tools > Manage 
 | **Reverse Geocoding** | `get_address` | Converts GPS coordinates (latitude, longitude) into a human-readable street address using the Nominatim (OpenStreetMap) reverse geocoding API. Free, no API key required. The LLM chains this with `get_location`: first get GPS coords, then resolve to an address. |
 | **Sub-agent** | `subagent` | Spawns a sub-task with a fresh session. The main agent delegates a focused task to a sub-agent, which processes it independently and returns the result. The sub-agent session is cleaned up after completion. |
 | **Message** | `message` | Internal tool for sending messages directly to the user interface. Always enabled (not toggleable). Returns a silent result — the LLM sees no output, but the user sees the message. |
+| **Clipboard** | `clipboard` | Read or write the device clipboard. The agent reads clipboard content when the user asks, or writes formatted text for the user to paste elsewhere. |
+| **Device Info** | `device_info` | Returns battery level and charging status, network connectivity type (WiFi/cellular), device manufacturer, model, and Android version. Useful for context-aware responses. |
+| **Text to Speech** | `speak` | Speaks text aloud using the device's built-in TTS engine. Supports language selection. Fire-and-forget: the agent continues while audio plays. Max 5000 chars. Disabled by default. |
+| **Open App / URL** | `open_app` | Opens URLs and apps on the device: web pages (`https:`), phone dialer (`tel:`), email (`mailto:`), SMS (`sms:`), maps (`geo:`). Uses `url_launcher` with scheme allowlist for safety. Disabled by default. |
+| **Alarm / Timer** | `set_alarm` | Sets alarms or timers via the system Clock app using Android intents (`SET_ALARM`, `SET_TIMER`). The Clock app opens for user confirmation. Disabled by default. |
+| **Notifications** | `notifications` | Create instant or scheduled local notifications. Operations: `show` (instant), `schedule` (at a future time with timezone-aware scheduling), `cancel` (by id), `list` (pending). Uses separate notification channels for instant vs scheduled. Disabled by default. |
+| **Contacts** | `contacts` | Read-only access to device contacts. Search by name, phone number, or email (client-side filtering). Returns minimal data (name + phones + emails) to protect privacy. Requires READ_CONTACTS permission (requested at first use). Disabled by default. |
+| **Calendar** | `calendar` | Read and create calendar events. Operations: `list_calendars` (find calendar IDs), `get_events` (date range query), `create_event` (with title, location, description). Requires READ_CALENDAR + WRITE_CALENDAR permissions. Disabled by default. |
+| **OCR** | `ocr` | Extract text from images using on-device Google ML Kit text recognition (Latin script). The image must already exist in the workspace (use `pick_image` or `file` tool first). Returns structured text with block count. |
+| **QR Code** | `qr_generate` | Generate QR code PNG images from text, URLs, WiFi configs, or contact info. Saves a 512x512 PNG to the workspace. Max 4296 characters. |
+| **Image Picker** | `pick_image` | Open the system image picker to select a photo from the gallery or take a new photo with the camera. The image is copied to the workspace `images/` directory for further processing (e.g. OCR). Requires CAMERA permission for camera source. Disabled by default. |
+| **Volume Control** | `volume_control` | Read and adjust device volume levels for alarm, media, ringtone, and notification streams. Reports ringer mode (normal/vibrate/silent). Use before `set_alarm` to verify alarm volume is audible. Supports human-readable levels (mute/low/medium/high/max). First custom MethodChannel to Android AudioManager. |
 
 ### Dual Scraping Strategy
 
@@ -360,10 +399,10 @@ adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
 | | |
 |---|---|
-| **Dart files** | 55 |
+| **Dart files** | 68 |
 | **Analysis issues** | 0 |
-| **APK size (arm64)** | 20.8 MB |
-| **Native code** | None (pure Dart/Flutter) |
+| **APK size (arm64)** | 34.5 MB |
+| **Native code** | Kotlin (AudioChannelPlugin — volume control) |
 | **minSdkVersion** | 24 (Android 7.0) |
 | **targetSdkVersion** | 34 (Android 14) |
 
