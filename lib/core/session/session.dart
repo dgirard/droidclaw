@@ -32,7 +32,12 @@ class Session {
 
   /// Get messages for the LLM context.
   /// If a summary exists, prepends it as a system message.
+  /// Repairs tool messages missing `name` and strips orphaned tool results.
+  /// Gemini returns 400 if function_response has empty name or appears first.
   List<Message> getMessages() {
+    _repairToolNames();
+    _stripOrphanedLeadingMessages();
+
     if (summary != null && summary!.isNotEmpty) {
       return [
         Message(
@@ -43,6 +48,69 @@ class Session {
       ];
     }
     return List.of(_messages);
+  }
+
+  /// Repair tool result messages that are missing or have empty `name`.
+  /// Old sessions saved before the name field was added, or sessions
+  /// restored after summarization, may have tool messages without names.
+  /// Gemini API returns 400 if name is missing/empty on function_response.
+  void _repairToolNames() {
+    for (var i = 0; i < _messages.length; i++) {
+      final msg = _messages[i];
+      if (msg.role != 'tool') continue;
+      if (msg.name != null && msg.name!.isNotEmpty) continue;
+
+      // Try to find the name from the preceding assistant message's toolCalls
+      String? repairedName;
+      if (msg.toolCallId != null) {
+        for (var j = i - 1; j >= 0; j--) {
+          final prev = _messages[j];
+          if (prev.role == 'assistant' && prev.toolCalls != null) {
+            for (final tc in prev.toolCalls!) {
+              if (tc.id == msg.toolCallId) {
+                repairedName = tc.name;
+                break;
+              }
+            }
+            if (repairedName != null) break;
+          }
+        }
+      }
+
+      _messages[i] = msg.copyWith(name: repairedName ?? 'unknown');
+    }
+  }
+
+  /// Strip orphaned tool results and assistant tool_calls at the start.
+  /// After summarization, the first messages may be tool results whose
+  /// parent assistant message was summarized away, or assistant messages
+  /// with tool_calls whose tool results were removed. Gemini rejects
+  /// these as contents[0] (function_response without context).
+  void _stripOrphanedLeadingMessages() {
+    while (_messages.isNotEmpty) {
+      final first = _messages.first;
+      if (first.role == 'tool') {
+        // Orphaned tool result — no preceding assistant with tool_calls
+        _messages.removeAt(0);
+      } else if (first.role == 'assistant' &&
+          first.toolCalls != null &&
+          first.toolCalls!.isNotEmpty) {
+        // Assistant message with tool_calls but tool results may follow.
+        // Check if all its tool_calls have matching tool results after it.
+        final tcIds = first.toolCalls!.map((tc) => tc.id).toSet();
+        final hasAllResults = tcIds.every((id) => _messages.any(
+              (m) => m.role == 'tool' && m.toolCallId == id,
+            ));
+        if (!hasAllResults) {
+          // Orphaned assistant tool_calls — remove it
+          _messages.removeAt(0);
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
+    }
   }
 
   /// Truncate history, keeping only the last [keepLast] messages.
