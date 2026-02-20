@@ -390,12 +390,44 @@ adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 3. Test the connection
 4. Start chatting
 
-### Configure Telegram (Optional)
+---
 
-1. Open Telegram and search for @BotFather
-2. Send `/newbot` and follow the instructions
-3. Copy the bot token
-4. In DroidClaw: Settings -> Telegram Bot -> paste the token -> Test -> Enable
+## API Keys
+
+DroidClaw requires API keys for the LLM provider and for some tools. All keys are stored securely on the device (FlutterSecureStorage). No key is ever sent to a third-party server.
+
+### Required (LLM Provider)
+
+You need **one** LLM provider key to use DroidClaw:
+
+| Provider | Free Tier | Guide |
+|----------|-----------|-------|
+| **OpenRouter** (recommended) | Free models available, pay-as-you-go | [Get key](docs/api-keys/openrouter.md) |
+| **Anthropic** (Claude) | $5 trial credit | [Get key](docs/api-keys/anthropic.md) |
+| **OpenAI** (GPT) | $5 trial credit | [Get key](docs/api-keys/openai.md) |
+| **Groq** (Llama, Mixtral) | Generous free tier | [Get key](docs/api-keys/groq.md) |
+| **Google Gemini** | 15 req/min free | [Get key](docs/api-keys/gemini.md) |
+
+### Optional (Tools)
+
+These keys unlock specific tools. The agent works without them, but the corresponding tools will be unavailable.
+
+| Service | Tool | Free Tier | Guide |
+|---------|------|-----------|-------|
+| **Brave Search** | `web_search` | 2,000 queries/month | [Get key](docs/api-keys/brave-search.md) |
+| **OpenRouteService** | `get_directions` | 2,000 req/day | [Get key](docs/api-keys/openrouteservice.md) |
+| **SNCF** | `get_transit` (national trains) | 5,000 req/day | [Get key](docs/api-keys/sncf.md) |
+| **PRIM / IDFM** | `get_transit` (Ile-de-France) | 1,000 req/day | [Get key](docs/api-keys/prim-idfm.md) |
+
+### Optional (Channels)
+
+| Service | Purpose | Guide |
+|---------|---------|-------|
+| **Telegram Bot** | Remote access via Telegram | [Get token](docs/api-keys/telegram.md) |
+
+### No Key Required
+
+These tools work out of the box, no configuration needed: `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`.
 
 ---
 
