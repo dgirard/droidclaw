@@ -30,19 +30,20 @@ lib/
 ├── main.dart                    # Entry point (init Hive + SharedPrefs)
 ├── app.dart                     # MaterialApp, routing, Material 3 theme
 ├── core/                        # Business logic (NO Flutter UI imports)
-│   ├── agent/                   # AgentLoop, ContextBuilder, MemoryManager
+│   ├── agent/                   # AgentLoop, ContextBuilder, MemoryManager, ServiceAgentFactory
 │   ├── config/                  # AppConfig, ConfigStorage, CronConfig
 │   ├── providers/               # LLM abstraction (Anthropic, HTTP, factory)
+│   ├── services/                # BackgroundTaskHandler, AudioManagerChannel
 │   ├── session/                 # Session + SessionManager (Hive persistence)
 │   ├── skills/                  # Three-tier loader + installer
-│   └── tools/                   # Tool interface + 8 implementations
+│   └── tools/                   # Tool interface + 21 implementations
 ├── features/                    # Screens and platform features
 │   ├── chat/                    # Chat screen, message bubbles, history
 │   ├── onboarding/              # First-launch setup
-│   ├── settings/                # Provider, tools, skills, cron, Telegram
-│   ├── telegram/                # Bot API, task handler, bot manager
+│   ├── settings/                # Provider, tools, skills, cron, Telegram, routing
+│   ├── telegram/                # Bot API, bot manager, rate limiter
 │   └── voice/                   # Voice input (STT via Groq Whisper)
-├── providers/                   # Riverpod providers (app, chat, telegram)
+├── providers/                   # Riverpod: app, chat, background service, Telegram
 ├── data/local/                  # StorageService (SharedPrefs + SecureStorage)
 └── shared/                      # Constants
 ```
@@ -135,7 +136,10 @@ Both chat UI and Telegram consume the same `Stream<AgentEvent>`.
    }
    ```
 3. Add toggle in `lib/features/settings/tools_config_screen.dart` → `_tools` list
-4. Update README tools table
+4. If service isolate compatible (pure HTTP, no Activity/UI): register in `lib/core/agent/service_agent_factory.dart`
+5. If it needs an API key: add getter/setter in `config_storage.dart`, cache in `background_service_provider.dart:_cacheSecretsForService()`, pass through `background_task_handler.dart` → `service_agent_factory.dart`
+6. If disabled by default: add to `_defaultDisabledTools` in `lib/core/config/app_config.dart`
+7. Update README tools table + availability table
 
 ## Adding a New Settings Screen
 
@@ -143,12 +147,37 @@ Both chat UI and Telegram consume the same `Stream<AgentEvent>`.
 2. Add route in `lib/app.dart`
 3. Add `ListTile` in `lib/features/settings/settings_screen.dart`
 
+### Dual-Isolate Architecture
+
+- **Main isolate**: Flutter UI, Riverpod, AgentLoop, TelegramBotManager
+- **Service isolate**: `BackgroundTaskHandler` (Telegram polling + cron scheduling), runs on separate FlutterEngine (NOT plain Dart isolate — platform channels work)
+- Service isolate has its own AgentLoop via `ServiceAgentFactory` (autonomous cron execution)
+- Communication: `FlutterForegroundTask` sendDataToMain/sendDataToTask
+- No `FlutterSecureStorage` in service isolate → secrets cached in `SharedPreferences` by main isolate (`_cacheSecretsForService()`)
+
+### API Key Pattern (Brave / ORS model)
+
+For tools needing an API key that must work in both isolates:
+
+1. `FlutterSecureStorage` getter/setter in `config_storage.dart`
+2. Config screen saves key → invalidates `toolRegistryProvider`
+3. `AppConstants.cachedXxxKeyKey` for SharedPreferences cache key
+4. `_cacheSecretsForService()` in `background_service_provider.dart` copies to SharedPreferences
+5. `background_task_handler.dart` reads from SharedPreferences, passes to `ServiceAgentFactory`
+6. Tool constructor receives `apiKey` parameter
+
+### Custom MethodChannel (volume_control)
+
+- `AudioChannelPlugin.kt` implements `FlutterPlugin` — registered in `MainActivity.configureFlutterEngine()`
+- `AudioManagerChannel` Dart wrapper in `lib/core/services/audio_manager_channel.dart`
+- MethodChannel tools only work in main isolate (registered on Activity FlutterEngine)
+
 ## Key Constraints
 
 - **No shell execution** on Android — no exec/shell tools
 - **Summarization**: triggers at 20+ messages OR estimated tokens > 75% of maxTokens, keeps last 4 messages
 - **Web scraping**: try `web_scrape` first (lightweight HTTP), fall back to `web_scrape_js` (WebView) for JS-rendered pages. Max 15K chars.
-- **Telegram**: long polling (not webhook) via foreground service with `remoteMessaging` type (no 6h limit). Dual-isolate architecture.
+- **Telegram**: long polling (not webhook) via foreground service with `remoteMessaging|location` types (no 6h limit). Dual-isolate architecture.
 - **API keys**: stored in `FlutterSecureStorage`, never in `SharedPreferences` or config JSON
 - **File tool**: sandboxed to app workspace directory, path validation prevents traversal
 - **Flutter 3.38**: `DropdownButtonFormField` uses `initialValue` (not `value`)
@@ -159,4 +188,4 @@ Both chat UI and Telegram consume the same `Stream<AgentEvent>`.
 - `AppConstants` in `lib/shared/constants.dart` for all magic values
 - `print('[AgentLoop] ...')` for debug logging (visible via `adb logcat`)
 - Config persisted in `SharedPreferences`, secrets in `FlutterSecureStorage`, sessions in Hive
-- All tool names are snake_case: `web_search`, `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`
+- All tool names are snake_case: `web_search`, `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`, `get_directions`

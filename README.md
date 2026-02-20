@@ -177,7 +177,7 @@ lib/
 └── shared/                      # Constants
 ```
 
-**68 Dart files** in total.
+**70 Dart files** in total.
 
 ---
 
@@ -403,7 +403,7 @@ adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 |---|---|
 | **Dart files** | 70 |
 | **Analysis issues** | 0 |
-| **APK size (arm64)** | 34.5 MB |
+| **APK size (arm64)** | 34.6 MB |
 | **Native code** | Kotlin (AudioChannelPlugin — volume control) |
 | **minSdkVersion** | 24 (Android 7.0) |
 | **targetSdkVersion** | 34 (Android 14) |
