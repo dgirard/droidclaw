@@ -13,6 +13,7 @@ import '../core/skills/skill_installer.dart';
 import '../core/skills/skill_loader.dart';
 import '../core/tools/calendar_tool.dart';
 import '../core/tools/clipboard_tool.dart';
+import '../core/tools/datetime_tool.dart';
 import '../core/tools/contacts_tool.dart';
 import '../core/tools/device_info_tool.dart';
 import '../core/tools/directions_tool.dart';
@@ -129,6 +130,9 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   }
   if (!disabled.contains('clipboard')) {
     registry.register(ClipboardTool());
+  }
+  if (!disabled.contains('get_datetime')) {
+    registry.register(DateTimeTool());
   }
   if (!disabled.contains('device_info')) {
     registry.register(DeviceInfoTool());

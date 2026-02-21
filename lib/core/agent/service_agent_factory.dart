@@ -9,6 +9,7 @@ import '../config/app_config.dart';
 import '../providers/provider_factory.dart';
 import '../session/session_manager.dart';
 import '../skills/skill_loader.dart';
+import '../tools/datetime_tool.dart';
 import '../tools/device_info_tool.dart';
 import '../tools/directions_tool.dart';
 import '../tools/geocode_tool.dart';
@@ -98,6 +99,9 @@ class ServiceAgentFactory {
     }
     if (!disabled.contains('get_address')) {
       registry.register(ReverseGeocodeTool());
+    }
+    if (!disabled.contains('get_datetime')) {
+      registry.register(DateTimeTool());
     }
     if (!disabled.contains('device_info')) {
       registry.register(DeviceInfoTool());

@@ -68,6 +68,12 @@ const _tools = [
     icon: Icons.content_paste,
   ),
   _ToolInfo(
+    name: 'get_datetime',
+    label: 'Date & Time',
+    description: 'Get current date, time, day of week, timezone',
+    icon: Icons.schedule,
+  ),
+  _ToolInfo(
     name: 'device_info',
     label: 'Device Info',
     description: 'Battery, connectivity, device model',

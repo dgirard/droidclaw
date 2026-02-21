@@ -163,7 +163,7 @@ lib/
 │   ├── services/                # BackgroundTaskHandler (foreground service isolate)
 │   ├── session/                 # Conversation persistence (Hive)
 │   ├── skills/                  # Three-tier loader and installer
-│   └── tools/                   # Tool interface + 23 implementations
+│   └── tools/                   # Tool interface + 24 implementations
 │
 ├── features/                    # Screens and platform features
 │   ├── chat/                    # Main screen, message bubbles, history
@@ -177,7 +177,7 @@ lib/
 └── shared/                      # Constants
 ```
 
-**72 Dart files** in total.
+**73 Dart files** in total.
 
 ---
 
@@ -291,6 +291,7 @@ Users define recurring prompts from Settings > Scheduled Prompts. Each cron runs
 | `subagent` | Yes | **No** — complex lifecycle |
 | `message` | Yes | **No** — no UI in service isolate |
 | `clipboard` | Yes | **No** — read requires foreground (Android 10+) |
+| `get_datetime` | Yes | Yes |
 | `device_info` | Yes | Yes |
 | `speak` | Yes | **No** — audio focus, no user context |
 | `open_app` | Yes | **No** — launches Activity, jarring from background |
@@ -311,7 +312,7 @@ The service isolate runs on a separate FlutterEngine with platform channel acces
 
 ## Tools
 
-The agent has access to 23 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
+The agent has access to 24 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
 
 Users can **enable or disable** individual tools from Settings > Tools > Manage Tools.
 
@@ -327,6 +328,7 @@ Users can **enable or disable** individual tools from Settings > Tools > Manage 
 | **Sub-agent** | `subagent` | Spawns a sub-task with a fresh session. The main agent delegates a focused task to a sub-agent, which processes it independently and returns the result. The sub-agent session is cleaned up after completion. |
 | **Message** | `message` | Internal tool for sending messages directly to the user interface. Always enabled (not toggleable). Returns a silent result — the LLM sees no output, but the user sees the message. |
 | **Clipboard** | `clipboard` | Read or write the device clipboard. The agent reads clipboard content when the user asks, or writes formatted text for the user to paste elsewhere. |
+| **Date & Time** | `get_datetime` | Returns the current date, time, day of week, timezone, and Unix timestamp from the device. Pure Dart — no API key, no permissions. Useful for time-aware prompts, scheduling context, and cron debugging. |
 | **Device Info** | `device_info` | Returns battery level and charging status, network connectivity type (WiFi/cellular), device manufacturer, model, and Android version. Useful for context-aware responses. |
 | **Text to Speech** | `speak` | Speaks text aloud using the device's built-in TTS engine. Supports language selection. Fire-and-forget: the agent continues while audio plays. Max 5000 chars. Disabled by default. |
 | **Open App / URL** | `open_app` | Opens URLs and apps on the device: web pages (`https:`), phone dialer (`tel:`), email (`mailto:`), SMS (`sms:`), maps (`geo:`). Uses `url_launcher` with scheme allowlist for safety. Disabled by default. |
@@ -429,7 +431,7 @@ These keys unlock specific tools. The agent works without them, but the correspo
 
 ### No Key Required
 
-These tools work out of the box, no configuration needed: `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`.
+These tools work out of the box, no configuration needed: `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `get_datetime`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`.
 
 ---
 
@@ -437,7 +439,7 @@ These tools work out of the box, no configuration needed: `web_scrape`, `web_scr
 
 | | |
 |---|---|
-| **Dart files** | 72 |
+| **Dart files** | 73 |
 | **Analysis issues** | 0 |
 | **APK size (arm64)** | 34.6 MB |
 | **Native code** | Kotlin (AudioChannelPlugin — volume control) |
