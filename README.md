@@ -8,6 +8,73 @@
 
 ---
 
+## The AI Sovereignty Problem
+
+Today's AI assistants follow a model of **digital feudalism**: platforms own the "harvest" — your data, your preferences, your conversation history, your memory. You interact with AI through corporate-controlled interfaces where your context becomes a platform asset, not yours.
+
+This creates three fundamental problems:
+
+- **Data leakage by design** — every prompt, every conversation, every tool result flows to a third-party server. Your AI knows your schedule, your contacts, your location, your habits. And it belongs to someone else.
+- **Vendor lock-in** — switching AI providers means losing your history, your memory, your workflows. The more you use one platform, the harder it becomes to leave.
+- **No autonomy** — you can't run tasks in the background, schedule prompts, or chain tools together. You're limited to what the platform allows, when it allows it.
+
+## Why DroidClaw Exists
+
+DroidClaw is built on a different premise: **your AI assistant should be sovereign infrastructure that you own and control**.
+
+This means three things:
+
+1. **Hardware autonomy** — everything runs on your phone. LLM API calls, tool execution, session management, scheduled tasks. No DroidClaw server. No middleware. Your phone is the server.
+2. **Provider freedom** — switch between Anthropic, OpenAI, Gemini, Groq, or OpenRouter at any time. Your memory, sessions, and tools stay intact. Zero vendor lock-in.
+3. **Context ownership** — conversation history, long-term memory, and AI context are stored locally as sovereign assets. They belong to you, not to a platform.
+
+## How DroidClaw Works
+
+DroidClaw is not a chatbot. It is an **agentic AI assistant** — it doesn't just respond, it acts. It reasons iteratively, calls tools, observes results, and loops until the task is solved.
+
+```
+User prompt
+    --> LLM reasons (Anthropic / OpenAI / Gemini / Groq)
+        --> Tool call (GPS, web search, calendar, files, transit...)
+            --> Result fed back to LLM
+                --> LLM reasons again, calls another tool if needed
+                    --> Final response to user
+```
+
+The agent has access to **25 tools** — from web search and file management to GPS location, public transit routing, weather forecasts, calendar access, OCR, and more. Each tool produces a **dual result**: raw data for the AI to reason over, and a clean summary for the user to read.
+
+The app survives Android's aggressive battery management through a **dual-isolate architecture**: the main app handles the UI, while an autonomous foreground service runs scheduled tasks and Telegram bot polling — even when Android kills the main app overnight.
+
+A **Telegram bot** turns your phone into a remote AI server accessible from any device — PC, tablet, another phone — with zero external infrastructure. The phone polls Telegram directly via long polling, no webhook, no public IP needed.
+
+```
+    +------------------+
+    |   Your Phone     |
+    |                  |         +------------------+
+    |  +-----------+   | <----> |   LLM APIs       |
+    |  | DroidClaw |   |        | (Anthropic,      |
+    |  | Agent     |   |        |  OpenAI, Gemini) |
+    |  | Loop      |   |        +------------------+
+    |  +-----+-----+   |
+    |        |          |
+    |  +-----v-----+   |        +------------------+
+    |  |  25 Tools  |   | <----> |  External APIs   |
+    |  | GPS, Web,  |   |        | (Brave, ORS,     |
+    |  | Calendar,  |   |        |  SNCF, Telegram) |
+    |  | Files ...  |   |        +------------------+
+    |  +-----------+   |
+    |                  |
+    |  Local storage:  |
+    |  Sessions,       |
+    |  Memory, Config  |
+    +------------------+
+         Your data stays here.
+```
+
+**Privacy-first by design. Sovereign by architecture.**
+
+---
+
 ## What is DroidClaw?
 
 DroidClaw is a personal AI assistant that runs **entirely on an Android phone**, with no external server.
