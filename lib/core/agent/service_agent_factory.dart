@@ -11,6 +11,7 @@ import '../session/session_manager.dart';
 import '../skills/skill_loader.dart';
 import '../tools/device_info_tool.dart';
 import '../tools/directions_tool.dart';
+import '../tools/geocode_tool.dart';
 import '../tools/file_tool.dart';
 import '../tools/location_tool.dart';
 import '../tools/ocr_tool.dart';
@@ -103,6 +104,9 @@ class ServiceAgentFactory {
     }
     if (!disabled.contains('get_directions')) {
       registry.register(DirectionsTool(apiKey: orsApiKey));
+    }
+    if (!disabled.contains('geocode')) {
+      registry.register(GeocodeTool(apiKey: orsApiKey));
     }
     if (!disabled.contains('get_transit')) {
       registry.register(TransitTool(sncfApiKey: sncfApiKey, primApiKey: primApiKey));

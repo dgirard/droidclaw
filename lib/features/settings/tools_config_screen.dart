@@ -134,6 +134,12 @@ const _tools = [
     icon: Icons.volume_up_outlined,
   ),
   _ToolInfo(
+    name: 'geocode',
+    label: 'Geocode',
+    description: 'Convert address to GPS coordinates (OpenRouteService)',
+    icon: Icons.location_searching,
+  ),
+  _ToolInfo(
     name: 'get_directions',
     label: 'Directions',
     description: 'Route calculation (car, bike, walk) via OpenRouteService',

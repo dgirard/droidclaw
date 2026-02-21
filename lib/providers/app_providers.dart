@@ -16,6 +16,7 @@ import '../core/tools/clipboard_tool.dart';
 import '../core/tools/contacts_tool.dart';
 import '../core/tools/device_info_tool.dart';
 import '../core/tools/directions_tool.dart';
+import '../core/tools/geocode_tool.dart';
 import '../core/tools/file_tool.dart';
 import '../core/tools/location_tool.dart';
 import '../core/tools/message_tool.dart';
@@ -164,6 +165,9 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   }
   if (!disabled.contains('get_directions')) {
     registry.register(DirectionsTool(apiKey: orsApiKey));
+  }
+  if (!disabled.contains('geocode')) {
+    registry.register(GeocodeTool(apiKey: orsApiKey));
   }
   if (!disabled.contains('get_transit')) {
     registry.register(TransitTool(sncfApiKey: sncfApiKey, primApiKey: primApiKey));

@@ -27,7 +27,7 @@ DroidClaw is a port of [PicoClaw](https://github.com/sipeed/picoclaw), a Go-base
 
 - **Agent Loop**: the agentic loop (LLM -> tool calls -> iteration)
 - **LLM Providers**: multi-provider abstraction (Anthropic, OpenAI, OpenRouter, Groq, Gemini)
-- **Tools**: web_search (Brave), web_scrape (HTTP+Markdown), web_scrape_js (WebView), file (sandboxed), get_location (GPS), get_address (reverse geocoding), subagent, message, clipboard, device_info, speak (TTS), open_app (URL/intent launcher), set_alarm, notifications (local notifications/reminders), contacts (read-only), calendar (read/write), ocr (on-device text extraction), qr_generate (QR code images), pick_image (gallery/camera), volume_control (audio levels), get_directions (ORS routing), get_transit (SNCF + IDFM public transit)
+- **Tools**: web_search (Brave), web_scrape (HTTP+Markdown), web_scrape_js (WebView), file (sandboxed), get_location (GPS), get_address (reverse geocoding), geocode (address to GPS via ORS), subagent, message, clipboard, device_info, speak (TTS), open_app (URL/intent launcher), set_alarm, notifications (local notifications/reminders), contacts (read-only), calendar (read/write), ocr (on-device text extraction), qr_generate (QR code images), pick_image (gallery/camera), volume_control (audio levels), get_directions (ORS routing), get_transit (SNCF + IDFM public transit)
 - **Sessions**: conversation history with Hive persistence
 - **Memory**: long-term MEMORY.md + daily notes
 - **Skills**: three-tier loading (builtin -> global -> workspace)
@@ -89,7 +89,7 @@ graph TB
     AL --> CB
     SAL --> LLM
     LP --> LLM["LLM APIs (Anthropic, OpenRouter, ...)"]
-    TR --> Tools["web_search / web_scrape / web_scrape_js / file / get_location / get_address / subagent / clipboard / device_info / speak / open_app / set_alarm / notifications / contacts / calendar / ocr / qr_generate / pick_image / volume_control / get_directions / get_transit"]
+    TR --> Tools["web_search / web_scrape / web_scrape_js / file / get_location / get_address / geocode / subagent / clipboard / device_info / speak / open_app / set_alarm / notifications / contacts / calendar / ocr / qr_generate / pick_image / volume_control / get_directions / get_transit"]
 ```
 
 ### Agent Loop
@@ -163,7 +163,7 @@ lib/
 │   ├── services/                # BackgroundTaskHandler (foreground service isolate)
 │   ├── session/                 # Conversation persistence (Hive)
 │   ├── skills/                  # Three-tier loader and installer
-│   └── tools/                   # Tool interface + 22 implementations
+│   └── tools/                   # Tool interface + 23 implementations
 │
 ├── features/                    # Screens and platform features
 │   ├── chat/                    # Main screen, message bubbles, history
@@ -177,7 +177,7 @@ lib/
 └── shared/                      # Constants
 ```
 
-**71 Dart files** in total.
+**72 Dart files** in total.
 
 ---
 
@@ -287,6 +287,7 @@ Users define recurring prompts from Settings > Scheduled Prompts. Each cron runs
 | `file` | Yes | Yes |
 | `get_location` | Yes | Yes — permission must be pre-granted from app |
 | `get_address` | Yes | Yes — pure HTTP (Nominatim) |
+| `geocode` | Yes | Yes — pure HTTP (OpenRouteService) |
 | `subagent` | Yes | **No** — complex lifecycle |
 | `message` | Yes | **No** — no UI in service isolate |
 | `clipboard` | Yes | **No** — read requires foreground (Android 10+) |
@@ -304,13 +305,13 @@ Users define recurring prompts from Settings > Scheduled Prompts. Each cron runs
 | `get_directions` | Yes | Yes — pure HTTP (OpenRouteService API) |
 | `get_transit` | Yes | Yes — pure HTTP (SNCF + PRIM APIs) |
 
-The service isolate runs on a separate FlutterEngine with platform channel access (via `GeneratedPluginRegistrant`). It can use `web_search`, `web_scrape`, `file`, `get_location`, `get_address`, `device_info`, `ocr`, `qr_generate`, `get_directions`, and `get_transit`. WebView-based tools, UI-dependent tools, permission-requiring tools (contacts, calendar, notifications), and tools with real-world side effects (TTS, app launches, alarms) are excluded. `get_location` requires that the user has granted location permission from the app at least once. When Android kills the app overnight and a cron triggers at 3 AM, the service isolate executes it autonomously. If the service AgentLoop init fails, crons fall back to a persistent pending queue that replays when the app is opened.
+The service isolate runs on a separate FlutterEngine with platform channel access (via `GeneratedPluginRegistrant`). It can use `web_search`, `web_scrape`, `file`, `get_location`, `get_address`, `geocode`, `device_info`, `ocr`, `qr_generate`, `get_directions`, and `get_transit`. WebView-based tools, UI-dependent tools, permission-requiring tools (contacts, calendar, notifications), and tools with real-world side effects (TTS, app launches, alarms) are excluded. `get_location` requires that the user has granted location permission from the app at least once. When Android kills the app overnight and a cron triggers at 3 AM, the service isolate executes it autonomously. If the service AgentLoop init fails, crons fall back to a persistent pending queue that replays when the app is opened.
 
 ---
 
 ## Tools
 
-The agent has access to 22 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
+The agent has access to 23 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
 
 Users can **enable or disable** individual tools from Settings > Tools > Manage Tools.
 
@@ -322,6 +323,7 @@ Users can **enable or disable** individual tools from Settings > Tools > Manage 
 | **File** | `file` | Sandboxed file operations within the app workspace: `read_file`, `write_file`, `list_dir`. Path validation prevents directory traversal outside the sandbox. |
 | **GPS Location** | `get_location` | Returns the device's current GPS coordinates (latitude, longitude, accuracy, altitude). Uses Android's `FusedLocationProviderClient` via the `geolocator` package, with automatic fallback from GPS to network location. Handles permission requests and service availability checks. |
 | **Reverse Geocoding** | `get_address` | Converts GPS coordinates (latitude, longitude) into a human-readable street address using the Nominatim (OpenStreetMap) reverse geocoding API. Free, no API key required. The LLM chains this with `get_location`: first get GPS coords, then resolve to an address. |
+| **Geocode** | `geocode` | Converts a text address or place name into GPS coordinates (latitude, longitude) using the OpenRouteService Geocoding API. Returns up to N matching results with confidence scores. The LLM chains this with `get_directions` or `get_transit`: first geocode the address, then route to the destination. Reuses the same ORS API key as `get_directions`. |
 | **Sub-agent** | `subagent` | Spawns a sub-task with a fresh session. The main agent delegates a focused task to a sub-agent, which processes it independently and returns the result. The sub-agent session is cleaned up after completion. |
 | **Message** | `message` | Internal tool for sending messages directly to the user interface. Always enabled (not toggleable). Returns a silent result — the LLM sees no output, but the user sees the message. |
 | **Clipboard** | `clipboard` | Read or write the device clipboard. The agent reads clipboard content when the user asks, or writes formatted text for the user to paste elsewhere. |
@@ -415,7 +417,7 @@ These keys unlock specific tools. The agent works without them, but the correspo
 | Service | Tool | Free Tier | Guide |
 |---------|------|-----------|-------|
 | **Brave Search** | `web_search` | 2,000 queries/month | [Get key](docs/api-keys/brave-search.md) |
-| **OpenRouteService** | `get_directions` | 2,000 req/day | [Get key](docs/api-keys/openrouteservice.md) |
+| **OpenRouteService** | `get_directions`, `geocode` | 2,000 req/day | [Get key](docs/api-keys/openrouteservice.md) |
 | **SNCF** | `get_transit` (national trains) | 5,000 req/day | [Get key](docs/api-keys/sncf.md) |
 | **PRIM / IDFM** | `get_transit` (Ile-de-France) | 1,000 req/day | [Get key](docs/api-keys/prim-idfm.md) |
 
@@ -435,7 +437,7 @@ These tools work out of the box, no configuration needed: `web_scrape`, `web_scr
 
 | | |
 |---|---|
-| **Dart files** | 71 |
+| **Dart files** | 72 |
 | **Analysis issues** | 0 |
 | **APK size (arm64)** | 34.6 MB |
 | **Native code** | Kotlin (AudioChannelPlugin — volume control) |

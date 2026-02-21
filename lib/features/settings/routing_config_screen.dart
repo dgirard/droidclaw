@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/tools/directions_tool.dart';
+import '../../core/tools/geocode_tool.dart';
 import '../../core/tools/transit_tool.dart';
 import '../../providers/app_providers.dart';
 
@@ -24,6 +25,8 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
 
   bool _testingOrs = false;
   String? _orsTestResult;
+  bool _testingGeocode = false;
+  String? _geocodeTestResult;
   bool _testingSncf = false;
   String? _sncfTestResult;
   bool _testingPrim = false;
@@ -87,6 +90,39 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
       setState(() {
         _testingOrs = false;
         _orsTestResult = 'Failed: $e';
+      });
+    }
+  }
+
+  Future<void> _testGeocode() async {
+    final apiKey = _orsKeyController.text.trim();
+    if (apiKey.isEmpty) {
+      setState(() => _geocodeTestResult = 'Please enter an API key');
+      return;
+    }
+
+    setState(() {
+      _testingGeocode = true;
+      _geocodeTestResult = null;
+    });
+
+    try {
+      final tool = GeocodeTool(apiKey: apiKey);
+      final result = await tool.execute({
+        'address': 'Tour Eiffel, Paris',
+        'max_results': 1,
+      });
+
+      setState(() {
+        _testingGeocode = false;
+        _geocodeTestResult = result.isError
+            ? 'Failed: ${result.forUser}'
+            : 'Geocode OK! ${result.forUser}';
+      });
+    } catch (e) {
+      setState(() {
+        _testingGeocode = false;
+        _geocodeTestResult = 'Failed: $e';
       });
     }
   }
@@ -217,6 +253,13 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
             onPressed: _testOrs,
           ),
           _buildTestResult(_orsTestResult),
+          const SizedBox(height: 12),
+          _buildTestButton(
+            testing: _testingGeocode,
+            label: 'Test Geocode (Tour Eiffel, Paris)',
+            onPressed: _testGeocode,
+          ),
+          _buildTestResult(_geocodeTestResult),
 
           const SizedBox(height: 32),
           const Divider(),
