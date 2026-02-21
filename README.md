@@ -27,7 +27,7 @@ DroidClaw is a port of [PicoClaw](https://github.com/sipeed/picoclaw), a Go-base
 
 - **Agent Loop**: the agentic loop (LLM -> tool calls -> iteration)
 - **LLM Providers**: multi-provider abstraction (Anthropic, OpenAI, OpenRouter, Groq, Gemini)
-- **Tools**: web_search (Brave), web_scrape (HTTP+Markdown), web_scrape_js (WebView), file (sandboxed), get_location (GPS), get_address (reverse geocoding), geocode (address to GPS via ORS), subagent, message, clipboard, device_info, speak (TTS), open_app (URL/intent launcher), set_alarm, notifications (local notifications/reminders), contacts (read-only), calendar (read/write), ocr (on-device text extraction), qr_generate (QR code images), pick_image (gallery/camera), volume_control (audio levels), get_directions (ORS routing), get_transit (SNCF + IDFM public transit)
+- **Tools**: web_search (Brave), web_scrape (HTTP+Markdown), web_scrape_js (WebView), file (sandboxed), get_location (GPS), get_address (reverse geocoding), geocode (address to GPS via ORS), subagent, message, clipboard, device_info, speak (TTS), open_app (URL/intent launcher), set_alarm, notifications (local notifications/reminders), contacts (read-only), calendar (read/write), ocr (on-device text extraction), qr_generate (QR code images), pick_image (gallery/camera), volume_control (audio levels), get_directions (ORS routing), get_transit (SNCF + IDFM public transit), weather (Open-Meteo/Météo-France)
 - **Sessions**: conversation history with Hive persistence
 - **Memory**: long-term MEMORY.md + daily notes
 - **Skills**: three-tier loading (builtin -> global -> workspace)
@@ -89,7 +89,7 @@ graph TB
     AL --> CB
     SAL --> LLM
     LP --> LLM["LLM APIs (Anthropic, OpenRouter, ...)"]
-    TR --> Tools["web_search / web_scrape / web_scrape_js / file / get_location / get_address / geocode / subagent / clipboard / device_info / speak / open_app / set_alarm / notifications / contacts / calendar / ocr / qr_generate / pick_image / volume_control / get_directions / get_transit"]
+    TR --> Tools["web_search / web_scrape / web_scrape_js / file / get_location / get_address / geocode / subagent / clipboard / device_info / speak / open_app / set_alarm / notifications / contacts / calendar / ocr / qr_generate / pick_image / volume_control / get_directions / get_transit / weather"]
 ```
 
 ### Agent Loop
@@ -163,7 +163,7 @@ lib/
 │   ├── services/                # BackgroundTaskHandler (foreground service isolate)
 │   ├── session/                 # Conversation persistence (Hive)
 │   ├── skills/                  # Three-tier loader and installer
-│   └── tools/                   # Tool interface + 24 implementations
+│   └── tools/                   # Tool interface + 25 implementations
 │
 ├── features/                    # Screens and platform features
 │   ├── chat/                    # Main screen, message bubbles, history
@@ -177,7 +177,7 @@ lib/
 └── shared/                      # Constants
 ```
 
-**73 Dart files** in total.
+**74 Dart files** in total.
 
 ---
 
@@ -305,14 +305,15 @@ Users define recurring prompts from Settings > Scheduled Prompts. Each cron runs
 | `volume_control` | Yes | **No** — MethodChannel on Activity engine only |
 | `get_directions` | Yes | Yes — pure HTTP (OpenRouteService API) |
 | `get_transit` | Yes | Yes — pure HTTP (SNCF + PRIM APIs) |
+| `weather` | Yes | Yes — pure HTTP (Open-Meteo) |
 
-The service isolate runs on a separate FlutterEngine with platform channel access (via `GeneratedPluginRegistrant`). It can use `web_search`, `web_scrape`, `file`, `get_location`, `get_address`, `geocode`, `device_info`, `ocr`, `qr_generate`, `get_directions`, and `get_transit`. WebView-based tools, UI-dependent tools, permission-requiring tools (contacts, calendar, notifications), and tools with real-world side effects (TTS, app launches, alarms) are excluded. `get_location` requires that the user has granted location permission from the app at least once. When Android kills the app overnight and a cron triggers at 3 AM, the service isolate executes it autonomously. If the service AgentLoop init fails, crons fall back to a persistent pending queue that replays when the app is opened.
+The service isolate runs on a separate FlutterEngine with platform channel access (via `GeneratedPluginRegistrant`). It can use `web_search`, `web_scrape`, `file`, `get_location`, `get_address`, `geocode`, `device_info`, `ocr`, `qr_generate`, `get_directions`, `get_transit`, and `weather`. WebView-based tools, UI-dependent tools, permission-requiring tools (contacts, calendar, notifications), and tools with real-world side effects (TTS, app launches, alarms) are excluded. `get_location` requires that the user has granted location permission from the app at least once. When Android kills the app overnight and a cron triggers at 3 AM, the service isolate executes it autonomously. If the service AgentLoop init fails, crons fall back to a persistent pending queue that replays when the app is opened.
 
 ---
 
 ## Tools
 
-The agent has access to 24 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
+The agent has access to 25 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
 
 Users can **enable or disable** individual tools from Settings > Tools > Manage Tools.
 
@@ -342,6 +343,7 @@ Users can **enable or disable** individual tools from Settings > Tools > Manage 
 | **Volume Control** | `volume_control` | Read and adjust device volume levels for alarm, media, ringtone, and notification streams. Reports ringer mode (normal/vibrate/silent). Use before `set_alarm` to verify alarm volume is audible. Supports human-readable levels (mute/low/medium/high/max). First custom MethodChannel to Android AudioManager. |
 | **Directions** | `get_directions` | Route calculation between two GPS coordinates via OpenRouteService API v2. Supports car, bike, road bike, mountain bike, walk, hike, and wheelchair profiles. Returns distance, duration, elevation gain/loss, and turn-by-turn instructions. Also supports isochrone calculation (reachable area within a time budget). Requires a free ORS API key. |
 | **Public Transit** | `get_transit` | Find public transit routes in France. Auto-routes between two APIs: **PRIM/IDFM** for Ile-de-France (Metro, RER, Bus, Tram, Transilien) and **SNCF** for national trains (TGV, TER, Intercites). Returns top 3 journey options with departure/arrival times, transfers, CO2 emissions, and section-by-section itinerary. Supports departure/arrival time constraints and wheelchair-accessible routes. Both APIs use Navitia technology with shared response parsing. |
+| **Weather** | `weather` | Weather forecast using Open-Meteo API with Météo-France high-precision models (AROME 1.3km + ARPEGE). Returns daily summary (min/max temperature, precipitation, wind, conditions) and hourly breakdown by period (morning/afternoon/evening). 1-7 day forecast. WMO weather codes interpreted to French descriptions. No API key required. |
 
 ### Dual Scraping Strategy
 
@@ -431,7 +433,7 @@ These keys unlock specific tools. The agent works without them, but the correspo
 
 ### No Key Required
 
-These tools work out of the box, no configuration needed: `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `get_datetime`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`.
+These tools work out of the box, no configuration needed: `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `get_datetime`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`, `weather`.
 
 ---
 
@@ -439,7 +441,7 @@ These tools work out of the box, no configuration needed: `web_scrape`, `web_scr
 
 | | |
 |---|---|
-| **Dart files** | 73 |
+| **Dart files** | 74 |
 | **Analysis issues** | 0 |
 | **APK size (arm64)** | 34.6 MB |
 | **Native code** | Kotlin (AudioChannelPlugin — volume control) |

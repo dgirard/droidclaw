@@ -157,6 +157,12 @@ const _tools = [
     description: 'Metro, RER, bus, train routes (SNCF + IDFM)',
     icon: Icons.directions_transit_outlined,
   ),
+  _ToolInfo(
+    name: 'weather',
+    label: 'Weather',
+    description: 'Weather forecast via Open-Meteo (Météo-France models)',
+    icon: Icons.cloud_outlined,
+  ),
 ];
 
 /// Screen to enable/disable individual agent tools.

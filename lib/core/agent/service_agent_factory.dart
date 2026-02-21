@@ -20,6 +20,7 @@ import '../tools/qr_generate_tool.dart';
 import '../tools/reverse_geocode_tool.dart';
 import '../tools/tool.dart';
 import '../tools/transit_tool.dart';
+import '../tools/weather_tool.dart';
 import '../tools/web_scrape_tool.dart';
 import '../tools/web_search_tool.dart';
 import 'agent_loop.dart';
@@ -120,6 +121,9 @@ class ServiceAgentFactory {
     }
     if (!disabled.contains('qr_generate')) {
       registry.register(QrGenerateTool(workspacePath: workspacePath));
+    }
+    if (!disabled.contains('weather')) {
+      registry.register(WeatherTool());
     }
     // Excluded from service isolate:
     // - WebScrapeJsTool (WebView needs Activity)

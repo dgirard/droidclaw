@@ -32,6 +32,7 @@ import '../core/tools/speak_tool.dart';
 import '../core/tools/subagent_tool.dart';
 import '../core/tools/transit_tool.dart';
 import '../core/tools/volume_control_tool.dart';
+import '../core/tools/weather_tool.dart';
 import '../core/tools/tool.dart';
 import '../core/tools/web_scrape_js_tool.dart';
 import '../core/tools/web_scrape_tool.dart';
@@ -175,6 +176,9 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   }
   if (!disabled.contains('get_transit')) {
     registry.register(TransitTool(sncfApiKey: sncfApiKey, primApiKey: primApiKey));
+  }
+  if (!disabled.contains('weather')) {
+    registry.register(WeatherTool());
   }
 
   return registry;
