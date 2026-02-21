@@ -89,8 +89,16 @@ class BackgroundTaskHandler extends TaskHandler {
       await _checkCrons(DateTime.now());
     }
 
-    // Telegram polling (skip if no token configured)
-    if (_api == null || _polling) return;
+    // Telegram polling — fire and forget (non-blocking)
+    // The _polling flag prevents concurrent polls.
+    if (_api != null && !_polling) {
+      _pollTelegram();
+    }
+  }
+
+  /// Long-polls Telegram for updates. Runs independently of onRepeatEvent
+  /// so the 30-second HTTP timeout doesn't block cron counter increments.
+  Future<void> _pollTelegram() async {
     _polling = true;
 
     try {
@@ -267,13 +275,11 @@ class BackgroundTaskHandler extends TaskHandler {
       final apiKey = prefs.getString(AppConstants.cachedApiKeyKey);
       final providerName = prefs.getString(AppConstants.cachedProviderNameKey);
       final workspacePath = prefs.getString(AppConstants.cachedWorkspacePathKey);
-      final configJson = prefs.getString(AppConstants.configKey);
 
-      if (apiKey == null || providerName == null ||
-          workspacePath == null || configJson == null) {
+      if (apiKey == null || providerName == null || workspacePath == null) {
         _log('Cannot init AgentLoop: missing cached config '
             '(apiKey=${apiKey != null}, provider=${providerName != null}, '
-            'workspace=${workspacePath != null}, config=${configJson != null})');
+            'workspace=${workspacePath != null})');
         return;
       }
 

@@ -73,6 +73,10 @@ A **Telegram bot** turns your phone into a remote AI server accessible from any 
 
 **Privacy-first by design. Sovereign by architecture.**
 
+<p align="center">
+  <img src="docs/architecture-overview.png" alt="DroidClaw architecture overview — Your phone is the server" width="800">
+</p>
+
 ---
 
 ## What is DroidClaw?
