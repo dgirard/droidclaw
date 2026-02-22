@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../core/agent/agent_loop.dart';
+import '../../l10n/l10n.dart';
 import '../../shared/constants.dart';
 import 'rate_limiter.dart';
 
@@ -15,6 +16,7 @@ import 'rate_limiter.dart';
 /// - Sends agent responses back to TaskHandler for Telegram delivery
 class TelegramBotManager {
   final AgentLoop agentLoop;
+  final String locale;
   final RateLimiter _rateLimiter = RateLimiter();
   final Map<int, Queue<_IncomingMessage>> _chatQueues = {};
   final Set<int> _processing = {};
@@ -24,7 +26,7 @@ class TelegramBotManager {
   /// Used by the provider to update stats.
   void Function(TelegramBotEvent)? onEvent;
 
-  TelegramBotManager({required this.agentLoop});
+  TelegramBotManager({required this.agentLoop, this.locale = 'en'});
 
   /// Update the whitelist of allowed usernames.
   void setAllowedUsers(Set<String> users) {
@@ -49,7 +51,7 @@ class TelegramBotManager {
         FlutterForegroundTask.sendDataToTask({
           'action': 'send',
           'chat_id': chatId,
-          'text': 'This bot is private.',
+          'text': tr(locale).telegramBotPrivate,
         });
         onEvent?.call(TelegramBotEvent.accessDenied(chatId, username));
         return;
@@ -92,8 +94,7 @@ class TelegramBotManager {
             case ResponseEvent():
               finalResponse = event.content;
             case ErrorEvent():
-              finalResponse =
-                  "Sorry, I encountered an error. Please try again.";
+              finalResponse = tr(locale).telegramErrorGeneric;
             case ThinkingEvent():
             case SummarizingEvent():
             case ToolCallEvent():
@@ -116,7 +117,7 @@ class TelegramBotManager {
         FlutterForegroundTask.sendDataToTask({
           'action': 'send',
           'chat_id': chatId,
-          'text': 'An error occurred while processing your message.',
+          'text': tr(locale).telegramErrorProcessing,
         });
         onEvent?.call(TelegramBotEvent.error(chatId, e.toString()));
       }

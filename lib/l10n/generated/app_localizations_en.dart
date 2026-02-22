@@ -1023,4 +1023,63 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get batteryUnknown => 'unknown';
+
+  @override
+  String agentLlmError(String error) {
+    return 'LLM call failed: $error';
+  }
+
+  @override
+  String get agentMaxIterations => 'Maximum tool iterations reached.';
+
+  @override
+  String agentError(String error) {
+    return 'Error: $error';
+  }
+
+  @override
+  String get telegramErrorGeneric =>
+      'Sorry, I encountered an error. Please try again.';
+
+  @override
+  String get telegramErrorProcessing =>
+      'An error occurred while processing your message.';
+
+  @override
+  String get notifChannelName => 'DroidClaw Background Service';
+
+  @override
+  String get notifChannelDesc =>
+      'Background service for Telegram bot and scheduled prompts';
+
+  @override
+  String get notifServiceActive => 'DroidClaw - Active';
+
+  @override
+  String get notifServiceRunning => 'Background service running';
+
+  @override
+  String get notifBotActive => 'DroidClaw Bot - Active';
+
+  @override
+  String notifBotMessages(int count) {
+    return 'Messages processed: $count';
+  }
+
+  @override
+  String get notifBotError => 'DroidClaw Bot - Error';
+
+  @override
+  String get notifBotInvalidToken => 'Invalid bot token';
+
+  @override
+  String get notifBotDisconnected => 'DroidClaw Bot - Disconnected';
+
+  @override
+  String get notifBotRetrying => 'Retrying...';
+
+  @override
+  String notifLastCron(String name) {
+    return 'Last cron: $name';
+  }
 }

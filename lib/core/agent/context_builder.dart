@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:intl/intl.dart';
 
+import '../../l10n/l10n.dart';
 import '../../shared/constants.dart';
 import '../skills/skill_loader.dart';
 import '../tools/tool.dart';
@@ -14,12 +15,14 @@ class ContextBuilder {
   final SkillLoader skillLoader;
   final ToolRegistry toolRegistry;
   final String workspacePath;
+  final String locale;
 
   ContextBuilder({
     required this.memoryManager,
     required this.skillLoader,
     required this.toolRegistry,
     required this.workspacePath,
+    this.locale = 'en',
   });
 
   /// Build the complete system prompt.
@@ -69,7 +72,8 @@ Version: ${AppConstants.appVersion}
 
 You have access to tools that let you search the web, fetch web pages, and manage files in your workspace.
 When you need current information, use the web_search tool.
-Be concise and helpful. Use markdown formatting in your responses.''';
+Be concise and helpful. Use markdown formatting in your responses.
+${tr(locale).agentRespondInstructions}''';
   }
 
   Future<String> _loadBootstrapFiles() async {

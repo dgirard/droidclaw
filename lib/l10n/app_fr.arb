@@ -330,5 +330,23 @@
   "batteryDischarging": "décharge",
   "batteryFull": "pleine",
   "batteryConnectedNotCharging": "connecté (pas en charge)",
-  "batteryUnknown": "inconnu"
+  "batteryUnknown": "inconnu",
+
+  "agentLlmError": "Échec de l'appel LLM : {error}",
+  "agentMaxIterations": "Nombre maximum d'itérations d'outils atteint.",
+  "agentError": "Erreur : {error}",
+  "telegramErrorGeneric": "Désolé, j'ai rencontré une erreur. Veuillez réessayer.",
+  "telegramErrorProcessing": "Une erreur s'est produite lors du traitement de votre message.",
+
+  "notifChannelName": "Service d'arrière-plan DroidClaw",
+  "notifChannelDesc": "Service d'arrière-plan pour le bot Telegram et les tâches planifiées",
+  "notifServiceActive": "DroidClaw - Actif",
+  "notifServiceRunning": "Service d'arrière-plan actif",
+  "notifBotActive": "Bot DroidClaw - Actif",
+  "notifBotMessages": "Messages traités : {count}",
+  "notifBotError": "Bot DroidClaw - Erreur",
+  "notifBotInvalidToken": "Token du bot invalide",
+  "notifBotDisconnected": "Bot DroidClaw - Déconnecté",
+  "notifBotRetrying": "Nouvelle tentative...",
+  "notifLastCron": "Dernière tâche : {name}"
 }

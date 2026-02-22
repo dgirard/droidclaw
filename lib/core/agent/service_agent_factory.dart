@@ -154,6 +154,7 @@ class ServiceAgentFactory {
       skillLoader: skillLoader,
       toolRegistry: registry,
       workspacePath: workspacePath,
+      locale: locale,
     );
 
     // 7. Build AgentLoop

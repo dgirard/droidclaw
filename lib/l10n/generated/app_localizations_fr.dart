@@ -1042,4 +1042,64 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get batteryUnknown => 'inconnu';
+
+  @override
+  String agentLlmError(String error) {
+    return 'Échec de l\'appel LLM : $error';
+  }
+
+  @override
+  String get agentMaxIterations =>
+      'Nombre maximum d\'itérations d\'outils atteint.';
+
+  @override
+  String agentError(String error) {
+    return 'Erreur : $error';
+  }
+
+  @override
+  String get telegramErrorGeneric =>
+      'Désolé, j\'ai rencontré une erreur. Veuillez réessayer.';
+
+  @override
+  String get telegramErrorProcessing =>
+      'Une erreur s\'est produite lors du traitement de votre message.';
+
+  @override
+  String get notifChannelName => 'Service d\'arrière-plan DroidClaw';
+
+  @override
+  String get notifChannelDesc =>
+      'Service d\'arrière-plan pour le bot Telegram et les tâches planifiées';
+
+  @override
+  String get notifServiceActive => 'DroidClaw - Actif';
+
+  @override
+  String get notifServiceRunning => 'Service d\'arrière-plan actif';
+
+  @override
+  String get notifBotActive => 'Bot DroidClaw - Actif';
+
+  @override
+  String notifBotMessages(int count) {
+    return 'Messages traités : $count';
+  }
+
+  @override
+  String get notifBotError => 'Bot DroidClaw - Erreur';
+
+  @override
+  String get notifBotInvalidToken => 'Token du bot invalide';
+
+  @override
+  String get notifBotDisconnected => 'Bot DroidClaw - Déconnecté';
+
+  @override
+  String get notifBotRetrying => 'Nouvelle tentative...';
+
+  @override
+  String notifLastCron(String name) {
+    return 'Dernière tâche : $name';
+  }
 }

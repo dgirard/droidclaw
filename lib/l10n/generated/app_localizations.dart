@@ -1945,6 +1945,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'unknown'**
   String get batteryUnknown;
+
+  /// No description provided for @agentLlmError.
+  ///
+  /// In en, this message translates to:
+  /// **'LLM call failed: {error}'**
+  String agentLlmError(String error);
+
+  /// No description provided for @agentMaxIterations.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum tool iterations reached.'**
+  String get agentMaxIterations;
+
+  /// No description provided for @agentError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error: {error}'**
+  String agentError(String error);
+
+  /// No description provided for @telegramErrorGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Sorry, I encountered an error. Please try again.'**
+  String get telegramErrorGeneric;
+
+  /// No description provided for @telegramErrorProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'An error occurred while processing your message.'**
+  String get telegramErrorProcessing;
+
+  /// No description provided for @notifChannelName.
+  ///
+  /// In en, this message translates to:
+  /// **'DroidClaw Background Service'**
+  String get notifChannelName;
+
+  /// No description provided for @notifChannelDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Background service for Telegram bot and scheduled prompts'**
+  String get notifChannelDesc;
+
+  /// No description provided for @notifServiceActive.
+  ///
+  /// In en, this message translates to:
+  /// **'DroidClaw - Active'**
+  String get notifServiceActive;
+
+  /// No description provided for @notifServiceRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Background service running'**
+  String get notifServiceRunning;
+
+  /// No description provided for @notifBotActive.
+  ///
+  /// In en, this message translates to:
+  /// **'DroidClaw Bot - Active'**
+  String get notifBotActive;
+
+  /// No description provided for @notifBotMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages processed: {count}'**
+  String notifBotMessages(int count);
+
+  /// No description provided for @notifBotError.
+  ///
+  /// In en, this message translates to:
+  /// **'DroidClaw Bot - Error'**
+  String get notifBotError;
+
+  /// No description provided for @notifBotInvalidToken.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid bot token'**
+  String get notifBotInvalidToken;
+
+  /// No description provided for @notifBotDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'DroidClaw Bot - Disconnected'**
+  String get notifBotDisconnected;
+
+  /// No description provided for @notifBotRetrying.
+  ///
+  /// In en, this message translates to:
+  /// **'Retrying...'**
+  String get notifBotRetrying;
+
+  /// No description provided for @notifLastCron.
+  ///
+  /// In en, this message translates to:
+  /// **'Last cron: {name}'**
+  String notifLastCron(String name);
 }
 
 class _AppLocalizationsDelegate

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/agent/agent_loop.dart';
+import '../l10n/l10n.dart';
 import '../shared/constants.dart';
 import 'app_providers.dart';
 
@@ -119,11 +120,12 @@ class ChatNotifier extends Notifier<ChatState> {
 
     final agentLoop = await ref.read(agentLoopProvider.future);
     if (agentLoop == null) {
+      final config = ref.read(appConfigProvider);
+      final l = tr(config.resolvedLocale);
       state = state.copyWith(
         messages: [
           ...state.messages,
-          ChatMessage.error('No LLM provider configured. '
-              'Please set up a provider in Settings.'),
+          ChatMessage.error(l.noProviderConfigured),
         ],
         isProcessing: false,
         clearEvent: true,
@@ -187,10 +189,11 @@ class ChatNotifier extends Notifier<ChatState> {
         }
       }
     } catch (e) {
+      final config = ref.read(appConfigProvider);
       state = state.copyWith(
         messages: [
           ...state.messages,
-          ChatMessage.error('Error: $e'),
+          ChatMessage.error(tr(config.resolvedLocale).agentError(e.toString())),
         ],
         isProcessing: false,
         clearEvent: true,

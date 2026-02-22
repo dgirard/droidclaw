@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../l10n/l10n.dart';
 import '../agent/agent_loop.dart';
 import '../agent/service_agent_factory.dart';
 import '../config/cron_config.dart';
@@ -44,6 +45,7 @@ class BackgroundTaskHandler extends TaskHandler {
   AgentLoop? _agentLoop;
   bool _agentInitializing = false;
   bool _cronExecuting = false;
+  String _locale = 'en';
 
   static const _maxBackoff = Duration(seconds: 60);
   static const _baseBackoff = Duration(seconds: 2);
@@ -64,6 +66,9 @@ class BackgroundTaskHandler extends TaskHandler {
 
     // Restore persisted offset
     _offset = prefs.getInt(AppConstants.telegramBotOffsetKey) ?? 0;
+
+    // Load locale
+    _locale = prefs.getString(AppConstants.cachedLocaleKey) ?? 'en';
 
     // Load cron definitions
     _loadCronDefinitions(prefs);
@@ -138,9 +143,10 @@ class BackgroundTaskHandler extends TaskHandler {
       }
 
       // Update notification
+      final l = tr(_locale);
       FlutterForegroundTask.updateService(
-        notificationTitle: 'DroidClaw Bot - Active',
-        notificationText: 'Messages processed: $_messageCount',
+        notificationTitle: l.notifBotActive,
+        notificationText: l.notifBotMessages(_messageCount),
       );
     } on TelegramRateLimitException catch (e) {
       // Respect Telegram's retry-after
@@ -155,8 +161,8 @@ class BackgroundTaskHandler extends TaskHandler {
           'message': 'Invalid bot token (401 Unauthorized)',
         });
         FlutterForegroundTask.updateService(
-          notificationTitle: 'DroidClaw Bot - Error',
-          notificationText: 'Invalid bot token',
+          notificationTitle: tr(_locale).notifBotError,
+          notificationText: tr(_locale).notifBotInvalidToken,
         );
         _api = null; // Stop polling
         return;
@@ -349,8 +355,8 @@ class BackgroundTaskHandler extends TaskHandler {
 
       // Update notification
       FlutterForegroundTask.updateService(
-        notificationTitle: 'DroidClaw - Active',
-        notificationText: 'Last cron: ${cron.name}',
+        notificationTitle: tr(_locale).notifServiceActive,
+        notificationText: tr(_locale).notifLastCron(cron.name),
       );
     } catch (e) {
       _log('EXCEPTION in "${cron.name}": $e');
@@ -487,8 +493,8 @@ class BackgroundTaskHandler extends TaskHandler {
 
     if (_consecutiveFailures >= _disconnectedThreshold) {
       FlutterForegroundTask.updateService(
-        notificationTitle: 'DroidClaw Bot - Disconnected',
-        notificationText: 'Retrying...',
+        notificationTitle: tr(_locale).notifBotDisconnected,
+        notificationText: tr(_locale).notifBotRetrying,
       );
     }
 

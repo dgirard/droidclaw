@@ -207,6 +207,7 @@ final llmProviderProvider = FutureProvider<LLMProvider?>((ref) async {
 
 /// Context builder.
 final contextBuilderProvider = FutureProvider<ContextBuilder>((ref) async {
+  final config = ref.watch(appConfigProvider);
   final storage = ref.watch(storageServiceProvider);
   final workspacePath = await storage.workspacePath;
   final toolRegistry = await ref.watch(toolRegistryProvider.future);
@@ -216,6 +217,7 @@ final contextBuilderProvider = FutureProvider<ContextBuilder>((ref) async {
     skillLoader: ref.watch(skillLoaderProvider),
     toolRegistry: toolRegistry,
     workspacePath: workspacePath,
+    locale: config.resolvedLocale,
   );
 });
 

@@ -361,5 +361,27 @@
   "batteryDischarging": "discharging",
   "batteryFull": "full",
   "batteryConnectedNotCharging": "connected (not charging)",
-  "batteryUnknown": "unknown"
+  "batteryUnknown": "unknown",
+
+  "agentLlmError": "LLM call failed: {error}",
+  "@agentLlmError": { "placeholders": { "error": { "type": "String" } } },
+  "agentMaxIterations": "Maximum tool iterations reached.",
+  "agentError": "Error: {error}",
+  "@agentError": { "placeholders": { "error": { "type": "String" } } },
+  "telegramErrorGeneric": "Sorry, I encountered an error. Please try again.",
+  "telegramErrorProcessing": "An error occurred while processing your message.",
+
+  "notifChannelName": "DroidClaw Background Service",
+  "notifChannelDesc": "Background service for Telegram bot and scheduled prompts",
+  "notifServiceActive": "DroidClaw - Active",
+  "notifServiceRunning": "Background service running",
+  "notifBotActive": "DroidClaw Bot - Active",
+  "notifBotMessages": "Messages processed: {count}",
+  "@notifBotMessages": { "placeholders": { "count": { "type": "int" } } },
+  "notifBotError": "DroidClaw Bot - Error",
+  "notifBotInvalidToken": "Invalid bot token",
+  "notifBotDisconnected": "DroidClaw Bot - Disconnected",
+  "notifBotRetrying": "Retrying...",
+  "notifLastCron": "Last cron: {name}",
+  "@notifLastCron": { "placeholders": { "name": { "type": "String" } } }
 }

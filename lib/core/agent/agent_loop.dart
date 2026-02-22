@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../l10n/l10n.dart';
 import '../../shared/constants.dart';
 import '../config/app_config.dart';
 import '../providers/llm_provider.dart';
@@ -117,7 +118,7 @@ class AgentLoop {
       } catch (e) {
         // ignore: avoid_print
         print('[AgentLoop] LLM error: $e');
-        yield ErrorEvent('LLM call failed: $e');
+        yield ErrorEvent(tr(config.resolvedLocale).agentLlmError(e.toString()));
         return;
       }
 
@@ -160,7 +161,7 @@ class AgentLoop {
 
     // Max iterations reached
     await sessions.save(session);
-    yield const ErrorEvent('Maximum tool iterations reached.');
+    yield ErrorEvent(tr(config.resolvedLocale).agentMaxIterations);
   }
 
   /// Check if the session needs summarization.

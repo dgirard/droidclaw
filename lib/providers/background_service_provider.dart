@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/agent/agent_loop.dart';
 import '../core/services/background_task_handler.dart';
+import '../l10n/l10n.dart';
 import '../shared/constants.dart';
 import 'app_providers.dart';
 
@@ -71,11 +72,14 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
     }
 
     // Start the service
+    final config = ref.read(appConfigProvider);
+    final l = tr(config.resolvedLocale);
+
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
         channelId: 'droidclaw_background_service',
-        channelName: 'DroidClaw Background Service',
-        channelDescription: 'Background service for Telegram bot and scheduled prompts',
+        channelName: l.notifChannelName,
+        channelDescription: l.notifChannelDesc,
         channelImportance: NotificationChannelImportance.LOW,
         priority: NotificationPriority.LOW,
         onlyAlertOnce: true,
@@ -104,8 +108,8 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
         ForegroundServiceTypes.remoteMessaging,
         ForegroundServiceTypes.location,
       ],
-      notificationTitle: 'DroidClaw - Active',
-      notificationText: 'Background service running',
+      notificationTitle: l.notifServiceActive,
+      notificationText: l.notifServiceRunning,
       notificationButtons: [
         const NotificationButton(id: 'btn_stop', text: 'Stop'),
       ],

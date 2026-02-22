@@ -175,7 +175,11 @@ class TelegramNotifier extends Notifier<TelegramState> {
       return;
     }
 
-    _botManager = TelegramBotManager(agentLoop: agentLoop);
+    final config = ref.read(appConfigProvider);
+    _botManager = TelegramBotManager(
+      agentLoop: agentLoop,
+      locale: config.resolvedLocale,
+    );
     _botManager!.onEvent = _onBotEvent;
 
     // Load allowed users
