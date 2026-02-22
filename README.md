@@ -9,6 +9,51 @@
 
 ---
 
+## Why Native Mobile? The Case for AI in Your Pocket
+
+For an AI to graduate from "gadget you query" to true **personal assistant**, the transition from desktop to native mobile isn't just logical — it's indispensable. A browser tab on a phone is the gap between a work tool and a life companion.
+
+### Ubiquity: The assistant must be where life happens
+
+The desktop is a **sedentary workspace**. You go there to produce, code, or write. But most needs for assistance arise when you're *not* in front of a 27-inch screen — in the street, in the kitchen, mid-conversation, or at the grocery store.
+
+- **Desktop**: a destination you visit.
+- **Mobile**: an extension of yourself. An assistant that stays on a computer is a part-time assistant.
+
+### Native vs. Web: A question of friction
+
+Nobody wants a web interface on their phone. The gap in performance and integration is brutal:
+
+- **Responsiveness**: a native app uses local device resources. Waiting for a web page to load, dealing with cookies and page refreshes — this kills the instantaneity a voice command requires.
+- **System integration**: a web page is trapped in its tab. A native app interacts with your contacts, calendar, reminders, and — crucially — your **sensors** (GPS, accelerometer, camera).
+- **Always-on mode**: only native technology enables voice activation ("wake word") or lock-screen access. Nobody will unlock their phone, open a browser, type a URL, and wait for it to load just to say "remind me to buy bread."
+
+### Contextual AI: Seeing what you see
+
+The great leap of AI in 2026 is **real-time multimodality**. For AI to be truly useful, it must be able to use the camera to identify an object in front of you, or read what's displayed on your screen to help you in another app.
+
+> A browser is a silo. It is blind to what's happening on your phone. A native app *is* the operating system of your digital life.
+
+### UX: Habits and comfort
+
+Mobile web ergonomics are often a clumsy adaptation of desktop:
+
+- **Touch latency**: the web is less fluid than native.
+- **Biometrics**: instant access via fingerprint or FaceID is seamless in native, often painful in a browser.
+
+### In summary
+
+| | Web Assistant (Browser) | Native Assistant (App) |
+|---|---|---|
+| **Speed** | Depends on network and web engine | Instant (local resources) |
+| **Sensor access** | Very limited | Full (GPS, camera, mic) |
+| **Interaction** | Text and click only | Voice, gesture, vision |
+| **Availability** | Must open browser first | Always running in background |
+
+The desktop remains king for **complex content creation**, but the smartphone is the throne of **execution and assistance**. An assistant that isn't seamlessly "in your pocket" is just another tool — not a companion.
+
+---
+
 ## The AI Sovereignty Problem
 
 Today's AI assistants follow a model of **digital feudalism**: platforms own the "harvest" — your data, your preferences, your conversation history, your memory. You interact with AI through corporate-controlled interfaces where your context becomes a platform asset, not yours.
