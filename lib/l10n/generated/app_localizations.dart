@@ -2041,6 +2041,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Last cron: {name}'**
   String notifLastCron(String name);
+
+  /// No description provided for @cronLastRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Last: {date}'**
+  String cronLastRun(String date);
 }
 
 class _AppLocalizationsDelegate

@@ -117,8 +117,8 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
                     title: Text(cron.name),
                     subtitle: Text(
                       hasRun
-                          ? '${cron.schedule.displayText} - Last: ${DateFormat('MMM d HH:mm').format(cron.lastRun!)}'
-                          : '${cron.schedule.displayText} - ${l.cronNeverRan}',
+                          ? '${cron.schedule.localizedDisplayText(l)} - ${l.cronLastRun(DateFormat('MMM d HH:mm').format(cron.lastRun!))}'
+                          : '${cron.schedule.localizedDisplayText(l)} - ${l.cronNeverRan}',
                       style: !hasRun && cron.enabled
                           ? TextStyle(
                               color:

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../l10n/l10n.dart';
+
 /// How sessions are managed for cron executions.
 enum SessionStrategy { newEach, sameThread }
 
@@ -48,20 +50,20 @@ class CronSchedule {
         daysOfWeek: (json['daysOfWeek'] as List?)?.cast<int>(),
       );
 
-  String get displayText {
+  String localizedDisplayText(AppLocalizations l) {
     switch (type) {
       case ScheduleType.interval:
         final minutes = interval!.inMinutes;
-        if (minutes < 60) return 'Every $minutes min';
+        if (minutes < 60) return l.cronDisplayEveryMinutes(minutes);
         final hours = minutes ~/ 60;
-        return hours == 1 ? 'Every hour' : 'Every $hours hours';
+        return hours == 1 ? l.cronDisplayEveryHour : l.cronDisplayEveryHours(hours);
       case ScheduleType.timeOfDay:
         final timeStrs = times!
             .map((t) =>
                 '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}')
             .join(', ');
-        if (daysOfWeek == null) return 'Daily at $timeStrs';
-        return 'At $timeStrs';
+        if (daysOfWeek == null) return l.cronDisplayDailyAt(timeStrs);
+        return l.cronDisplayAt(timeStrs);
     }
   }
 }

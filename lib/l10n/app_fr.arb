@@ -348,5 +348,8 @@
   "notifBotInvalidToken": "Token du bot invalide",
   "notifBotDisconnected": "Bot DroidClaw - Déconnecté",
   "notifBotRetrying": "Nouvelle tentative...",
-  "notifLastCron": "Dernière tâche : {name}"
+  "notifLastCron": "Dernière tâche : {name}",
+
+  "cronLastRun": "Dernière : {date}",
+  "@cronLastRun": { "placeholders": { "date": { "type": "String" } } }
 }

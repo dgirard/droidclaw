@@ -383,5 +383,8 @@
   "notifBotDisconnected": "DroidClaw Bot - Disconnected",
   "notifBotRetrying": "Retrying...",
   "notifLastCron": "Last cron: {name}",
-  "@notifLastCron": { "placeholders": { "name": { "type": "String" } } }
+  "@notifLastCron": { "placeholders": { "name": { "type": "String" } } },
+
+  "cronLastRun": "Last: {date}",
+  "@cronLastRun": { "placeholders": { "date": { "type": "String" } } }
 }

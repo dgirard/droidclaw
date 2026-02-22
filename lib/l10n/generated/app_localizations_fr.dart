@@ -1102,4 +1102,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String notifLastCron(String name) {
     return 'Dernière tâche : $name';
   }
+
+  @override
+  String cronLastRun(String date) {
+    return 'Dernière : $date';
+  }
 }
