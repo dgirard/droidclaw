@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
+import '../../providers/app_providers.dart';
 import '../../providers/chat_provider.dart';
 import 'agent_status_indicator.dart';
 import 'input_bar.dart';
@@ -52,6 +53,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       appBar: AppBar(
         title: Text(AppLocalizations.of(context).chatTitle),
         actions: [
+          _LocaleSwitcher(),
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: AppLocalizations.of(context).chatConversations,
@@ -131,6 +133,63 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Compact locale switcher: shows current language flag, tap to cycle.
+class _LocaleSwitcher extends ConsumerWidget {
+  static const _locales = ['system', 'en', 'fr'];
+
+  static String _flag(String locale) => switch (locale) {
+        'fr' => '\u{1F1EB}\u{1F1F7}',
+        'en' => '\u{1F1EC}\u{1F1E7}',
+        _ => '\u{1F310}', // globe for system
+      };
+
+  static String _label(String locale) => switch (locale) {
+        'fr' => 'Français',
+        'en' => 'English',
+        _ => 'System',
+      };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final config = ref.watch(appConfigProvider);
+    final current = config.locale;
+    final resolved = config.resolvedLocale;
+    // Show the resolved flag (actual language), but with a globe overlay for 'system'
+    final displayFlag =
+        current == 'system' ? _flag('system') : _flag(resolved);
+
+    return PopupMenuButton<String>(
+      tooltip: AppLocalizations.of(context).localeSettingsTitle,
+      onSelected: (locale) {
+        final newConfig = config.copyWith(locale: locale);
+        ref.read(configStorageProvider).save(newConfig);
+        ref.read(appConfigProvider.notifier).update(newConfig);
+      },
+      itemBuilder: (context) => _locales.map((locale) {
+        return PopupMenuItem<String>(
+          value: locale,
+          child: Row(
+            children: [
+              Text(_flag(locale), style: const TextStyle(fontSize: 20)),
+              const SizedBox(width: 12),
+              Text(_label(locale)),
+              if (locale == current) ...[
+                const Spacer(),
+                Icon(Icons.check,
+                    size: 18, color: Theme.of(context).colorScheme.primary),
+              ],
+            ],
+          ),
+        );
+      }).toList(),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Text(displayFlag, style: const TextStyle(fontSize: 22)),
       ),
     );
   }
