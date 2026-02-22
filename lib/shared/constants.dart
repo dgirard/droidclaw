@@ -66,4 +66,5 @@ class AppConstants {
   static const String cachedSncfApiKeyKey = 'cached_sncf_api_key';
   static const String cachedPrimApiKeyKey = 'cached_prim_api_key';
   static const String cachedWorkspacePathKey = 'cached_workspace_path';
+  static const String cachedLocaleKey = 'cached_locale';
 }

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import '../../shared/constants.dart';
 
 /// Top-level application configuration.
@@ -6,16 +8,21 @@ class AppConfig {
   final Map<String, ProviderConfig> providers;
   final ToolsConfig tools;
 
+  /// Locale setting: 'en', 'fr', or 'system' (follow device language).
+  final String locale;
+
   const AppConfig({
     required this.agent,
     this.providers = const {},
     this.tools = const ToolsConfig(),
+    this.locale = 'system',
   });
 
   factory AppConfig.defaults() => AppConfig(
         agent: AgentConfig.defaults(),
         providers: {},
         tools: const ToolsConfig(),
+        locale: 'system',
       );
 
   factory AppConfig.fromJson(Map<String, dynamic> json) => AppConfig(
@@ -30,27 +37,45 @@ class AppConfig {
         tools: json['tools'] != null
             ? ToolsConfig.fromJson(json['tools'] as Map<String, dynamic>)
             : const ToolsConfig(),
+        locale: json['locale'] as String? ?? 'system',
       );
 
   Map<String, dynamic> toJson() => {
         'agent': agent.toJson(),
         'providers': providers.map((k, v) => MapEntry(k, v.toJson())),
         'tools': tools.toJson(),
+        'locale': locale,
       };
 
   AppConfig copyWith({
     AgentConfig? agent,
     Map<String, ProviderConfig>? providers,
     ToolsConfig? tools,
+    String? locale,
   }) =>
       AppConfig(
         agent: agent ?? this.agent,
         providers: providers ?? this.providers,
         tools: tools ?? this.tools,
+        locale: locale ?? this.locale,
       );
 
   /// Get the active provider config based on agent.provider.
   ProviderConfig? get activeProvider => providers[agent.provider];
+
+  /// Resolve the effective locale code ('en' or 'fr').
+  /// If locale is 'system', check the device language.
+  String get resolvedLocale {
+    if (locale == 'system') {
+      return _resolveSystemLocale();
+    }
+    return locale;
+  }
+
+  static String _resolveSystemLocale() {
+    final deviceLocale = PlatformDispatcher.instance.locale.languageCode;
+    return deviceLocale == 'fr' ? 'fr' : 'en';
+  }
 }
 
 /// Agent behavior configuration.
