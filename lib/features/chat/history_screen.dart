@@ -237,7 +237,7 @@ class _CronGroup {
 }
 
 /// Sub-screen showing individual executions of a cron.
-class CronExecutionsScreen extends ConsumerWidget {
+class CronExecutionsScreen extends ConsumerStatefulWidget {
   final String cronName;
   final List<Session> sessions;
   final int popCount;
@@ -250,10 +250,24 @@ class CronExecutionsScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CronExecutionsScreen> createState() =>
+      _CronExecutionsScreenState();
+}
+
+class _CronExecutionsScreenState extends ConsumerState<CronExecutionsScreen> {
+  late final List<Session> _sessions;
+
+  @override
+  void initState() {
+    super.initState();
+    _sessions = List.of(widget.sessions);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(cronName)),
-      body: sessions.isEmpty
+      appBar: AppBar(title: Text(widget.cronName)),
+      body: _sessions.isEmpty
           ? Center(
               child: Text(AppLocalizations.of(context).historyNoExecutions,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -262,9 +276,9 @@ class CronExecutionsScreen extends ConsumerWidget {
                           .onSurfaceVariant)),
             )
           : ListView.builder(
-              itemCount: sessions.length,
+              itemCount: _sessions.length,
               itemBuilder: (context, index) {
-                final session = sessions[index];
+                final session = _sessions[index];
                 return ListTile(
                   leading: const Icon(Icons.play_arrow_outlined),
                   title: Text(_sessionTitle(session),
@@ -275,15 +289,14 @@ class CronExecutionsScreen extends ConsumerWidget {
                   ),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline, size: 20),
-                    onPressed: () => _confirmDeleteExecution(
-                        context, ref, session),
+                    onPressed: () =>
+                        _confirmDeleteExecution(context, session),
                   ),
                   onTap: () {
                     ref
                         .read(chatProvider.notifier)
                         .loadSession(session.key);
-                    // Pop back to chat
-                    for (var i = 0; i < popCount; i++) {
+                    for (var i = 0; i < widget.popCount; i++) {
                       Navigator.of(context).pop();
                     }
                   },
@@ -294,7 +307,7 @@ class CronExecutionsScreen extends ConsumerWidget {
   }
 
   Future<void> _confirmDeleteExecution(
-      BuildContext context, WidgetRef ref, Session session) async {
+      BuildContext context, Session session) async {
     final l = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -313,6 +326,7 @@ class CronExecutionsScreen extends ConsumerWidget {
     );
     if (confirmed == true) {
       ref.read(chatProvider.notifier).deleteSession(session.key);
+      if (mounted) setState(() => _sessions.remove(session));
     }
   }
 }

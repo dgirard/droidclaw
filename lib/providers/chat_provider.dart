@@ -214,6 +214,9 @@ class ChatNotifier extends Notifier<ChatState> {
     await sessions.deleteSession(sessionKey);
     if (state.sessionKey == sessionKey) {
       await loadSession(AppConstants.defaultSessionKey);
+    } else {
+      // Force state change so watchers (e.g., HistoryScreen) rebuild
+      state = state.copyWith();
     }
   }
 }
