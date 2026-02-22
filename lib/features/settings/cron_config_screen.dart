@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/config/cron_config.dart';
+import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/background_service_provider.dart';
 import '../../shared/constants.dart';
@@ -56,19 +57,20 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
   }
 
   Future<void> _deleteCron(int index) async {
+    final l = AppLocalizations.of(context);
     final cron = _crons[index];
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete scheduled prompt?'),
-        content: Text('Delete "${cron.name}"? This cannot be undone.'),
+        title: Text(l.cronDeleteTitle),
+        content: Text(l.cronDeleteContent(cron.name)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+              child: Text(l.commonCancel)),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Delete')),
+              child: Text(l.commonDelete)),
         ],
       ),
     );
@@ -80,8 +82,10 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Scheduled Prompts')),
+      appBar: AppBar(title: Text(l.cronTitle)),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           final result = await Navigator.pushNamed(
@@ -114,7 +118,7 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
                     subtitle: Text(
                       hasRun
                           ? '${cron.schedule.displayText} - Last: ${DateFormat('MMM d HH:mm').format(cron.lastRun!)}'
-                          : '${cron.schedule.displayText} - Never ran',
+                          : '${cron.schedule.displayText} - ${l.cronNeverRan}',
                       style: !hasRun && cron.enabled
                           ? TextStyle(
                               color:
@@ -126,7 +130,7 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.history, size: 20),
-                          tooltip: 'View executions',
+                          tooltip: l.cronViewExecutions,
                           onPressed: () => _viewExecutions(cron),
                         ),
                         Switch(
@@ -159,6 +163,7 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
   }
 
   Widget _buildServiceStatus(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final hasEnabledCrons = _crons.any((c) => c.enabled);
     return Container(
@@ -185,10 +190,10 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
           Expanded(
             child: Text(
               !hasEnabledCrons
-                  ? 'No prompts enabled'
+                  ? l.cronNoPromptsEnabled
                   : _serviceRunning
-                      ? 'Background service running'
-                      : 'Background service not running',
+                      ? l.cronServiceRunning
+                      : l.cronServiceNotRunning,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: _serviceRunning && hasEnabledCrons
                     ? theme.colorScheme.onPrimaryContainer
@@ -225,6 +230,7 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final theme = Theme.of(context);
     return Center(
       child: Padding(
@@ -236,12 +242,11 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
                 size: 64,
                 color: theme.colorScheme.primary.withValues(alpha: 0.5)),
             const SizedBox(height: 16),
-            Text('No scheduled prompts',
+            Text(l.cronEmpty,
                 style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(
-              'Tap + to create a recurring prompt.\n'
-              'The AI will run it automatically on schedule.',
+              l.cronEmptySubtitle,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),

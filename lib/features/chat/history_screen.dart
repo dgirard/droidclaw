@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/session/session.dart';
+import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/chat_provider.dart';
 import '../../shared/constants.dart';
@@ -17,7 +18,7 @@ class HistoryScreen extends ConsumerWidget {
     final currentSessionKey = ref.watch(chatProvider).sessionKey;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Conversations')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context).historyTitle)),
       body: sessionManagerAsync.when(
         data: (sm) {
           final allSessions = sm.getAllSessions();
@@ -47,7 +48,7 @@ class HistoryScreen extends ConsumerWidget {
           return ListView(
             children: [
               if (chatSessions.isNotEmpty) ...[
-                _SectionHeader(title: 'Chat'),
+                _SectionHeader(title: AppLocalizations.of(context).historySectionChat),
                 ...chatSessions.map((s) => _SessionTile(
                       session: s,
                       isCurrent: s.key == currentSessionKey,
@@ -56,7 +57,7 @@ class HistoryScreen extends ConsumerWidget {
                     )),
               ],
               if (cronGroups.isNotEmpty) ...[
-                _SectionHeader(title: 'Scheduled Prompts'),
+                _SectionHeader(title: AppLocalizations.of(context).historySectionCron),
                 ...cronGroups.entries.map((entry) {
                   final cronName = entry.value.name;
                   final sessions = entry.value.sessions;
@@ -67,7 +68,7 @@ class HistoryScreen extends ConsumerWidget {
                     title: Text(cronName, maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                     subtitle: Text(
-                      '${sessions.length} executions - Last: ${_formatDate(lastSession.updated)}',
+                      AppLocalizations.of(context).historyExecutions(sessions.length, _formatDate(context, lastSession.updated)),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     trailing: const Icon(Icons.chevron_right),
@@ -90,7 +91,7 @@ class HistoryScreen extends ConsumerWidget {
                 }),
               ],
               if (telegramSessions.isNotEmpty) ...[
-                _SectionHeader(title: 'Telegram'),
+                _SectionHeader(title: AppLocalizations.of(context).historySectionTelegram),
                 ...telegramSessions.map((s) => _SessionTile(
                       session: s,
                       isCurrent: s.key == currentSessionKey,
@@ -103,7 +104,7 @@ class HistoryScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => Center(child: Text(AppLocalizations.of(context).historyError(e.toString()))),
       ),
     );
   }
@@ -138,7 +139,7 @@ class HistoryScreen extends ConsumerWidget {
         cronId = keyWithoutPrefix;
       }
 
-      final name = cronNameMap[cronId] ?? 'Scheduled prompt';
+      final name = cronNameMap[cronId] ?? cronId;
       groups.putIfAbsent(cronId, () => _CronGroup(name: name, sessions: []));
       groups[cronId]!.sessions.add(session);
     }
@@ -153,19 +154,19 @@ class HistoryScreen extends ConsumerWidget {
 
   Future<void> _confirmDelete(
       BuildContext context, WidgetRef ref, Session session) async {
+    final l = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete conversation?'),
-        content: Text(
-            'Delete "${_sessionTitle(session)}"? This cannot be undone.'),
+        title: Text(l.historyDeleteTitle),
+        content: Text(l.historyDeleteContent(_sessionTitle(session))),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+              child: Text(l.commonCancel)),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Delete')),
+              child: Text(l.commonDelete)),
         ],
       ),
     );
@@ -184,7 +185,7 @@ class HistoryScreen extends ConsumerWidget {
               size: 64,
               color: theme.colorScheme.primary.withValues(alpha: 0.5)),
           const SizedBox(height: 16),
-          Text('No conversations yet',
+          Text(AppLocalizations.of(context).historyEmpty,
               style: theme.textTheme.bodyLarge
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         ],
@@ -218,7 +219,7 @@ class CronExecutionsScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(cronName)),
       body: sessions.isEmpty
           ? Center(
-              child: Text('No executions yet',
+              child: Text(AppLocalizations.of(context).historyNoExecutions,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: Theme.of(context)
                           .colorScheme
@@ -233,7 +234,7 @@ class CronExecutionsScreen extends ConsumerWidget {
                   title: Text(_sessionTitle(session),
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(
-                    '${_formatDate(session.updated)} ${DateFormat('HH:mm').format(session.updated)}',
+                    '${_formatDate(context, session.updated)} ${DateFormat('HH:mm').format(session.updated)}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   onTap: () {
@@ -304,7 +305,7 @@ class _SessionTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        '${_formatDate(session.updated)} - $userMessageCount messages',
+        '${_formatDate(context, session.updated)} - ${AppLocalizations.of(context).historyMessages(userMessageCount)}',
         style: theme.textTheme.bodySmall,
       ),
       trailing: IconButton(
@@ -319,18 +320,19 @@ class _SessionTile extends StatelessWidget {
 String _sessionTitle(Session session) {
   final firstUserMsg =
       session.messages.where((m) => m.role == 'user').firstOrNull;
-  if (firstUserMsg == null) return 'New conversation';
+  if (firstUserMsg == null) return session.key;
   final text = firstUserMsg.content.replaceAll('\n', ' ').trim();
   return text.length > 60 ? '${text.substring(0, 60)}...' : text;
 }
 
-String _formatDate(DateTime date) {
+String _formatDate(BuildContext context, DateTime date) {
+  final l = AppLocalizations.of(context);
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final sessionDay = DateTime(date.year, date.month, date.day);
-  if (sessionDay == today) return 'Today';
+  if (sessionDay == today) return l.historyToday;
   if (sessionDay == today.subtract(const Duration(days: 1))) {
-    return 'Yesterday';
+    return l.historyYesterday;
   }
   return DateFormat('MMM d').format(date);
 }

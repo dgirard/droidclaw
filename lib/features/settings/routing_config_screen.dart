@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/tools/directions_tool.dart';
 import '../../core/tools/geocode_tool.dart';
 import '../../core/tools/transit_tool.dart';
+import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 
 /// Screen for configuring routing and transit API keys.
@@ -59,9 +60,10 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
   }
 
   Future<void> _testOrs() async {
+    final l = AppLocalizations.of(context);
     final apiKey = _orsKeyController.text.trim();
     if (apiKey.isEmpty) {
-      setState(() => _orsTestResult = 'Please enter an API key');
+      setState(() => _orsTestResult = l.commonEnterApiKey);
       return;
     }
 
@@ -83,21 +85,22 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
       setState(() {
         _testingOrs = false;
         _orsTestResult = result.isError
-            ? 'Failed: ${result.forUser}'
+            ? l.commonFailed(result.forUser)
             : 'Route OK! ${result.forUser}';
       });
     } catch (e) {
       setState(() {
         _testingOrs = false;
-        _orsTestResult = 'Failed: $e';
+        _orsTestResult = l.commonFailed('$e');
       });
     }
   }
 
   Future<void> _testGeocode() async {
+    final l = AppLocalizations.of(context);
     final apiKey = _orsKeyController.text.trim();
     if (apiKey.isEmpty) {
-      setState(() => _geocodeTestResult = 'Please enter an API key');
+      setState(() => _geocodeTestResult = l.commonEnterApiKey);
       return;
     }
 
@@ -116,21 +119,22 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
       setState(() {
         _testingGeocode = false;
         _geocodeTestResult = result.isError
-            ? 'Failed: ${result.forUser}'
+            ? l.commonFailed(result.forUser)
             : 'Geocode OK! ${result.forUser}';
       });
     } catch (e) {
       setState(() {
         _testingGeocode = false;
-        _geocodeTestResult = 'Failed: $e';
+        _geocodeTestResult = l.commonFailed('$e');
       });
     }
   }
 
   Future<void> _testSncf() async {
+    final l = AppLocalizations.of(context);
     final apiKey = _sncfKeyController.text.trim();
     if (apiKey.isEmpty) {
-      setState(() => _sncfTestResult = 'Please enter an API key');
+      setState(() => _sncfTestResult = l.commonEnterApiKey);
       return;
     }
 
@@ -152,21 +156,22 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
       setState(() {
         _testingSncf = false;
         _sncfTestResult = result.isError
-            ? 'Failed: ${result.forUser}'
+            ? l.commonFailed(result.forUser)
             : 'Transit OK! ${result.forUser}';
       });
     } catch (e) {
       setState(() {
         _testingSncf = false;
-        _sncfTestResult = 'Failed: $e';
+        _sncfTestResult = l.commonFailed('$e');
       });
     }
   }
 
   Future<void> _testPrim() async {
+    final l = AppLocalizations.of(context);
     final apiKey = _primKeyController.text.trim();
     if (apiKey.isEmpty) {
-      setState(() => _primTestResult = 'Please enter an API key');
+      setState(() => _primTestResult = l.commonEnterApiKey);
       return;
     }
 
@@ -188,18 +193,19 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
       setState(() {
         _testingPrim = false;
         _primTestResult = result.isError
-            ? 'Failed: ${result.forUser}'
+            ? l.commonFailed(result.forUser)
             : 'Transit OK! ${result.forUser}';
       });
     } catch (e) {
       setState(() {
         _testingPrim = false;
-        _primTestResult = 'Failed: $e';
+        _primTestResult = l.commonFailed('$e');
       });
     }
   }
 
   Future<void> _save() async {
+    final l = AppLocalizations.of(context);
     final configStorage = ref.read(configStorageProvider);
 
     await configStorage.setOrsApiKey(_orsKeyController.text.trim());
@@ -210,7 +216,7 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('API keys saved')),
+        SnackBar(content: Text(l.routingSaved)),
       );
       Navigator.pop(context);
     }
@@ -218,45 +224,46 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final subtitleStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         );
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Routing & Transit'),
+        title: Text(l.routingTitle),
         actions: [
-          TextButton(onPressed: _save, child: const Text('Save')),
+          TextButton(onPressed: _save, child: Text(l.routingSave)),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           // --- ORS Section ---
-          Text('OpenRouteService', style: Theme.of(context).textTheme.titleMedium),
+          Text(l.routingOrsTitle, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(
-            'Free API key at openrouteservice.org for car, bike, and walking routes.',
+            l.routingOrsDesc,
             style: subtitleStyle,
           ),
           const SizedBox(height: 12),
           _buildKeyField(
             controller: _orsKeyController,
-            label: 'ORS API Key',
+            label: l.routingOrsKeyLabel,
             obscure: _obscureOrs,
             onToggle: () => setState(() => _obscureOrs = !_obscureOrs),
           ),
           const SizedBox(height: 12),
           _buildTestButton(
             testing: _testingOrs,
-            label: 'Test Route (Paris \u2192 Versailles)',
+            label: l.routingOrsTestRoute,
             onPressed: _testOrs,
           ),
           _buildTestResult(_orsTestResult),
           const SizedBox(height: 12),
           _buildTestButton(
             testing: _testingGeocode,
-            label: 'Test Geocode (Tour Eiffel, Paris)',
+            label: l.routingOrsTestGeocode,
             onPressed: _testGeocode,
           ),
           _buildTestResult(_geocodeTestResult),
@@ -266,23 +273,23 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
           const SizedBox(height: 16),
 
           // --- SNCF Section ---
-          Text('SNCF (National Trains)', style: Theme.of(context).textTheme.titleMedium),
+          Text(l.routingSncfTitle, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(
-            'Free API key at ressources.data.sncf.com for TGV, TER, and Intercit\u00e9s routes across France.',
+            l.routingSncfDesc,
             style: subtitleStyle,
           ),
           const SizedBox(height: 12),
           _buildKeyField(
             controller: _sncfKeyController,
-            label: 'SNCF API Key',
+            label: l.routingSncfKeyLabel,
             obscure: _obscureSncf,
             onToggle: () => setState(() => _obscureSncf = !_obscureSncf),
           ),
           const SizedBox(height: 12),
           _buildTestButton(
             testing: _testingSncf,
-            label: 'Test Transit (Paris \u2192 Lyon)',
+            label: l.routingSncfTestTransit,
             onPressed: _testSncf,
           ),
           _buildTestResult(_sncfTestResult),
@@ -292,23 +299,23 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
           const SizedBox(height: 16),
 
           // --- PRIM Section ---
-          Text('PRIM / IDFM (\u00cele-de-France)', style: Theme.of(context).textTheme.titleMedium),
+          Text(l.routingPrimTitle, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(
-            'Free API key at prim.iledefrance-mobilites.fr for M\u00e9tro, RER, Bus, and Tram in Paris region.',
+            l.routingPrimDesc,
             style: subtitleStyle,
           ),
           const SizedBox(height: 12),
           _buildKeyField(
             controller: _primKeyController,
-            label: 'PRIM API Key',
+            label: l.routingPrimKeyLabel,
             obscure: _obscurePrim,
             onToggle: () => setState(() => _obscurePrim = !_obscurePrim),
           ),
           const SizedBox(height: 12),
           _buildTestButton(
             testing: _testingPrim,
-            label: 'Test Transit (Gare de Lyon \u2192 Ch\u00e2telet)',
+            label: l.routingPrimTestTransit,
             onPressed: _testPrim,
           ),
           _buildTestResult(_primTestResult),

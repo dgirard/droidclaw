@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/app_config.dart';
 import '../../core/providers/llm_response.dart';
 import '../../core/providers/provider_factory.dart';
+import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 import '../../shared/constants.dart';
 
@@ -23,6 +24,7 @@ class _ProviderConfigScreenState extends ConsumerState<ProviderConfigScreen> {
   String _selectedProvider = AppConstants.defaultProvider;
   bool _obscureApiKey = true;
   bool _testing = false;
+  bool _testPassed = false;
   String? _testResult;
 
   static const _providers = ['openrouter', 'anthropic', 'openai', 'groq', 'gemini'];
@@ -69,7 +71,7 @@ class _ProviderConfigScreenState extends ConsumerState<ProviderConfigScreen> {
 
       if (apiKey.isEmpty) {
         setState(() {
-          _testResult = 'Please enter an API key';
+          _testResult = AppLocalizations.of(context).commonEnterApiKey;
           _testing = false;
         });
         return;
@@ -95,12 +97,14 @@ class _ProviderConfigScreenState extends ConsumerState<ProviderConfigScreen> {
       );
 
       setState(() {
-        _testResult = 'Connection successful! Response: ${response.content}';
+        _testPassed = true;
+        _testResult = AppLocalizations.of(context).providerConfigTestSuccess(response.content);
         _testing = false;
       });
     } catch (e) {
       setState(() {
-        _testResult = 'Connection failed: $e';
+        _testPassed = false;
+        _testResult = AppLocalizations.of(context).providerConfigTestFailed(e.toString());
         _testing = false;
       });
     }
@@ -134,7 +138,7 @@ class _ProviderConfigScreenState extends ConsumerState<ProviderConfigScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settings saved')),
+        SnackBar(content: Text(AppLocalizations.of(context).providerConfigSaved)),
       );
       Navigator.pop(context);
     }
@@ -142,11 +146,12 @@ class _ProviderConfigScreenState extends ConsumerState<ProviderConfigScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Provider Config'),
+        title: Text(l.providerConfigTitle),
         actions: [
-          TextButton(onPressed: _save, child: const Text('Save')),
+          TextButton(onPressed: _save, child: Text(l.providerConfigSave)),
         ],
       ),
       body: ListView(
@@ -155,9 +160,9 @@ class _ProviderConfigScreenState extends ConsumerState<ProviderConfigScreen> {
           // Provider selection
           DropdownButtonFormField<String>(
             initialValue: _selectedProvider,
-            decoration: const InputDecoration(
-              labelText: 'Provider',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l.providerConfigProviderLabel,
+              border: const OutlineInputBorder(),
             ),
             items: _providers
                 .map((p) => DropdownMenuItem(value: p, child: Text(p)))
@@ -176,7 +181,7 @@ class _ProviderConfigScreenState extends ConsumerState<ProviderConfigScreen> {
             controller: _apiKeyController,
             obscureText: _obscureApiKey,
             decoration: InputDecoration(
-              labelText: 'API Key',
+              labelText: l.providerConfigApiKeyLabel,
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
                 icon: Icon(
@@ -193,10 +198,10 @@ class _ProviderConfigScreenState extends ConsumerState<ProviderConfigScreen> {
           // Model
           TextField(
             controller: _modelController,
-            decoration: const InputDecoration(
-              labelText: 'Model (optional)',
-              hintText: 'e.g. claude-sonnet-4-20250514',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l.providerConfigModelLabel,
+              hintText: l.providerConfigModelHint,
+              border: const OutlineInputBorder(),
             ),
           ),
 
@@ -205,10 +210,10 @@ class _ProviderConfigScreenState extends ConsumerState<ProviderConfigScreen> {
           // API Base
           TextField(
             controller: _apiBaseController,
-            decoration: const InputDecoration(
-              labelText: 'API Base URL (optional)',
-              hintText: 'Leave empty for default',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l.providerConfigApiBaseLabel,
+              hintText: l.providerConfigApiBaseHint,
+              border: const OutlineInputBorder(),
             ),
           ),
 
@@ -223,7 +228,7 @@ class _ProviderConfigScreenState extends ConsumerState<ProviderConfigScreen> {
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Test Connection'),
+                : Text(l.providerConfigTestConnection),
           ),
 
           if (_testResult != null) ...[
@@ -231,7 +236,7 @@ class _ProviderConfigScreenState extends ConsumerState<ProviderConfigScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: _testResult!.startsWith('Connection successful')
+                color: _testPassed
                     ? Colors.green.withValues(alpha: 0.1)
                     : Colors.red.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
@@ -239,9 +244,7 @@ class _ProviderConfigScreenState extends ConsumerState<ProviderConfigScreen> {
               child: Text(
                 _testResult!,
                 style: TextStyle(
-                  color: _testResult!.startsWith('Connection successful')
-                      ? Colors.green
-                      : Colors.red,
+                  color: _testPassed ? Colors.green : Colors.red,
                 ),
               ),
             ),

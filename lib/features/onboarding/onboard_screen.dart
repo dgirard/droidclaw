@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/app_config.dart';
 import '../../core/providers/llm_response.dart';
 import '../../core/providers/provider_factory.dart';
+import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 import '../../shared/constants.dart';
 
@@ -24,12 +25,12 @@ class _OnboardScreenState extends ConsumerState<OnboardScreen> {
   bool _testPassed = false;
   String? _testMessage;
 
-  static const _providers = [
-    ('openrouter', 'OpenRouter', 'Access many models with one API key'),
-    ('anthropic', 'Anthropic', 'Direct access to Claude models'),
-    ('openai', 'OpenAI', 'Access to GPT models'),
-    ('groq', 'Groq', 'Fast inference for open models'),
-    ('gemini', 'Google Gemini', 'Google AI models with free tier'),
+  List<(String, String, String)> _providers(AppLocalizations l) => [
+    ('openrouter', l.providerOpenRouter, l.providerOpenRouterDesc),
+    ('anthropic', l.providerAnthropic, l.providerAnthropicDesc),
+    ('openai', l.providerOpenAI, l.providerOpenAIDesc),
+    ('groq', l.providerGroq, l.providerGroqDesc),
+    ('gemini', l.providerGemini, l.providerGeminiDesc),
   ];
 
   @override
@@ -49,7 +50,7 @@ class _OnboardScreenState extends ConsumerState<OnboardScreen> {
   Future<void> _testConnection() async {
     final apiKey = _apiKeyController.text.trim();
     if (apiKey.isEmpty) {
-      setState(() => _testMessage = 'Please enter an API key');
+      setState(() => _testMessage = AppLocalizations.of(context).onboardEnterApiKeyError);
       return;
     }
 
@@ -76,13 +77,13 @@ class _OnboardScreenState extends ConsumerState<OnboardScreen> {
 
       setState(() {
         _testPassed = true;
-        _testMessage = 'Connected! Response: ${response.content}';
+        _testMessage = AppLocalizations.of(context).onboardTestSuccess(response.content);
         _testing = false;
       });
     } catch (e) {
       setState(() {
         _testPassed = false;
-        _testMessage = 'Failed: $e';
+        _testMessage = AppLocalizations.of(context).commonFailed(e.toString());
         _testing = false;
       });
     }
@@ -152,6 +153,7 @@ class _OnboardScreenState extends ConsumerState<OnboardScreen> {
   }
 
   Widget _buildWelcomePage(ThemeData theme) {
+    final l = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Column(
@@ -164,14 +166,13 @@ class _OnboardScreenState extends ConsumerState<OnboardScreen> {
           ),
           const SizedBox(height: 24),
           Text(
-            'Welcome to DroidClaw',
+            l.onboardWelcome,
             style: theme.textTheme.headlineMedium,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
           Text(
-            'Your personal AI assistant on Android.\n'
-            'Let\'s set up your LLM provider to get started.',
+            l.onboardSubtitle,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -180,7 +181,7 @@ class _OnboardScreenState extends ConsumerState<OnboardScreen> {
           const SizedBox(height: 48),
           FilledButton(
             onPressed: _nextPage,
-            child: const Text('Get Started'),
+            child: Text(l.onboardGetStarted),
           ),
         ],
       ),
@@ -188,23 +189,25 @@ class _OnboardScreenState extends ConsumerState<OnboardScreen> {
   }
 
   Widget _buildProviderPage(ThemeData theme) {
+    final l = AppLocalizations.of(context);
+    final providers = _providers(l);
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 24),
-          Text('Choose a provider', style: theme.textTheme.headlineSmall),
+          Text(l.onboardChooseProvider, style: theme.textTheme.headlineSmall),
           const SizedBox(height: 8),
           Text(
-            'Select which LLM provider you want to use.',
+            l.onboardChooseProviderSubtitle,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 24),
-          ...List.generate(_providers.length, (i) {
-            final (id, name, desc) = _providers[i];
+          ...List.generate(providers.length, (i) {
+            final (id, name, desc) = providers[i];
             final selected = _selectedProvider == id;
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -232,7 +235,7 @@ class _OnboardScreenState extends ConsumerState<OnboardScreen> {
             alignment: Alignment.centerRight,
             child: FilledButton(
               onPressed: _nextPage,
-              child: const Text('Next'),
+              child: Text(l.onboardNext),
             ),
           ),
         ],
@@ -241,16 +244,17 @@ class _OnboardScreenState extends ConsumerState<OnboardScreen> {
   }
 
   Widget _buildApiKeyPage(ThemeData theme) {
+    final l = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 24),
-          Text('Enter your API key', style: theme.textTheme.headlineSmall),
+          Text(l.onboardEnterApiKey, style: theme.textTheme.headlineSmall),
           const SizedBox(height: 8),
           Text(
-            'Your key is stored securely on device.',
+            l.onboardApiKeySecure,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -259,9 +263,9 @@ class _OnboardScreenState extends ConsumerState<OnboardScreen> {
           TextField(
             controller: _apiKeyController,
             obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'API Key',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l.onboardApiKeyLabel,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 16),
@@ -273,7 +277,7 @@ class _OnboardScreenState extends ConsumerState<OnboardScreen> {
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Test Connection'),
+                : Text(l.onboardTestConnection),
           ),
           if (_testMessage != null) ...[
             const SizedBox(height: 12),
@@ -289,7 +293,7 @@ class _OnboardScreenState extends ConsumerState<OnboardScreen> {
             alignment: Alignment.centerRight,
             child: FilledButton(
               onPressed: _testPassed ? _complete : null,
-              child: const Text('Finish Setup'),
+              child: Text(l.onboardFinishSetup),
             ),
           ),
         ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/config/cron_config.dart';
+import '../../l10n/l10n.dart';
 
 /// Create/edit a scheduled prompt.
 class CronEditScreen extends StatefulWidget {
@@ -21,17 +22,20 @@ class _CronEditScreenState extends State<CronEditScreen> {
   bool _isEditing = false;
   String? _editingId;
 
-  static const _intervalPresets = [
-    ('15 min', Duration(minutes: 15)),
-    ('30 min', Duration(minutes: 30)),
-    ('1 hour', Duration(hours: 1)),
-    ('2 hours', Duration(hours: 2)),
-    ('6 hours', Duration(hours: 6)),
-    ('12 hours', Duration(hours: 12)),
-    ('24 hours', Duration(hours: 24)),
+  static List<(String, Duration)> _intervalPresets(AppLocalizations l) => [
+    (l.cronEditInterval15, const Duration(minutes: 15)),
+    (l.cronEditInterval30, const Duration(minutes: 30)),
+    (l.cronEditInterval1h, const Duration(hours: 1)),
+    (l.cronEditInterval2h, const Duration(hours: 2)),
+    (l.cronEditInterval6h, const Duration(hours: 6)),
+    (l.cronEditInterval12h, const Duration(hours: 12)),
+    (l.cronEditInterval24h, const Duration(hours: 24)),
   ];
 
-  static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static List<String> _dayNames(AppLocalizations l) => [
+    l.cronEditMon, l.cronEditTue, l.cronEditWed, l.cronEditThu,
+    l.cronEditFri, l.cronEditSat, l.cronEditSun,
+  ];
 
   @override
   void didChangeDependencies() {
@@ -61,16 +65,17 @@ class _CronEditScreenState extends State<CronEditScreen> {
   }
 
   void _save() {
+    final l = AppLocalizations.of(context);
     if (_nameController.text.trim().isEmpty ||
         _promptController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name and prompt are required')),
+        SnackBar(content: Text(l.cronEditNameRequired)),
       );
       return;
     }
     if (_scheduleType == ScheduleType.timeOfDay && _times.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one time')),
+        SnackBar(content: Text(l.cronEditTimeRequired)),
       );
       return;
     }
@@ -103,13 +108,16 @@ class _CronEditScreenState extends State<CronEditScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final presets = _intervalPresets(l);
+    final dayNamesList = _dayNames(l);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_editingId != null ? 'Edit Prompt' : 'New Prompt'),
+        title: Text(_editingId != null ? l.cronEditTitleEdit : l.cronEditTitle),
         actions: [
-          TextButton(onPressed: _save, child: const Text('Save')),
+          TextButton(onPressed: _save, child: Text(l.cronEditSave)),
         ],
       ),
       body: ListView(
@@ -118,9 +126,9 @@ class _CronEditScreenState extends State<CronEditScreen> {
           // Name
           TextField(
             controller: _nameController,
-            decoration: const InputDecoration(
-              labelText: 'Name',
-              hintText: 'e.g., Daily news brief',
+            decoration: InputDecoration(
+              labelText: l.cronEditName,
+              hintText: l.cronEditNameHint,
             ),
           ),
           const SizedBox(height: 16),
@@ -129,28 +137,28 @@ class _CronEditScreenState extends State<CronEditScreen> {
           TextField(
             controller: _promptController,
             maxLines: 4,
-            decoration: const InputDecoration(
-              labelText: 'Prompt',
-              hintText: 'What should the AI do?',
+            decoration: InputDecoration(
+              labelText: l.cronEditPrompt,
+              hintText: l.cronEditPromptHint,
               alignLabelWithHint: true,
             ),
           ),
           const SizedBox(height: 24),
 
           // Schedule type
-          Text('Schedule', style: theme.textTheme.titleSmall),
+          Text(l.cronEditSchedule, style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
           SegmentedButton<ScheduleType>(
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: ScheduleType.interval,
-                label: Text('Interval'),
-                icon: Icon(Icons.timer_outlined),
+                label: Text(l.cronEditInterval),
+                icon: const Icon(Icons.timer_outlined),
               ),
               ButtonSegment(
                 value: ScheduleType.timeOfDay,
-                label: Text('Specific times'),
-                icon: Icon(Icons.access_time),
+                label: Text(l.cronEditSpecificTimes),
+                icon: const Icon(Icons.access_time),
               ),
             ],
             selected: {_scheduleType},
@@ -164,7 +172,7 @@ class _CronEditScreenState extends State<CronEditScreen> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _intervalPresets.map((preset) {
+              children: presets.map((preset) {
                 final isSelected = _interval == preset.$2;
                 return ChoiceChip(
                   label: Text(preset.$1),
@@ -194,7 +202,7 @@ class _CronEditScreenState extends State<CronEditScreen> {
                 }),
                 ActionChip(
                   avatar: const Icon(Icons.add, size: 18),
-                  label: const Text('Add time'),
+                  label: Text(l.cronEditAddTime),
                   onPressed: _addTime,
                 ),
               ],
@@ -202,7 +210,7 @@ class _CronEditScreenState extends State<CronEditScreen> {
             const SizedBox(height: 16),
 
             // Days of week
-            Text('Days', style: theme.textTheme.bodySmall),
+            Text(l.cronEditDays, style: theme.textTheme.bodySmall),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -211,7 +219,7 @@ class _CronEditScreenState extends State<CronEditScreen> {
                 final isSelected =
                     _daysOfWeek == null || _daysOfWeek!.contains(day);
                 return FilterChip(
-                  label: Text(_dayNames[index]),
+                  label: Text(dayNamesList[index]),
                   selected: isSelected,
                   onSelected: (selected) {
                     setState(() {
@@ -238,7 +246,7 @@ class _CronEditScreenState extends State<CronEditScreen> {
           const SizedBox(height: 24),
 
           // Session strategy
-          Text('Conversation', style: theme.textTheme.titleSmall),
+          Text(l.cronEditConversation, style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
           RadioGroup<SessionStrategy>(
             groupValue: _sessionStrategy,
@@ -248,14 +256,13 @@ class _CronEditScreenState extends State<CronEditScreen> {
             child: Column(
               children: [
                 RadioListTile<SessionStrategy>(
-                  title: const Text('New conversation each time'),
-                  subtitle: const Text('Each execution is independent'),
+                  title: Text(l.cronEditNewEach),
+                  subtitle: Text(l.cronEditNewEachSubtitle),
                   value: SessionStrategy.newEach,
                 ),
                 RadioListTile<SessionStrategy>(
-                  title: const Text('Continue in same thread'),
-                  subtitle:
-                      const Text('The AI remembers previous executions'),
+                  title: Text(l.cronEditSameThread),
+                  subtitle: Text(l.cronEditSameThreadSubtitle),
                   value: SessionStrategy.sameThread,
                 ),
               ],

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
+
 /// Chat input bar with text field, send button, and mic button.
 class InputBar extends StatefulWidget {
   final void Function(String text) onSend;
@@ -63,7 +65,7 @@ class _InputBarState extends State<InputBar> {
             IconButton(
               icon: const Icon(Icons.mic_outlined),
               onPressed: widget.enabled ? widget.onMicPressed : null,
-              tooltip: 'Voice input',
+              tooltip: AppLocalizations.of(context).chatVoiceInput,
             ),
 
           // Text field
@@ -77,7 +79,7 @@ class _InputBarState extends State<InputBar> {
               textInputAction: TextInputAction.newline,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: 'Message DroidClaw...',
+                hintText: AppLocalizations.of(context).chatInputHint,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
@@ -100,7 +102,7 @@ class _InputBarState extends State<InputBar> {
             child: IconButton.filled(
               icon: const Icon(Icons.send),
               onPressed: _hasText && widget.enabled ? _send : null,
-              tooltip: 'Send',
+              tooltip: AppLocalizations.of(context).chatSend,
             ),
           ),
         ],

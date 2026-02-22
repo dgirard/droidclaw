@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/agent/agent_loop.dart';
+import '../../l10n/l10n.dart';
 
 /// Shows the current agent status (thinking, tool call, summarizing).
 class AgentStatusIndicator extends StatelessWidget {
@@ -13,7 +14,7 @@ class AgentStatusIndicator extends StatelessWidget {
     if (event == null) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
-    final (icon, label) = _eventInfo(event!);
+    final (icon, label) = _eventInfo(context, event!);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -42,23 +43,26 @@ class AgentStatusIndicator extends StatelessWidget {
     );
   }
 
-  (IconData, String) _eventInfo(AgentEvent event) => switch (event) {
+  (IconData, String) _eventInfo(BuildContext context, AgentEvent event) {
+    final l = AppLocalizations.of(context);
+    return switch (event) {
         ThinkingEvent(iteration: final i) => (
             Icons.psychology_outlined,
-            i == 0 ? 'Thinking...' : 'Thinking (step ${i + 1})...'
+            i == 0 ? l.statusThinking : l.statusThinkingStep(i + 1)
           ),
         SummarizingEvent() => (
             Icons.compress_outlined,
-            'Summarizing conversation...'
+            l.statusSummarizing
           ),
         ToolCallEvent(name: final name) => (
             Icons.build_outlined,
-            'Using $name...'
+            l.statusUsingTool(name)
           ),
         ToolResultEvent(name: final name) => (
             Icons.check_circle_outline,
-            'Got result from $name'
+            l.statusGotResult(name)
           ),
-        _ => (Icons.hourglass_empty, 'Processing...'),
+        _ => (Icons.hourglass_empty, l.statusProcessing),
       };
+  }
 }

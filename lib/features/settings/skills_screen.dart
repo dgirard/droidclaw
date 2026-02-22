@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/skills/skill.dart';
+import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 
 /// Screen for managing installed skills.
@@ -30,6 +31,7 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
   }
 
   Future<void> _installSkill() async {
+    final l = AppLocalizations.of(context);
     final url = _urlController.text.trim();
     if (url.isEmpty) return;
 
@@ -42,13 +44,13 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
       await _loadSkills();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Installed skill: $name')),
+          SnackBar(content: Text(l.skillsInstalled(name))),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Install failed: $e')),
+          SnackBar(content: Text(l.skillsInstallFailed('$e'))),
         );
       }
     } finally {
@@ -57,19 +59,20 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
   }
 
   Future<void> _uninstallSkill(SkillInfo skill) async {
+    final l = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Uninstall Skill'),
-        content: Text('Remove "${skill.name}"?'),
+        title: Text(l.skillsUninstallTitle),
+        content: Text(l.skillsUninstallContent(skill.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Uninstall'),
+            child: Text(l.skillsUninstall),
           ),
         ],
       ),
@@ -83,13 +86,13 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
       await _loadSkills();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Uninstalled: ${skill.name}')),
+          SnackBar(content: Text(l.skillsUninstalled(skill.name))),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Uninstall failed: $e')),
+          SnackBar(content: Text(l.skillsUninstallFailed('$e'))),
         );
       }
     }
@@ -103,8 +106,10 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Skills')),
+      appBar: AppBar(title: Text(l.skillsTitle)),
       body: Column(
         children: [
           // Install from URL
@@ -115,10 +120,10 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
                 Expanded(
                   child: TextField(
                     controller: _urlController,
-                    decoration: const InputDecoration(
-                      labelText: 'GitHub URL',
-                      hintText: 'https://github.com/user/repo/blob/main/SKILL.md',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: l.skillsGithubUrl,
+                      hintText: l.skillsGithubUrlHint,
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                 ),
@@ -132,7 +137,7 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.download),
-                  tooltip: 'Install',
+                  tooltip: l.skillsInstall,
                 ),
               ],
             ),
@@ -143,7 +148,7 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
           // Installed skills list
           Expanded(
             child: _skills.isEmpty
-                ? const Center(child: Text('No skills installed'))
+                ? Center(child: Text(l.skillsNoSkills))
                 : ListView.builder(
                     itemCount: _skills.length,
                     itemBuilder: (context, index) {

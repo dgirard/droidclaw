@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/telegram_provider.dart';
 import '../../shared/constants.dart';
@@ -12,66 +13,63 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(appConfigProvider);
+    final l = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(l.settingsTitle)),
       body: ListView(
         children: [
           // Provider section
-          _SectionHeader(title: 'LLM Provider'),
+          _SectionHeader(title: l.settingsSectionProvider),
           ListTile(
             leading: const Icon(Icons.cloud_outlined),
-            title: const Text('Provider'),
+            title: Text(l.settingsProvider),
             subtitle: Text(config.agent.provider),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.pushNamed(context, '/settings/provider'),
           ),
           ListTile(
             leading: const Icon(Icons.memory_outlined),
-            title: const Text('Model'),
+            title: Text(l.settingsModel),
             subtitle: Text(config.agent.model),
           ),
 
           const Divider(),
 
           // Agent section
-          _SectionHeader(title: 'Agent'),
+          _SectionHeader(title: l.settingsSectionAgent),
           ListTile(
             leading: const Icon(Icons.tune_outlined),
-            title: const Text('Max tokens'),
+            title: Text(l.settingsMaxTokens),
             subtitle: Text('${config.agent.maxTokens}'),
           ),
           ListTile(
             leading: const Icon(Icons.thermostat_outlined),
-            title: const Text('Temperature'),
+            title: Text(l.settingsTemperature),
             subtitle: Text('${config.agent.temperature}'),
           ),
           ListTile(
             leading: const Icon(Icons.repeat_outlined),
-            title: const Text('Max tool iterations'),
+            title: Text(l.settingsMaxToolIterations),
             subtitle: Text('${config.agent.maxToolIterations}'),
           ),
 
           const Divider(),
 
           // Tools section
-          _SectionHeader(title: 'Tools'),
+          _SectionHeader(title: l.settingsSectionTools),
           ListTile(
             leading: const Icon(Icons.build_outlined),
-            title: const Text('Manage Tools'),
-            subtitle: const Text('Enable or disable agent tools'),
+            title: Text(l.settingsManageTools),
+            subtitle: Text(l.settingsManageToolsSubtitle),
             trailing: const Icon(Icons.chevron_right),
             onTap: () =>
                 Navigator.pushNamed(context, '/settings/tools'),
           ),
           ListTile(
             leading: const Icon(Icons.search_outlined),
-            title: const Text('Web Search'),
-            subtitle: Text(
-              config.tools.webSearchMaxResults > 0
-                  ? 'Configure Brave Search API'
-                  : 'Configure Brave Search API',
-            ),
+            title: Text(l.settingsWebSearch),
+            subtitle: Text(l.settingsWebSearchSubtitle),
             trailing: const Icon(Icons.chevron_right),
             onTap: () =>
                 Navigator.pushNamed(context, '/settings/web-search'),
@@ -79,8 +77,8 @@ class SettingsScreen extends ConsumerWidget {
 
           ListTile(
             leading: const Icon(Icons.directions_outlined),
-            title: const Text('Routing'),
-            subtitle: const Text('Configure routing & transit APIs'),
+            title: Text(l.settingsRouting),
+            subtitle: Text(l.settingsRoutingSubtitle),
             trailing: const Icon(Icons.chevron_right),
             onTap: () =>
                 Navigator.pushNamed(context, '/settings/routing'),
@@ -88,8 +86,8 @@ class SettingsScreen extends ConsumerWidget {
 
           ListTile(
             leading: const Icon(Icons.schedule_outlined),
-            title: const Text('Scheduled Prompts'),
-            subtitle: const Text('Automated recurring tasks'),
+            title: Text(l.settingsScheduledPrompts),
+            subtitle: Text(l.settingsScheduledPromptsSubtitle),
             trailing: const Icon(Icons.chevron_right),
             onTap: () =>
                 Navigator.pushNamed(context, '/settings/crons'),
@@ -97,16 +95,16 @@ class SettingsScreen extends ConsumerWidget {
 
           const Divider(),
 
-          // Telegram section
-          _SectionHeader(title: 'Channels'),
+          // Channels section
+          _SectionHeader(title: l.settingsSectionChannels),
           Builder(
             builder: (context) {
               final telegramState = ref.watch(telegramProvider);
               return ListTile(
                 leading: const Icon(Icons.telegram),
-                title: const Text('Telegram Bot'),
+                title: Text(l.settingsTelegramBot),
                 subtitle: Text(
-                  telegramState.isRunning ? 'Running' : 'Disabled',
+                  telegramState.isRunning ? l.settingsTelegramRunning : l.settingsTelegramDisabled,
                 ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () =>
@@ -120,16 +118,24 @@ class SettingsScreen extends ConsumerWidget {
           // Skills section
           ListTile(
             leading: const Icon(Icons.extension_outlined),
-            title: const Text('Skills'),
-            subtitle: const Text('Manage installed skills'),
+            title: Text(l.settingsSkills),
+            subtitle: Text(l.settingsSkillsSubtitle),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.pushNamed(context, '/settings/skills'),
+          ),
+
+          // Language section
+          ListTile(
+            leading: const Icon(Icons.language_outlined),
+            title: Text(l.localeSettingsTitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.pushNamed(context, '/settings/locale'),
           ),
 
           const Divider(),
 
           // About
-          _SectionHeader(title: 'About'),
+          _SectionHeader(title: l.settingsSectionAbout),
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text(AppConstants.appName),

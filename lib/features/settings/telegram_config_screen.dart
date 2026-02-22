@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/telegram_provider.dart';
 import '../../shared/constants.dart';
@@ -21,6 +22,7 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
   bool _obscureToken = true;
   bool _testing = false;
   String? _testResult;
+  bool _testPassed = false;
 
   @override
   void initState() {
@@ -49,40 +51,48 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
   }
 
   Future<void> _testConnection() async {
+    final l = AppLocalizations.of(context);
     final token = _tokenController.text.trim();
     if (token.isEmpty) {
-      setState(() => _testResult = 'Please enter a bot token');
+      setState(() {
+        _testResult = l.telegramEnterTokenError;
+        _testPassed = false;
+      });
       return;
     }
 
     setState(() {
       _testing = true;
       _testResult = null;
+      _testPassed = false;
     });
 
     try {
       final username =
           await ref.read(telegramProvider.notifier).testConnection(token);
       setState(() {
-        _testResult = 'Connected! Bot: @$username';
+        _testResult = l.telegramTestSuccess(username);
+        _testPassed = true;
         _testing = false;
       });
     } catch (e) {
       setState(() {
-        _testResult = 'Failed: $e';
+        _testResult = l.commonFailed(e.toString());
+        _testPassed = false;
         _testing = false;
       });
     }
   }
 
   Future<void> _toggleBot(bool enable) async {
+    final l = AppLocalizations.of(context);
     final notifier = ref.read(telegramProvider.notifier);
 
     if (enable) {
       final token = _tokenController.text.trim();
       if (token.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter a bot token first')),
+          SnackBar(content: Text(l.telegramEnterToken)),
         );
         return;
       }
@@ -101,8 +111,9 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
         .setAllowedUsers(_allowedUsersController.text.trim());
 
     if (mounted) {
+      final l = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Allowed users updated')),
+        SnackBar(content: Text(l.telegramUsersUpdated)),
       );
     }
   }
@@ -112,14 +123,15 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
     final telegramState = ref.watch(telegramProvider);
     final theme = Theme.of(context);
     final hasToken = _tokenController.text.trim().isNotEmpty;
+    final l = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Telegram Bot')),
+      appBar: AppBar(title: Text(l.telegramTitle)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           // Status card
-          if (telegramState.isRunning) _buildStatusCard(telegramState, theme),
+          if (telegramState.isRunning) _buildStatusCard(context, telegramState, theme),
 
           // Error display
           if (telegramState.error != null) ...[
@@ -150,8 +162,8 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
             controller: _tokenController,
             obscureText: _obscureToken,
             decoration: InputDecoration(
-              labelText: 'Bot Token',
-              helperText: 'Get one from @BotFather on Telegram',
+              labelText: l.telegramBotToken,
+              helperText: l.telegramBotTokenHelper,
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
                 icon: Icon(
@@ -174,7 +186,7 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Test Connection'),
+                : Text(l.telegramTestConnection),
           ),
 
           if (_testResult != null) ...[
@@ -182,9 +194,7 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
             Text(
               _testResult!,
               style: TextStyle(
-                color: _testResult!.startsWith('Connected')
-                    ? Colors.green
-                    : Colors.red,
+                color: _testPassed ? Colors.green : Colors.red,
               ),
             ),
           ],
@@ -193,13 +203,13 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
 
           // Enable/disable toggle
           SwitchListTile(
-            title: const Text('Enable Bot'),
+            title: Text(l.telegramEnableBot),
             subtitle: Text(
               telegramState.isRunning
-                  ? 'Bot is running'
+                  ? l.telegramBotRunning
                   : telegramState.isEnabled
-                      ? 'Starting...'
-                      : 'Bot is disabled',
+                      ? l.telegramBotStarting
+                      : l.telegramBotDisabled,
             ),
             value: telegramState.isEnabled,
             onChanged: hasToken ? _toggleBot : null,
@@ -211,12 +221,11 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
           // Allowed users
           TextField(
             controller: _allowedUsersController,
-            decoration: const InputDecoration(
-              labelText: 'Allowed Users (optional)',
-              helperText:
-                  'Comma-separated Telegram usernames. Leave empty for all.',
-              hintText: 'alice, bob, charlie',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l.telegramAllowedUsers,
+              helperText: l.telegramAllowedUsersHelper,
+              hintText: l.telegramAllowedUsersHint,
+              border: const OutlineInputBorder(),
             ),
             onSubmitted: (_) => _saveAllowedUsers(),
           ),
@@ -227,7 +236,7 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
             alignment: Alignment.centerRight,
             child: TextButton(
               onPressed: _saveAllowedUsers,
-              child: const Text('Save Users'),
+              child: Text(l.telegramSaveUsers),
             ),
           ),
 
@@ -243,15 +252,9 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('How to set up', style: theme.textTheme.titleSmall),
+                Text(l.telegramHowToSetup, style: theme.textTheme.titleSmall),
                 const SizedBox(height: 8),
-                const Text(
-                  '1. Open Telegram and search for @BotFather\n'
-                  '2. Send /newbot and follow the instructions\n'
-                  '3. Copy the bot token and paste it above\n'
-                  '4. Test the connection, then enable the bot\n'
-                  '5. Send a message to your bot on Telegram!',
-                ),
+                Text(l.telegramSetupSteps),
               ],
             ),
           ),
@@ -260,7 +263,8 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
     );
   }
 
-  Widget _buildStatusCard(TelegramState state, ThemeData theme) {
+  Widget _buildStatusCard(BuildContext context, TelegramState state, ThemeData theme) {
+    final l = AppLocalizations.of(context);
     final timeFormat = DateFormat('HH:mm');
 
     return Card(
@@ -279,7 +283,7 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Bot Active',
+                  l.telegramBotActive,
                   style: theme.textTheme.titleSmall?.copyWith(
                     color: Colors.green,
                   ),
@@ -300,14 +304,14 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
               children: [
                 _StatChip(
                   icon: Icons.message_outlined,
-                  label: '${state.messageCount} messages',
+                  label: l.telegramMessages(state.messageCount),
                 ),
                 const SizedBox(width: 12),
                 if (state.lastMessageTime != null)
                   _StatChip(
                     icon: Icons.access_time,
-                    label:
-                        'Last: ${timeFormat.format(state.lastMessageTime!)}',
+                    label: l.telegramLastMessage(
+                        timeFormat.format(state.lastMessageTime!)),
                   ),
               ],
             ),

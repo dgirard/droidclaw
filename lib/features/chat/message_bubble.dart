@@ -4,6 +4,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../l10n/l10n.dart';
 import '../../providers/chat_provider.dart';
 
 /// Displays a single chat message as a bubble.
@@ -97,9 +98,9 @@ class MessageBubble extends StatelessWidget {
                     Clipboard.setData(
                         ClipboardData(text: message.content));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Copied to clipboard'),
-                        duration: Duration(milliseconds: 1500),
+                      SnackBar(
+                        content: Text(AppLocalizations.of(context).chatCopied),
+                        duration: const Duration(milliseconds: 1500),
                       ),
                     );
                   },

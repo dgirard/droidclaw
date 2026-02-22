@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../providers/chat_provider.dart';
 import 'agent_status_indicator.dart';
 import 'input_bar.dart';
@@ -49,21 +50,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('DroidClaw'),
+        title: Text(AppLocalizations.of(context).chatTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
-            tooltip: 'Conversations',
+            tooltip: AppLocalizations.of(context).chatConversations,
             onPressed: () => Navigator.pushNamed(context, '/history'),
           ),
           IconButton(
             icon: const Icon(Icons.add_comment_outlined),
-            tooltip: 'New session',
+            tooltip: AppLocalizations.of(context).chatNewSession,
             onPressed: () => chatNotifier.newSession(),
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Settings',
+            tooltip: AppLocalizations.of(context).chatSettings,
             onPressed: () => Navigator.pushNamed(context, '/settings'),
           ),
         ],
@@ -101,6 +102,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Widget _buildEmptyState(BuildContext context) {
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -114,14 +116,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'DroidClaw',
+              l.chatEmptyTitle,
               style: theme.textTheme.headlineMedium?.copyWith(
                 color: theme.colorScheme.primary,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Your personal AI assistant.\nType a message to get started.',
+              l.chatEmptySubtitle,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
