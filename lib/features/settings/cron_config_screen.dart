@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -20,13 +19,11 @@ class CronConfigScreen extends ConsumerStatefulWidget {
 
 class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
   List<CronDefinition> _crons = [];
-  bool _serviceRunning = false;
 
   @override
   void initState() {
     super.initState();
     _loadCrons();
-    _checkServiceStatus();
   }
 
   void _loadCrons() {
@@ -34,11 +31,6 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
     setState(() {
       _crons = configStorage.getCronDefinitions();
     });
-  }
-
-  Future<void> _checkServiceStatus() async {
-    final running = await FlutterForegroundTask.isRunningService;
-    if (mounted) setState(() => _serviceRunning = running);
   }
 
   Future<void> _saveCrons() async {
@@ -83,6 +75,7 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final serviceRunning = ref.watch(backgroundServiceProvider).isRunning;
 
     return Scaffold(
       appBar: AppBar(title: Text(l.cronTitle)),
@@ -103,7 +96,7 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
           ? _buildEmptyState(context)
           : ListView(
               children: [
-                _buildServiceStatus(context),
+                _buildServiceStatus(context, serviceRunning),
                 ...List.generate(_crons.length, (index) {
                   final cron = _crons[index];
                   final hasRun = cron.lastRun != null;
@@ -162,15 +155,16 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
     );
   }
 
-  Widget _buildServiceStatus(BuildContext context) {
+  Widget _buildServiceStatus(BuildContext context, bool serviceRunning) {
     final l = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final hasEnabledCrons = _crons.any((c) => c.enabled);
+    final ok = serviceRunning && hasEnabledCrons;
     return Container(
       margin: const EdgeInsets.all(12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: _serviceRunning && hasEnabledCrons
+        color: ok
             ? theme.colorScheme.primaryContainer
             : theme.colorScheme.errorContainer,
         borderRadius: BorderRadius.circular(12),
@@ -178,11 +172,9 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
       child: Row(
         children: [
           Icon(
-            _serviceRunning && hasEnabledCrons
-                ? Icons.check_circle_outline
-                : Icons.warning_amber_rounded,
+            ok ? Icons.check_circle_outline : Icons.warning_amber_rounded,
             size: 20,
-            color: _serviceRunning && hasEnabledCrons
+            color: ok
                 ? theme.colorScheme.onPrimaryContainer
                 : theme.colorScheme.onErrorContainer,
           ),
@@ -191,11 +183,11 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
             child: Text(
               !hasEnabledCrons
                   ? l.cronNoPromptsEnabled
-                  : _serviceRunning
+                  : serviceRunning
                       ? l.cronServiceRunning
                       : l.cronServiceNotRunning,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: _serviceRunning && hasEnabledCrons
+                color: ok
                     ? theme.colorScheme.onPrimaryContainer
                     : theme.colorScheme.onErrorContainer,
               ),
