@@ -2,12 +2,17 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../l10n/l10n.dart';
 import 'tool.dart';
 
 /// Weather forecast tool using Open-Meteo API with Météo-France models
 /// (AROME 1.3km + ARPEGE). No API key required, pure HTTP.
 class WeatherTool extends Tool {
   static const _baseUrl = 'https://api.open-meteo.com/v1/meteofrance';
+
+  final String locale;
+
+  WeatherTool({this.locale = 'en'});
 
   @override
   String get name => 'weather';
@@ -51,6 +56,7 @@ class WeatherTool extends Tool {
     }
 
     final days = ((arguments['days'] as int?) ?? 2).clamp(1, 7);
+    final l = tr(locale);
 
     try {
       final uri = Uri.parse(
@@ -96,9 +102,9 @@ class WeatherTool extends Tool {
         final precip = (precipSums[i] as num?)?.toDouble() ?? 0;
         final wind = (windMaxs[i] as num?)?.toDouble();
         final code = (dailyCodes[i] as int?) ?? -1;
-        final condition = _wmoToFrench(code);
+        final condition = _wmoDescription(code);
 
-        final dayLabel = i == 0 ? "Aujourd'hui ($date)" : date;
+        final dayLabel = i == 0 ? l.weatherToday(date) : date;
 
         llmBuf.writeln('=== $dayLabel ===');
         llmBuf.writeln('Condition: $condition (WMO $code)');
@@ -117,7 +123,7 @@ class WeatherTool extends Tool {
             ? '${tMin.round()}-${tMax.round()}°C'
             : '?';
         final precipStr = precip > 0 ? ', ${precip}mm' : '';
-        final label = i == 0 ? "Auj" : date.substring(5); // MM-DD
+        final label = i == 0 ? l.weatherTodayShort : date.substring(5); // MM-DD
         userBuf.write('$label: $tempStr, $condition$precipStr');
         if (i < dates.length - 1) userBuf.write(' | ');
       }
@@ -139,8 +145,9 @@ class WeatherTool extends Tool {
     final winds = hourly['wind_speed_10m'] as List? ?? [];
     final codes = hourly['weather_code'] as List? ?? [];
 
+    final l = tr(locale);
     final buf = StringBuffer();
-    final periods = {'Matin (9h)': 9, 'Après-midi (15h)': 15, 'Soir (21h)': 21};
+    final periods = {l.weatherMorning: 9, l.weatherAfternoon: 15, l.weatherEvening: 21};
 
     for (final entry in periods.entries) {
       final idx = entry.value + (dayIndex * 24);
@@ -152,10 +159,10 @@ class WeatherTool extends Tool {
       final wind = (winds[idx] as num?)?.toDouble();
       final code = (codes[idx] as int?) ?? -1;
 
-      buf.write('  ${entry.key}: ${_wmoToFrench(code)}');
+      buf.write('  ${entry.key}: ${_wmoDescription(code)}');
       if (temp != null) buf.write(', ${temp.round()}°C');
       if (humidity != null) buf.write(', $humidity%');
-      if (wind != null) buf.write(', vent ${wind.round()} km/h');
+      if (wind != null) buf.write(', ${l.weatherWind(wind.round())}');
       if (precip > 0) buf.write(', ${precip}mm');
       buf.writeln();
     }
@@ -163,35 +170,36 @@ class WeatherTool extends Tool {
     return buf.toString();
   }
 
-  /// Interpret WMO weather codes to French descriptions.
-  static String _wmoToFrench(int code) {
+  /// Interpret WMO weather codes to localized descriptions.
+  String _wmoDescription(int code) {
+    final l = tr(locale);
     return switch (code) {
-      0 => 'Ciel dégagé',
-      1 => 'Peu nuageux',
-      2 => 'Partiellement nuageux',
-      3 => 'Couvert',
-      45 || 48 => 'Brouillard',
-      51 => 'Bruine légère',
-      53 => 'Bruine modérée',
-      55 => 'Bruine dense',
-      56 || 57 => 'Bruine verglaçante',
-      61 => 'Pluie légère',
-      63 => 'Pluie modérée',
-      65 => 'Pluie forte',
-      66 || 67 => 'Pluie verglaçante',
-      71 => 'Neige légère',
-      73 => 'Neige modérée',
-      75 => 'Neige forte',
-      77 => 'Grésil',
-      80 => 'Averses légères',
-      81 => 'Averses modérées',
-      82 => 'Averses violentes',
-      85 => 'Averses de neige légères',
-      86 => 'Averses de neige fortes',
-      95 => 'Orage',
-      96 => 'Orage avec grêle légère',
-      99 => 'Orage avec grêle forte',
-      _ => 'Inconnu (code $code)',
+      0 => l.weatherClearSky,
+      1 => l.weatherMainlyClear,
+      2 => l.weatherPartlyCloudy,
+      3 => l.weatherOvercast,
+      45 || 48 => l.weatherFog,
+      51 => l.weatherLightDrizzle,
+      53 => l.weatherModerateDrizzle,
+      55 => l.weatherDenseDrizzle,
+      56 || 57 => l.weatherFreezingDrizzle,
+      61 => l.weatherLightRain,
+      63 => l.weatherModerateRain,
+      65 => l.weatherHeavyRain,
+      66 || 67 => l.weatherFreezingRain,
+      71 => l.weatherLightSnow,
+      73 => l.weatherModerateSnow,
+      75 => l.weatherHeavySnow,
+      77 => l.weatherSleet,
+      80 => l.weatherLightShowers,
+      81 => l.weatherModerateShowers,
+      82 => l.weatherViolentShowers,
+      85 => l.weatherLightSnowShowers,
+      86 => l.weatherHeavySnowShowers,
+      95 => l.weatherThunderstorm,
+      96 => l.weatherThunderstormLightHail,
+      99 => l.weatherThunderstormHeavyHail,
+      _ => l.weatherUnknown(code),
     };
   }
 }

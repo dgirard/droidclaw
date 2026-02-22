@@ -182,6 +182,9 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
       // Cache workspace path
       final workspacePath = await storage.workspacePath;
       await prefs.setString(AppConstants.cachedWorkspacePathKey, workspacePath);
+
+      // Cache resolved locale
+      await prefs.setString(AppConstants.cachedLocaleKey, config.resolvedLocale);
     } catch (e) {
       // Non-critical — service isolate will fall back to pending queue
       _cronLog('WARNING: Failed to cache secrets for service: $e');

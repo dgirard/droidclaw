@@ -5,6 +5,10 @@ import 'tool.dart';
 /// Tool that returns the current date and time.
 /// Pure Dart — no API key, no platform channel, service isolate compatible.
 class DateTimeTool extends Tool {
+  final String locale;
+
+  DateTimeTool({this.locale = 'en'});
+
   @override
   String get name => 'get_datetime';
 
@@ -22,8 +26,9 @@ class DateTimeTool extends Tool {
   @override
   Future<ToolResult> execute(Map<String, dynamic> arguments) async {
     final now = DateTime.now();
-    final dayFormat = DateFormat('EEEE', 'fr_FR');
-    final dateFormat = DateFormat('dd MMMM yyyy', 'fr_FR');
+    final intlLocale = locale == 'fr' ? 'fr_FR' : 'en_US';
+    final dayFormat = DateFormat('EEEE', intlLocale);
+    final dateFormat = DateFormat('dd MMMM yyyy', intlLocale);
     final timeFormat = DateFormat('HH:mm:ss');
 
     final dayOfWeek = dayFormat.format(now);

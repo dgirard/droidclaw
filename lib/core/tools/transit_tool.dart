@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../l10n/l10n.dart';
 import 'tool.dart';
 
 /// Tool that finds public transit routes via SNCF and PRIM/IDFM APIs.
@@ -11,10 +12,11 @@ import 'tool.dart';
 class TransitTool extends Tool {
   final String? sncfApiKey;
   final String? primApiKey;
+  final String locale;
 
-  TransitTool({this.sncfApiKey, this.primApiKey});
+  TransitTool({this.sncfApiKey, this.primApiKey, this.locale = 'en'});
 
-  // Île-de-France bounding box (generous, includes suburban rail endpoints).
+  // Ile-de-France bounding box (generous, includes suburban rail endpoints).
   static const _idfMinLat = 48.1;
   static const _idfMaxLat = 49.25;
   static const _idfMinLon = 1.4;
@@ -22,8 +24,8 @@ class TransitTool extends Tool {
 
   /// Map Navitia physical_mode values to French display labels.
   static const _modeLabels = {
-    'Metro': 'Métro',
-    'Métro': 'Métro',
+    'Metro': 'Metro',
+    'Métro': 'Metro',
     'RapidTransit': 'RER',
     'Bus': 'Bus',
     'Tramway': 'Tram',
@@ -41,7 +43,7 @@ class TransitTool extends Tool {
   @override
   String get description =>
       'Find public transit routes in France (metro, RER, bus, tram, train). '
-      'Covers Île-de-France (RATP, Transilien) and national trains (TGV, TER). '
+      'Covers Ile-de-France (RATP, Transilien) and national trains (TGV, TER). '
       'Auto-selects the best API based on trip location. '
       'Coordinates: use get_location for current position, or provide lat/lon. '
       'Chain with get_address to resolve place names to coordinates.';
@@ -90,13 +92,12 @@ class TransitTool extends Tool {
 
   @override
   Future<ToolResult> execute(Map<String, dynamic> arguments) async {
+    final l = tr(locale);
     final hasSncf = sncfApiKey != null && sncfApiKey!.isNotEmpty;
     final hasPrim = primApiKey != null && primApiKey!.isNotEmpty;
 
     if (!hasSncf && !hasPrim) {
-      return ToolResult.error(
-          'No transit API key configured. '
-          'Set SNCF or PRIM key in Settings > Routing.');
+      return ToolResult.error(l.transitNoApiKey);
     }
 
     final originLat = (arguments['origin_lat'] as num?)?.toDouble();
@@ -117,9 +118,7 @@ class TransitTool extends Tool {
       final api = _chooseApi(originLat, originLon, destLat, destLon,
           hasSncf: hasSncf, hasPrim: hasPrim);
       if (api == null) {
-        return ToolResult.error(
-            'SNCF API key needed for trips outside Île-de-France. '
-            'Set it in Settings > Routing.');
+        return ToolResult.error(l.transitSncfRequired);
       }
 
       return await _queryJourneys(
@@ -155,21 +154,21 @@ class TransitTool extends Tool {
     final originInIdf = _isInIdf(originLat, originLon);
     final destInIdf = _isInIdf(destLat, destLon);
 
-    // Both points in IDF → prefer PRIM
+    // Both points in IDF -> prefer PRIM
     if (originInIdf && destInIdf) {
       if (hasPrim) {
         return _ApiConfig(
           baseUrl:
               'https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/journeys',
           headers: {'apiKey': primApiKey!},
-          name: 'PRIM (Île-de-France)',
+          name: 'PRIM (Ile-de-France)',
         );
       }
       if (hasSncf) return _sncfConfig();
       return null;
     }
 
-    // At least one point outside IDF → use SNCF
+    // At least one point outside IDF -> use SNCF
     if (hasSncf) return _sncfConfig();
 
     // Only PRIM key, but trip is not IDF-only
@@ -192,6 +191,8 @@ class TransitTool extends Tool {
     required String datetimeRepresents,
     required bool wheelchair,
   }) async {
+    final l = tr(locale);
+
     // Navitia uses lon;lat (semicolon separator, GeoJSON order)
     final from = '$originLon;$originLat';
     final to = '$destLon;$destLat';
@@ -218,13 +219,11 @@ class TransitTool extends Tool {
     });
 
     if (response.statusCode == 429) {
-      return ToolResult.error(
-          'Transit API rate limit reached. Try again later.');
+      return ToolResult.error(l.transitRateLimit);
     }
 
     if (response.statusCode == 401) {
-      return ToolResult.error(
-          '${api.name} API key is invalid. Check it in Settings > Routing.');
+      return ToolResult.error(l.transitInvalidKey(api.name));
     }
 
     if (response.statusCode != 200) {
@@ -235,8 +234,7 @@ class TransitTool extends Tool {
     final journeys = data['journeys'] as List?;
 
     if (journeys == null || journeys.isEmpty) {
-      return ToolResult.error(
-          'No transit routes found between these locations.');
+      return ToolResult.error(l.transitNoRoutes);
     }
 
     // Take up to 3 best journeys
@@ -264,6 +262,7 @@ class TransitTool extends Tool {
     int index,
     String apiName,
   ) {
+    final l = tr(locale);
     final durationSec = (journey['duration'] as num?)?.toInt() ?? 0;
     final transfers = (journey['nb_transfers'] as num?)?.toInt() ?? 0;
     final departure = journey['departure_date_time'] as String? ?? '';
@@ -317,7 +316,7 @@ class TransitTool extends Tool {
         case 'transfer' || 'waiting':
           if (secMin > 0) {
             final transferLabel =
-                type == 'transfer' ? 'correspondance' : 'attente';
+                type == 'transfer' ? l.transitTransfer : l.transitWaiting;
             sectionLines.add('  [$transferLabel] $secMin min');
           }
       }
@@ -327,19 +326,19 @@ class TransitTool extends Tool {
         ? ', CO2: ${(co2['value'] as num?)?.toStringAsFixed(1)} ${co2['unit']}'
         : '';
     final transferStr =
-        transfers > 0 ? '$transfers correspondance${transfers > 1 ? 's' : ''}' : 'direct';
+        transfers > 0 ? l.transitTransferCount(transfers) : l.transitDirect;
 
     final llm = StringBuffer()
-      ..writeln('--- Option $index (via $apiName) ---')
-      ..writeln('Durée: $durationStr, $transferStr$co2Str')
-      ..writeln('Départ: $depStr → Arrivée: $arrStr')
-      ..writeln('Sections:')
+      ..writeln('--- ${l.transitOption(index, apiName)} ---')
+      ..writeln('${l.transitDuration} $durationStr, $transferStr$co2Str')
+      ..writeln('${l.transitDeparture} $depStr → ${l.transitArrival} $arrStr')
+      ..writeln(l.transitSections)
       ..writeln(sectionLines.join('\n'));
 
     final routeStr =
         transitLabels.isNotEmpty ? transitLabels.join(' → ') : 'transit';
     final user = '$routeStr, $durationStr, $transferStr\n'
-        'Départ $depStr → Arrivée $arrStr';
+        '${l.transitDeparture} $depStr → ${l.transitArrival} $arrStr';
 
     return _FormattedJourney(llm: llm.toString(), user: user);
   }

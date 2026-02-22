@@ -298,6 +298,7 @@ class BackgroundTaskHandler extends TaskHandler {
         orsApiKey: prefs.getString(AppConstants.cachedOrsApiKeyKey),
         sncfApiKey: prefs.getString(AppConstants.cachedSncfApiKeyKey),
         primApiKey: prefs.getString(AppConstants.cachedPrimApiKeyKey),
+        locale: prefs.getString(AppConstants.cachedLocaleKey) ?? 'en',
       );
 
       _log('AgentLoop initialized in service isolate');

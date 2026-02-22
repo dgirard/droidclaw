@@ -355,5 +355,11 @@
   "localeEnglish": "English",
   "localeFrench": "French",
 
-  "agentRespondInstructions": "Respond in English."
+  "agentRespondInstructions": "Respond in English.",
+
+  "batteryCharging": "charging",
+  "batteryDischarging": "discharging",
+  "batteryFull": "full",
+  "batteryConnectedNotCharging": "connected (not charging)",
+  "batteryUnknown": "unknown"
 }

@@ -51,6 +51,7 @@ class ServiceAgentFactory {
     String? orsApiKey,
     String? sncfApiKey,
     String? primApiKey,
+    String locale = 'en',
   }) async {
     // 1. Initialize Hive (plain Dart — no initFlutter)
     Hive.init(hivePath);
@@ -102,10 +103,10 @@ class ServiceAgentFactory {
       registry.register(ReverseGeocodeTool());
     }
     if (!disabled.contains('get_datetime')) {
-      registry.register(DateTimeTool());
+      registry.register(DateTimeTool(locale: locale));
     }
     if (!disabled.contains('device_info')) {
-      registry.register(DeviceInfoTool());
+      registry.register(DeviceInfoTool(locale: locale));
     }
     if (!disabled.contains('get_directions')) {
       registry.register(DirectionsTool(apiKey: orsApiKey));
@@ -114,7 +115,7 @@ class ServiceAgentFactory {
       registry.register(GeocodeTool(apiKey: orsApiKey));
     }
     if (!disabled.contains('get_transit')) {
-      registry.register(TransitTool(sncfApiKey: sncfApiKey, primApiKey: primApiKey));
+      registry.register(TransitTool(sncfApiKey: sncfApiKey, primApiKey: primApiKey, locale: locale));
     }
     if (!disabled.contains('ocr')) {
       registry.register(OcrTool(workspacePath: workspacePath));
@@ -123,7 +124,7 @@ class ServiceAgentFactory {
       registry.register(QrGenerateTool(workspacePath: workspacePath));
     }
     if (!disabled.contains('weather')) {
-      registry.register(WeatherTool());
+      registry.register(WeatherTool(locale: locale));
     }
     // Excluded from service isolate:
     // - WebScrapeJsTool (WebView needs Activity)

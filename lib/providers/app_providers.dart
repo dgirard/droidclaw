@@ -100,6 +100,7 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   final orsApiKey = await configStorage.getOrsApiKey();
   final sncfApiKey = await configStorage.getSncfApiKey();
   final primApiKey = await configStorage.getPrimApiKey();
+  final locale = config.resolvedLocale;
   final registry = ToolRegistry();
   final disabled = config.tools.disabledTools;
 
@@ -133,10 +134,10 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
     registry.register(ClipboardTool());
   }
   if (!disabled.contains('get_datetime')) {
-    registry.register(DateTimeTool());
+    registry.register(DateTimeTool(locale: locale));
   }
   if (!disabled.contains('device_info')) {
-    registry.register(DeviceInfoTool());
+    registry.register(DeviceInfoTool(locale: locale));
   }
   if (!disabled.contains('speak')) {
     registry.register(SpeakTool());
@@ -175,10 +176,10 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
     registry.register(GeocodeTool(apiKey: orsApiKey));
   }
   if (!disabled.contains('get_transit')) {
-    registry.register(TransitTool(sncfApiKey: sncfApiKey, primApiKey: primApiKey));
+    registry.register(TransitTool(sncfApiKey: sncfApiKey, primApiKey: primApiKey, locale: locale));
   }
   if (!disabled.contains('weather')) {
-    registry.register(WeatherTool());
+    registry.register(WeatherTool(locale: locale));
   }
 
   return registry;

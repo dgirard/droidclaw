@@ -1915,6 +1915,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Respond in English.'**
   String get agentRespondInstructions;
+
+  /// No description provided for @batteryCharging.
+  ///
+  /// In en, this message translates to:
+  /// **'charging'**
+  String get batteryCharging;
+
+  /// No description provided for @batteryDischarging.
+  ///
+  /// In en, this message translates to:
+  /// **'discharging'**
+  String get batteryDischarging;
+
+  /// No description provided for @batteryFull.
+  ///
+  /// In en, this message translates to:
+  /// **'full'**
+  String get batteryFull;
+
+  /// No description provided for @batteryConnectedNotCharging.
+  ///
+  /// In en, this message translates to:
+  /// **'connected (not charging)'**
+  String get batteryConnectedNotCharging;
+
+  /// No description provided for @batteryUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'unknown'**
+  String get batteryUnknown;
 }
 
 class _AppLocalizationsDelegate

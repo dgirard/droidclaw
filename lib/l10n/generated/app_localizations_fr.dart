@@ -1027,4 +1027,19 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get agentRespondInstructions => 'Réponds en français.';
+
+  @override
+  String get batteryCharging => 'en charge';
+
+  @override
+  String get batteryDischarging => 'décharge';
+
+  @override
+  String get batteryFull => 'pleine';
+
+  @override
+  String get batteryConnectedNotCharging => 'connecté (pas en charge)';
+
+  @override
+  String get batteryUnknown => 'inconnu';
 }

@@ -2,10 +2,15 @@ import 'package:battery_plus/battery_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
+import '../../l10n/l10n.dart';
 import 'tool.dart';
 
 /// Tool that returns device information: battery, connectivity, and hardware.
 class DeviceInfoTool extends Tool {
+  final String locale;
+
+  DeviceInfoTool({this.locale = 'en'});
+
   @override
   String get name => 'device_info';
 
@@ -30,12 +35,13 @@ class DeviceInfoTool extends Tool {
       final battery = Battery();
       final level = await battery.batteryLevel;
       final state = await battery.batteryState;
+      final l = tr(locale);
       final stateStr = switch (state) {
-        BatteryState.charging => 'charging',
-        BatteryState.discharging => 'discharging',
-        BatteryState.full => 'full',
-        BatteryState.connectedNotCharging => 'connected (not charging)',
-        _ => 'unknown',
+        BatteryState.charging => l.batteryCharging,
+        BatteryState.discharging => l.batteryDischarging,
+        BatteryState.full => l.batteryFull,
+        BatteryState.connectedNotCharging => l.batteryConnectedNotCharging,
+        _ => l.batteryUnknown,
       };
       parts.add('Battery: $level% ($stateStr)');
       userParts.add('Battery: $level% ($stateStr)');

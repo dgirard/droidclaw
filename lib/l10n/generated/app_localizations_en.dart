@@ -1008,4 +1008,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentRespondInstructions => 'Respond in English.';
+
+  @override
+  String get batteryCharging => 'charging';
+
+  @override
+  String get batteryDischarging => 'discharging';
+
+  @override
+  String get batteryFull => 'full';
+
+  @override
+  String get batteryConnectedNotCharging => 'connected (not charging)';
+
+  @override
+  String get batteryUnknown => 'unknown';
 }
