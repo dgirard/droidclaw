@@ -35,7 +35,7 @@ DroidClaw is not a chatbot. It is an **agentic AI assistant** — it doesn't jus
 
 ```
 User prompt
-    --> LLM reasons (Anthropic / OpenAI / Gemini / Groq)
+    --> LLM reasons (Local LLM or Anthropic / OpenAI / Gemini / Groq)
         --> Tool call (GPS, web search, calendar, files, transit...)
             --> Result fed back to LLM
                 --> LLM reasons again, calls another tool if needed
