@@ -20,7 +20,7 @@ Future<void> main() async {
 
   // Initialize persistent logger (same directory as Hive)
   final appDir = await getApplicationDocumentsDirectory();
-  AppLogger.init(dirPath: '${appDir.path}/app_flutter', isolateName: 'main');
+  AppLogger.init(dirPath: appDir.path, isolateName: 'main');
   await AppLogger.instance.purge();
 
   // Initialize SharedPreferences

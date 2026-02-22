@@ -77,7 +77,7 @@ class BackgroundTaskHandler extends TaskHandler {
     final workspacePath = prefs.getString(AppConstants.cachedWorkspacePathKey);
     if (workspacePath != null) {
       final appDir = Directory(workspacePath).parent.path;
-      AppLogger.init(dirPath: '$appDir/app_flutter', isolateName: 'service');
+      AppLogger.init(dirPath: appDir, isolateName: 'service');
       await AppLogger.instance.purge();
     }
 
@@ -312,10 +312,10 @@ class BackgroundTaskHandler extends TaskHandler {
         return;
       }
 
-      // Derive Hive path: workspace is <appDir>/droidclaw_workspace,
-      // Hive.initFlutter() uses <appDir>/app_flutter
+      // Derive Hive path: workspace is <appDocDir>/droidclaw_workspace,
+      // getApplicationDocumentsDirectory() returns <appDocDir> which IS app_flutter
       final appDir = Directory(workspacePath).parent.path;
-      final hivePath = '$appDir/app_flutter';
+      final hivePath = appDir;
 
       _agentLoop = await ServiceAgentFactory.create(
         prefs: prefs,
@@ -354,19 +354,14 @@ class BackgroundTaskHandler extends TaskHandler {
         cronId: cron.id, sessionKey: sessionKey);
 
     try {
+      int responseLength = 0;
       await for (final event
           in _agentLoop!.processMessage(cron.prompt, sessionKey)) {
         if (event is ResponseEvent) {
+          responseLength = event.content.length;
           AppLogger.instance.info(LogSource.cron,
-              'Completed "${cron.name}" (${event.content.length} chars)',
+              'Completed "${cron.name}" ($responseLength chars)',
               cronId: cron.id, sessionKey: sessionKey);
-          // Notify main isolate of completion (for UI update if app is open)
-          FlutterForegroundTask.sendDataToMain({
-            'type': 'cron_completed',
-            'cron_id': cron.id,
-            'cron_name': cron.name,
-            'response_length': event.content.length,
-          });
           break;
         } else if (event is ErrorEvent) {
           AppLogger.instance.error(LogSource.cron,
@@ -376,13 +371,22 @@ class BackgroundTaskHandler extends TaskHandler {
         }
       }
 
-      // Save session
+      // Save session BEFORE notifying main isolate (avoids race condition
+      // where main reloads Hive before session is flushed to disk).
       final session = _agentLoop!.sessions.get(sessionKey);
       if (session != null) {
         await _agentLoop!.sessions.save(session);
         AppLogger.instance.debug(LogSource.cron,
             'Session saved for "${cron.name}"');
       }
+
+      // Notify main isolate of completion (for UI update if app is open)
+      FlutterForegroundTask.sendDataToMain({
+        'type': 'cron_completed',
+        'cron_id': cron.id,
+        'cron_name': cron.name,
+        'response_length': responseLength,
+      });
 
       // Update notification
       FlutterForegroundTask.updateService(

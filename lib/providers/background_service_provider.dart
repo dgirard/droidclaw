@@ -15,20 +15,24 @@ import 'app_providers.dart';
 class BackgroundServiceState {
   final bool isRunning;
   final String? error;
+  final int cronCompletionCount;
 
   const BackgroundServiceState({
     this.isRunning = false,
     this.error,
+    this.cronCompletionCount = 0,
   });
 
   BackgroundServiceState copyWith({
     bool? isRunning,
     String? error,
     bool clearError = false,
+    int? cronCompletionCount,
   }) =>
       BackgroundServiceState(
         isRunning: isRunning ?? this.isRunning,
         error: clearError ? null : (error ?? this.error),
+        cronCompletionCount: cronCompletionCount ?? this.cronCompletionCount,
       );
 }
 
@@ -222,6 +226,9 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
             'Service isolate completed "${map['cron_name']}" '
             '(${map['response_length']} chars)',
             cronId: map['cron_id'] as String?);
+        // Reload SharedPreferences (service isolate wrote lastRun) and
+        // bump counter so CronConfigScreen can react via ref.watch().
+        _reloadAfterCronCompletion();
 
       case 'stop_requested':
         _stopAll();
@@ -233,6 +240,22 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
     state = state.copyWith(isRunning: false);
   }
 
+  /// Reload SharedPreferences after the service isolate updated lastRun,
+  /// then bump cronCompletionCount so the UI rebuilds.
+  Future<void> _reloadAfterCronCompletion() async {
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.reload();
+      // Reload session manager to pick up cron sessions from service isolate
+      final sm = await ref.read(sessionManagerProvider.future);
+      await sm.reload();
+      state = state.copyWith(
+          cronCompletionCount: state.cronCompletionCount + 1);
+    } catch (e) {
+      AppLogger.instance.error(LogSource.service,
+          'Failed to reload after cron completion: $e');
+    }
+  }
 
   /// Remove a trigger from the pending queue.
   void _removePendingTrigger(String cronId) {

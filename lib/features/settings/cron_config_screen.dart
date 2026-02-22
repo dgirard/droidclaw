@@ -75,7 +75,13 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final serviceRunning = ref.watch(backgroundServiceProvider).isRunning;
+    final bgState = ref.watch(backgroundServiceProvider);
+    final serviceRunning = bgState.isRunning;
+
+    // Reload crons when service isolate completes a cron execution
+    // (it updates lastRun in SharedPreferences, main isolate reloads on signal)
+    ref.listen(backgroundServiceProvider.select((s) => s.cronCompletionCount),
+        (prev, next) => _loadCrons());
 
     return Scaffold(
       appBar: AppBar(title: Text(l.cronTitle)),

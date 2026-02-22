@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../core/session/session.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
+import '../../providers/background_service_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../shared/constants.dart';
 
@@ -16,6 +17,8 @@ class HistoryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionManagerAsync = ref.watch(sessionManagerProvider);
     final currentSessionKey = ref.watch(chatProvider).sessionKey;
+    // Rebuild when cron executions complete (sessions updated by service isolate)
+    ref.watch(backgroundServiceProvider.select((s) => s.cronCompletionCount));
 
     return Scaffold(
       appBar: AppBar(title: Text(AppLocalizations.of(context).historyTitle)),

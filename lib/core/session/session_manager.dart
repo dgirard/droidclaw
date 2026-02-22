@@ -29,6 +29,25 @@ class SessionManager {
     }
   }
 
+  /// Reload sessions from Hive to pick up writes from other isolates.
+  /// Closes and reopens the Hive box to force a disk re-read.
+  Future<void> reload() async {
+    final boxName = _box?.name;
+    if (boxName == null) return;
+    await _box!.close();
+    _box = await Hive.openBox<String>(boxName);
+    _cache.clear();
+    for (final key in _box!.keys) {
+      final raw = _box!.get(key);
+      if (raw != null) {
+        try {
+          final json = jsonDecode(raw) as Map<String, dynamic>;
+          _cache[key as String] = Session.fromJson(json);
+        } catch (_) {}
+      }
+    }
+  }
+
   /// Get or create a session by key.
   Session getOrCreate(String key) {
     return _cache.putIfAbsent(key, () => Session(key: key));
