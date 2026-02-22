@@ -140,17 +140,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
 /// Compact locale switcher: shows current language flag, tap to cycle.
 class _LocaleSwitcher extends ConsumerWidget {
-  static const _locales = ['system', 'en', 'fr'];
+  static const _locales = ['system', 'en', 'fr', 'es', 'de', 'it'];
 
   static String _flag(String locale) => switch (locale) {
-        'fr' => '\u{1F1EB}\u{1F1F7}',
         'en' => '\u{1F1EC}\u{1F1E7}',
+        'fr' => '\u{1F1EB}\u{1F1F7}',
+        'es' => '\u{1F1EA}\u{1F1F8}',
+        'de' => '\u{1F1E9}\u{1F1EA}',
+        'it' => '\u{1F1EE}\u{1F1F9}',
         _ => '\u{1F310}', // globe for system
       };
 
   static String _label(String locale) => switch (locale) {
-        'fr' => 'Français',
         'en' => 'English',
+        'fr' => 'Français',
+        'es' => 'Español',
+        'de' => 'Deutsch',
+        'it' => 'Italiano',
         _ => 'System',
       };
 

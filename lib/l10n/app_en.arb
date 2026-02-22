@@ -354,6 +354,9 @@
   "localeSystem": "System default",
   "localeEnglish": "English",
   "localeFrench": "French",
+  "localeSpanish": "Spanish",
+  "localeGerman": "German",
+  "localeItalian": "Italian",
 
   "agentRespondInstructions": "Respond in English.",
 

@@ -1026,6 +1026,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get localeFrench => 'Français';
 
   @override
+  String get localeSpanish => 'Espagnol';
+
+  @override
+  String get localeGerman => 'Allemand';
+
+  @override
+  String get localeItalian => 'Italien';
+
+  @override
   String get agentRespondInstructions => 'Réponds en français.';
 
   @override

@@ -1007,6 +1007,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get localeFrench => 'French';
 
   @override
+  String get localeSpanish => 'Spanish';
+
+  @override
+  String get localeGerman => 'German';
+
+  @override
+  String get localeItalian => 'Italian';
+
+  @override
   String get agentRespondInstructions => 'Respond in English.';
 
   @override

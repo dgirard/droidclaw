@@ -5,7 +5,7 @@
 ![Flutter](https://img.shields.io/badge/Flutter-3.38-02569B?logo=flutter)
 ![Dart](https://img.shields.io/badge/Dart-3.10-0175C2?logo=dart)
 ![Android](https://img.shields.io/badge/Android-API_24+-3DDC84?logo=android)
-![i18n](https://img.shields.io/badge/i18n-EN_|_FR-blueviolet)
+![i18n](https://img.shields.io/badge/i18n-EN_|_FR_|_ES_|_DE_|_IT-blueviolet)
 
 ---
 
@@ -87,7 +87,7 @@ DroidClaw is a personal AI assistant that runs **entirely on an Android phone**,
 - **Agent-based**: agentic LLM loop + iterative tool calling
 - **Multi-provider**: Anthropic (Claude), OpenRouter, OpenAI, Groq, Google Gemini
 - **Dual interface**: built-in Flutter chat **+ Telegram bot**
-- **Multilingual**: English and French, switchable from the chat screen (locale switcher in the AppBar)
+- **Multilingual**: English, French, Spanish, German, Italian — switchable from the chat screen (locale switcher in the AppBar)
 - **On-device only**: everything runs on the phone — LLM API calls, tool execution, session management
 
 ---
@@ -245,13 +245,13 @@ lib/
 │   ├── telegram/                # Bot API, bot manager, rate limiter
 │   └── voice/                   # Voice input (STT via Groq Whisper)
 │
-├── l10n/                        # i18n: ARB files (EN/FR), generated code, tr() helper
+├── l10n/                        # i18n: ARB files (EN/FR/ES/DE/IT), generated code, tr() helper
 ├── providers/                   # Riverpod: app, chat, background service, Telegram
 ├── data/local/                  # Unified StorageService
 └── shared/                      # Constants
 ```
 
-**79 Dart files** in total.
+**82 Dart files** in total.
 
 ---
 
@@ -338,7 +338,7 @@ Both interfaces (chat UI and Telegram) consume the same `Stream<AgentEvent>`. Th
 
 ### Internationalization (i18n)
 
-DroidClaw is fully localized in English and French (~380 ARB keys). The user switches language from a flag icon in the chat AppBar — the change propagates instantly to the entire app, tool outputs, notifications, and the agent's response language.
+DroidClaw is fully localized in 5 languages — English, French, Spanish, German, and Italian (~380 ARB keys per locale). The user switches language from a flag icon in the chat AppBar — the change propagates instantly to the entire app, tool outputs, notifications, and the agent's response language.
 
 Two access patterns coexist:
 - **`AppLocalizations.of(context)`** — standard Flutter, used in all UI screens (`lib/features/`)
@@ -427,7 +427,7 @@ Users can **enable or disable** individual tools from Settings > Tools > Manage 
 | **Volume Control** | `volume_control` | Read and adjust device volume levels for alarm, media, ringtone, and notification streams. Reports ringer mode (normal/vibrate/silent). Use before `set_alarm` to verify alarm volume is audible. Supports human-readable levels (mute/low/medium/high/max). First custom MethodChannel to Android AudioManager. |
 | **Directions** | `get_directions` | Route calculation between two GPS coordinates via OpenRouteService API v2. Supports car, bike, road bike, mountain bike, walk, hike, and wheelchair profiles. Returns distance, duration, elevation gain/loss, and turn-by-turn instructions. Also supports isochrone calculation (reachable area within a time budget). Requires a free ORS API key. |
 | **Public Transit** | `get_transit` | Find public transit routes in France. Auto-routes between two APIs: **PRIM/IDFM** for Ile-de-France (Metro, RER, Bus, Tram, Transilien) and **SNCF** for national trains (TGV, TER, Intercites). Returns top 3 journey options with departure/arrival times, transfers, CO2 emissions, and section-by-section itinerary. Supports departure/arrival time constraints and wheelchair-accessible routes. Both APIs use Navitia technology with shared response parsing. |
-| **Weather** | `weather` | Weather forecast using Open-Meteo API with Météo-France high-precision models (AROME 1.3km + ARPEGE). Returns daily summary (min/max temperature, precipitation, wind, conditions) and hourly breakdown by period (morning/afternoon/evening). 1-7 day forecast. WMO weather codes interpreted to localized descriptions (EN/FR). No API key required. |
+| **Weather** | `weather` | Weather forecast using Open-Meteo API with Météo-France high-precision models (AROME 1.3km + ARPEGE). Returns daily summary (min/max temperature, precipitation, wind, conditions) and hourly breakdown by period (morning/afternoon/evening). 1-7 day forecast. WMO weather codes interpreted to localized descriptions (EN/FR/ES/DE/IT). No API key required. |
 
 ### Dual Scraping Strategy
 
@@ -525,10 +525,10 @@ These tools work out of the box, no configuration needed: `web_scrape`, `web_scr
 
 | | |
 |---|---|
-| **Dart files** | 79 |
+| **Dart files** | 82 |
 | **Analysis issues** | 0 |
-| **APK size (arm64)** | 33.7 MB |
-| **Languages** | English, French |
+| **APK size (arm64)** | 35.5 MB |
+| **Languages** | English, French, Spanish, German, Italian |
 | **Native code** | Kotlin (AudioChannelPlugin — volume control) |
 | **minSdkVersion** | 24 (Android 7.0) |
 | **targetSdkVersion** | 34 (Android 14) |

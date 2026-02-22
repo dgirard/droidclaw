@@ -63,7 +63,7 @@ class AppConfig {
   /// Get the active provider config based on agent.provider.
   ProviderConfig? get activeProvider => providers[agent.provider];
 
-  /// Resolve the effective locale code ('en' or 'fr').
+  /// Resolve the effective locale code.
   /// If locale is 'system', check the device language.
   String get resolvedLocale {
     if (locale == 'system') {
@@ -72,9 +72,11 @@ class AppConfig {
     return locale;
   }
 
+  static const _supportedLocales = {'en', 'fr', 'es', 'de', 'it'};
+
   static String _resolveSystemLocale() {
     final deviceLocale = PlatformDispatcher.instance.locale.languageCode;
-    return deviceLocale == 'fr' ? 'fr' : 'en';
+    return _supportedLocales.contains(deviceLocale) ? deviceLocale : 'en';
   }
 }
 

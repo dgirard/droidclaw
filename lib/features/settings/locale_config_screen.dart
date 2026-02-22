@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 
-/// Screen for selecting the app locale (System / English / French).
+/// Screen for selecting the app locale.
 class LocaleConfigScreen extends ConsumerWidget {
   const LocaleConfigScreen({super.key});
 
@@ -27,12 +27,24 @@ class LocaleConfigScreen extends ConsumerWidget {
               value: 'system',
             ),
             RadioListTile<String>(
-              title: const Text('English'),
+              title: Text(l.localeEnglish),
               value: 'en',
             ),
             RadioListTile<String>(
-              title: const Text('Français'),
+              title: Text(l.localeFrench),
               value: 'fr',
+            ),
+            RadioListTile<String>(
+              title: Text(l.localeSpanish),
+              value: 'es',
+            ),
+            RadioListTile<String>(
+              title: Text(l.localeGerman),
+              value: 'de',
+            ),
+            RadioListTile<String>(
+              title: Text(l.localeItalian),
+              value: 'it',
             ),
           ],
         ),
