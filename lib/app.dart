@@ -8,6 +8,7 @@ import 'features/onboarding/onboard_screen.dart';
 import 'features/settings/cron_config_screen.dart';
 import 'features/settings/cron_edit_screen.dart';
 import 'features/settings/locale_config_screen.dart';
+import 'features/settings/logs_screen.dart';
 import 'features/settings/provider_config_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/settings/skills_screen.dart';
@@ -61,6 +62,7 @@ class DroidClawApp extends ConsumerWidget {
         '/settings/crons': (context) => const CronConfigScreen(),
         '/settings/crons/edit': (context) => const CronEditScreen(),
         '/settings/locale': (context) => const LocaleConfigScreen(),
+        '/settings/logs': (context) => const LogsScreen(),
       },
     );
   }

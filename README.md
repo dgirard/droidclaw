@@ -251,7 +251,7 @@ lib/
 └── shared/                      # Constants
 ```
 
-**82 Dart files** in total.
+**85 Dart files** in total.
 
 ---
 
@@ -525,9 +525,9 @@ These tools work out of the box, no configuration needed: `web_scrape`, `web_scr
 
 | | |
 |---|---|
-| **Dart files** | 82 |
+| **Dart files** | 85 |
 | **Analysis issues** | 0 |
-| **APK size (arm64)** | 35.5 MB |
+| **APK size (arm64)** | 35.6 MB |
 | **Languages** | English, French, Spanish, German, Italian |
 | **Native code** | Kotlin (AudioChannelPlugin — volume control) |
 | **minSdkVersion** | 24 (Android 7.0) |

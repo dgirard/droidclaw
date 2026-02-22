@@ -71,7 +71,17 @@ class HistoryScreen extends ConsumerWidget {
                       AppLocalizations.of(context).historyExecutions(sessions.length, _formatDate(context, lastSession.updated)),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          onPressed: () => _confirmDeleteCronGroup(
+                              context, ref, cronName, sessions),
+                        ),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
                     onTap: () {
                       if (sessions.length == 1) {
                         _loadSession(context, ref, sessions.first.key);
@@ -175,6 +185,32 @@ class HistoryScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _confirmDeleteCronGroup(BuildContext context, WidgetRef ref,
+      String cronName, List<Session> sessions) async {
+    final l = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l.cronDeleteGroup),
+        content: Text(l.cronDeleteGroupCount(sessions.length)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l.commonCancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l.commonDelete)),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      final chatNotifier = ref.read(chatProvider.notifier);
+      for (final session in sessions) {
+        chatNotifier.deleteSession(session.key);
+      }
+    }
+  }
+
   Widget _buildEmptyState(BuildContext context) {
     final theme = Theme.of(context);
     return Center(
@@ -237,6 +273,11 @@ class CronExecutionsScreen extends ConsumerWidget {
                     '${_formatDate(context, session.updated)} ${DateFormat('HH:mm').format(session.updated)}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    onPressed: () => _confirmDeleteExecution(
+                        context, ref, session),
+                  ),
                   onTap: () {
                     ref
                         .read(chatProvider.notifier)
@@ -250,6 +291,29 @@ class CronExecutionsScreen extends ConsumerWidget {
               },
             ),
     );
+  }
+
+  Future<void> _confirmDeleteExecution(
+      BuildContext context, WidgetRef ref, Session session) async {
+    final l = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l.cronDeleteExecution),
+        content: Text(_sessionTitle(session)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l.commonCancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l.commonDelete)),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      ref.read(chatProvider.notifier).deleteSession(session.key);
+    }
   }
 }
 

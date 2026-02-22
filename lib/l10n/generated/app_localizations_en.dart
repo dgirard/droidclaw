@@ -1096,4 +1096,67 @@ class AppLocalizationsEn extends AppLocalizations {
   String cronLastRun(String date) {
     return 'Last: $date';
   }
+
+  @override
+  String get logsTitle => 'Logs';
+
+  @override
+  String get logsEmpty => 'No log entries';
+
+  @override
+  String get logsFilterAll => 'All';
+
+  @override
+  String get logsFilterInfo => 'Info';
+
+  @override
+  String get logsFilterWarning => 'Warning';
+
+  @override
+  String get logsFilterError => 'Error';
+
+  @override
+  String get logsSourceAgent => 'Agent';
+
+  @override
+  String get logsSourceCron => 'Cron';
+
+  @override
+  String get logsSourceService => 'Service';
+
+  @override
+  String get logsSourceTelegram => 'Telegram';
+
+  @override
+  String get logsSourceApp => 'App';
+
+  @override
+  String get logsClearAll => 'Clear all logs';
+
+  @override
+  String get logsClearConfirm => 'Delete all log entries?';
+
+  @override
+  String logsEntryCount(int count) {
+    return '$count entries';
+  }
+
+  @override
+  String get logsCleared => 'Logs cleared';
+
+  @override
+  String logsPurged(int count) {
+    return 'Purged $count old log entries';
+  }
+
+  @override
+  String get cronDeleteGroup => 'Delete all executions for this cron?';
+
+  @override
+  String get cronDeleteExecution => 'Delete this execution?';
+
+  @override
+  String cronDeleteGroupCount(int count) {
+    return 'This will delete $count sessions.';
+  }
 }

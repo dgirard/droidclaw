@@ -9,8 +9,10 @@ import '../../l10n/l10n.dart';
 import '../agent/agent_loop.dart';
 import '../agent/service_agent_factory.dart';
 import '../config/cron_config.dart';
+import '../config/log_entry.dart';
 import '../../shared/constants.dart';
 import '../../features/telegram/telegram_api.dart';
+import 'app_logger.dart';
 
 /// Top-level callback for the foreground service isolate.
 /// Must be a top-level function with @pragma to survive tree-shaking.
@@ -47,12 +49,13 @@ class BackgroundTaskHandler extends TaskHandler {
   bool _cronExecuting = false;
   String _locale = 'en';
 
+  // Log purge: every 6 hours (6 * 3600 = 21600 seconds)
+  int _purgeCounter = 0;
+  static const _purgeIntervalSeconds = 21600;
+
   static const _maxBackoff = Duration(seconds: 60);
   static const _baseBackoff = Duration(seconds: 2);
   static const _disconnectedThreshold = 10;
-
-  // ignore: avoid_print
-  void _log(String msg) => print('[DroidClaw] $msg');
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -70,9 +73,18 @@ class BackgroundTaskHandler extends TaskHandler {
     // Load locale
     _locale = prefs.getString(AppConstants.cachedLocaleKey) ?? 'en';
 
+    // Initialize logger for service isolate
+    final workspacePath = prefs.getString(AppConstants.cachedWorkspacePathKey);
+    if (workspacePath != null) {
+      final appDir = Directory(workspacePath).parent.path;
+      AppLogger.init(dirPath: '$appDir/app_flutter', isolateName: 'service');
+      await AppLogger.instance.purge();
+    }
+
     // Load cron definitions
     _loadCronDefinitions(prefs);
-    _log('TaskHandler started: ${_cronDefinitions.length} crons loaded, '
+    AppLogger.instance.info(LogSource.service,
+        'TaskHandler started: ${_cronDefinitions.length} crons loaded, '
         'telegram=${_api != null}');
 
     // Initialize AgentLoop for autonomous cron execution
@@ -92,6 +104,15 @@ class BackgroundTaskHandler extends TaskHandler {
       _cronCheckCounter = 0;
       // Use DateTime.now() (local time) instead of timestamp (may be UTC)
       await _checkCrons(DateTime.now());
+    }
+
+    // Purge old logs every 6 hours
+    _purgeCounter++;
+    if (_purgeCounter >= _purgeIntervalSeconds) {
+      _purgeCounter = 0;
+      if (AppLogger.isInitialized) {
+        await AppLogger.instance.purge();
+      }
     }
 
     // Telegram polling — fire and forget (non-blocking)
@@ -215,7 +236,8 @@ class BackgroundTaskHandler extends TaskHandler {
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
       _loadCronDefinitions(prefs);
-      _log('Reloaded crons: ${_cronDefinitions.length} definitions, '
+      AppLogger.instance.info(LogSource.service,
+          'Reloaded crons: ${_cronDefinitions.length} definitions, '
           'schedules: ${_cronDefinitions.map((c) => '${c.name}:${c.schedule.type.name}').join(', ')}');
       // Re-init AgentLoop if config may have changed
       if (_agentLoop == null) {
@@ -283,7 +305,8 @@ class BackgroundTaskHandler extends TaskHandler {
       final workspacePath = prefs.getString(AppConstants.cachedWorkspacePathKey);
 
       if (apiKey == null || providerName == null || workspacePath == null) {
-        _log('Cannot init AgentLoop: missing cached config '
+        AppLogger.instance.warning(LogSource.service,
+            'Cannot init AgentLoop: missing cached config '
             '(apiKey=${apiKey != null}, provider=${providerName != null}, '
             'workspace=${workspacePath != null})');
         return;
@@ -307,9 +330,11 @@ class BackgroundTaskHandler extends TaskHandler {
         locale: prefs.getString(AppConstants.cachedLocaleKey) ?? 'en',
       );
 
-      _log('AgentLoop initialized in service isolate');
+      AppLogger.instance.info(LogSource.service,
+          'AgentLoop initialized in service isolate');
     } catch (e) {
-      _log('Failed to init AgentLoop in service: $e');
+      AppLogger.instance.error(LogSource.service,
+          'Failed to init AgentLoop in service: $e');
     } finally {
       _agentInitializing = false;
     }
@@ -324,14 +349,17 @@ class BackgroundTaskHandler extends TaskHandler {
         ? '${AppConstants.cronSessionPrefix}${cron.id}'
         : '${AppConstants.cronSessionPrefix}${cron.id}_${DateTime.now().millisecondsSinceEpoch}';
 
-    _log('Executing "${cron.name}" locally (session=$sessionKey)');
+    AppLogger.instance.info(LogSource.cron,
+        'Executing "${cron.name}" locally (session=$sessionKey)',
+        cronId: cron.id, sessionKey: sessionKey);
 
     try {
       await for (final event
           in _agentLoop!.processMessage(cron.prompt, sessionKey)) {
         if (event is ResponseEvent) {
-          _log('Got response for "${cron.name}" '
-              '(${event.content.length} chars)');
+          AppLogger.instance.info(LogSource.cron,
+              'Completed "${cron.name}" (${event.content.length} chars)',
+              cronId: cron.id, sessionKey: sessionKey);
           // Notify main isolate of completion (for UI update if app is open)
           FlutterForegroundTask.sendDataToMain({
             'type': 'cron_completed',
@@ -341,7 +369,9 @@ class BackgroundTaskHandler extends TaskHandler {
           });
           break;
         } else if (event is ErrorEvent) {
-          _log('ERROR in "${cron.name}": ${event.message}');
+          AppLogger.instance.error(LogSource.cron,
+              'ERROR in "${cron.name}": ${event.message}',
+              cronId: cron.id, sessionKey: sessionKey);
           break;
         }
       }
@@ -350,7 +380,8 @@ class BackgroundTaskHandler extends TaskHandler {
       final session = _agentLoop!.sessions.get(sessionKey);
       if (session != null) {
         await _agentLoop!.sessions.save(session);
-        _log('Session saved for "${cron.name}"');
+        AppLogger.instance.debug(LogSource.cron,
+            'Session saved for "${cron.name}"');
       }
 
       // Update notification
@@ -359,7 +390,9 @@ class BackgroundTaskHandler extends TaskHandler {
         notificationText: tr(_locale).notifLastCron(cron.name),
       );
     } catch (e) {
-      _log('EXCEPTION in "${cron.name}": $e');
+      AppLogger.instance.error(LogSource.cron,
+          'EXCEPTION in "${cron.name}": $e',
+          cronId: cron.id, sessionKey: sessionKey);
     } finally {
       _cronExecuting = false;
     }
@@ -384,7 +417,8 @@ class BackgroundTaskHandler extends TaskHandler {
   }
 
   Future<void> _checkCrons(DateTime now) async {
-    _log('Checking ${_cronDefinitions.length} crons at '
+    AppLogger.instance.debug(LogSource.service,
+        'Checking ${_cronDefinitions.length} crons at '
         '${now.hour}:${now.minute.toString().padLeft(2, '0')}');
     for (final cron in _cronDefinitions) {
       if (!cron.enabled) continue;
@@ -392,10 +426,11 @@ class BackgroundTaskHandler extends TaskHandler {
       final schedInfo = cron.schedule.type == ScheduleType.timeOfDay
           ? 'times=${cron.schedule.times?.map((t) => '${t.hour}:${t.minute.toString().padLeft(2, '0')}').join(',')}'
           : 'interval=${cron.schedule.interval}';
-      _log('Cron "${cron.name}": due=$due, $schedInfo, '
-          'lastRun=${cron.lastRun}');
+      AppLogger.instance.debug(LogSource.cron,
+          '"${cron.name}": due=$due, $schedInfo, lastRun=${cron.lastRun}');
       if (due) {
-        _log('Triggering cron "${cron.name}"');
+        AppLogger.instance.info(LogSource.cron,
+            'Triggering "${cron.name}"', cronId: cron.id);
         final prefs = await SharedPreferences.getInstance();
 
         // Immediately update lastRun to prevent re-triggering
@@ -457,8 +492,10 @@ class BackgroundTaskHandler extends TaskHandler {
     pending.add(trigger);
     prefs.setString(
         AppConstants.cronPendingTriggersKey, jsonEncode(pending));
-    _log('Queued pending trigger for "${trigger['cron_name']}" '
-        '(${pending.length} pending)');
+    AppLogger.instance.info(LogSource.cron,
+        'Queued pending trigger for "${trigger['cron_name']}" '
+        '(${pending.length} pending)',
+        cronId: trigger['cron_id'] as String?);
   }
 
   /// Remove a completed trigger from the pending queue.
@@ -473,7 +510,8 @@ class BackgroundTaskHandler extends TaskHandler {
       prefs.setString(
           AppConstants.cronPendingTriggersKey, jsonEncode(pending));
     }
-    _log('Removed pending trigger for $cronId (${pending.length} remaining)');
+    AppLogger.instance.debug(LogSource.cron,
+        'Removed pending trigger for $cronId (${pending.length} remaining)');
   }
 
   void _updateCronLastRun(

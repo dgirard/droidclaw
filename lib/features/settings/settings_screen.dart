@@ -132,6 +132,14 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => Navigator.pushNamed(context, '/settings/locale'),
           ),
 
+          // Logs
+          ListTile(
+            leading: const Icon(Icons.receipt_long_outlined),
+            title: Text(l.logsTitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.pushNamed(context, '/settings/logs'),
+          ),
+
           const Divider(),
 
           // About

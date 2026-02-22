@@ -4,6 +4,8 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/agent/agent_loop.dart';
+import '../core/config/log_entry.dart';
+import '../core/services/app_logger.dart';
 import '../core/services/background_task_handler.dart';
 import '../l10n/l10n.dart';
 import '../shared/constants.dart';
@@ -191,7 +193,8 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
       await prefs.setString(AppConstants.cachedLocaleKey, config.resolvedLocale);
     } catch (e) {
       // Non-critical — service isolate will fall back to pending queue
-      _cronLog('WARNING: Failed to cache secrets for service: $e');
+      AppLogger.instance.warning(LogSource.service,
+          'Failed to cache secrets for service: $e');
     }
   }
 
@@ -215,8 +218,10 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
 
       case 'cron_completed':
         // Service isolate executed the cron autonomously
-        _cronLog('Service isolate completed "${map['cron_name']}" '
-            '(${map['response_length']} chars)');
+        AppLogger.instance.info(LogSource.cron,
+            'Service isolate completed "${map['cron_name']}" '
+            '(${map['response_length']} chars)',
+            cronId: map['cron_id'] as String?);
 
       case 'stop_requested':
         _stopAll();
@@ -228,8 +233,6 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
     state = state.copyWith(isRunning: false);
   }
 
-  // ignore: avoid_print
-  void _cronLog(String msg) => print('[DroidClaw:Cron] $msg');
 
   /// Remove a trigger from the pending queue.
   void _removePendingTrigger(String cronId) {
@@ -259,7 +262,8 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
       final pending = jsonDecode(raw) as List;
       if (pending.isEmpty) return;
 
-      _cronLog('Found ${pending.length} pending cron trigger(s), executing...');
+      AppLogger.instance.info(LogSource.cron,
+          'Found ${pending.length} pending cron trigger(s), executing...');
 
       for (final trigger in pending) {
         final map = Map<String, dynamic>.from(trigger as Map);
@@ -268,9 +272,10 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
 
       // Clear pending queue after processing
       storage.remove(AppConstants.cronPendingTriggersKey);
-      _cronLog('All pending triggers processed');
+      AppLogger.instance.info(LogSource.cron, 'All pending triggers processed');
     } catch (e) {
-      _cronLog('ERROR processing pending triggers: $e');
+      AppLogger.instance.error(LogSource.cron,
+          'ERROR processing pending triggers: $e');
     }
   }
 
@@ -281,11 +286,13 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
     final prompt = data['prompt'] as String;
     final strategy = data['session_strategy'] as String;
 
-    _cronLog('Executing "$cronName" (strategy=$strategy)');
+    AppLogger.instance.info(LogSource.cron,
+        'Executing "$cronName" (strategy=$strategy)', cronId: cronId);
 
     final agentLoop = await ref.read(agentLoopProvider.future);
     if (agentLoop == null) {
-      _cronLog('ERROR: AgentLoop is null (no LLM provider configured?)');
+      AppLogger.instance.error(LogSource.cron,
+          'AgentLoop is null (no LLM provider configured?)');
       return;
     }
 
@@ -293,16 +300,20 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
         ? '${AppConstants.cronSessionPrefix}$cronId'
         : '${AppConstants.cronSessionPrefix}${cronId}_${DateTime.now().millisecondsSinceEpoch}';
 
-    _cronLog('Session key: $sessionKey');
+    AppLogger.instance.debug(LogSource.cron,
+        'Session key: $sessionKey', cronId: cronId);
 
     try {
       await for (final event in agentLoop.processMessage(prompt, sessionKey)) {
         if (event is ResponseEvent) {
-          _cronLog('Got response for "$cronName" '
-              '(${event.content.length} chars)');
+          AppLogger.instance.info(LogSource.cron,
+              'Completed "$cronName" (${event.content.length} chars)',
+              cronId: cronId, sessionKey: sessionKey);
           break;
         } else if (event is ErrorEvent) {
-          _cronLog('ERROR in "$cronName": ${event.message}');
+          AppLogger.instance.error(LogSource.cron,
+              'ERROR in "$cronName": ${event.message}',
+              cronId: cronId, sessionKey: sessionKey);
           break;
         }
       }
@@ -312,9 +323,11 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
       final session = sessions.get(sessionKey);
       if (session != null) {
         await sessions.save(session);
-        _cronLog('Session saved for "$cronName"');
+        AppLogger.instance.debug(LogSource.cron,
+            'Session saved for "$cronName"');
       } else {
-        _cronLog('WARNING: No session found for key $sessionKey');
+        AppLogger.instance.warning(LogSource.cron,
+            'No session found for key $sessionKey');
       }
 
       // Notify task handler that cron is done
@@ -323,7 +336,8 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
         'cron_id': cronId,
       });
     } catch (e) {
-      _cronLog('EXCEPTION in "$cronName": $e');
+      AppLogger.instance.error(LogSource.cron,
+          'EXCEPTION in "$cronName": $e', cronId: cronId);
     }
   }
 }

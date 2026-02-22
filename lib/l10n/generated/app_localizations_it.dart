@@ -1115,4 +1115,67 @@ class AppLocalizationsIt extends AppLocalizations {
   String cronLastRun(String date) {
     return 'Ultimo: $date';
   }
+
+  @override
+  String get logsTitle => 'Registri';
+
+  @override
+  String get logsEmpty => 'Nessuna voce di registro';
+
+  @override
+  String get logsFilterAll => 'Tutti';
+
+  @override
+  String get logsFilterInfo => 'Info';
+
+  @override
+  String get logsFilterWarning => 'Avviso';
+
+  @override
+  String get logsFilterError => 'Errore';
+
+  @override
+  String get logsSourceAgent => 'Agente';
+
+  @override
+  String get logsSourceCron => 'Cron';
+
+  @override
+  String get logsSourceService => 'Servizio';
+
+  @override
+  String get logsSourceTelegram => 'Telegram';
+
+  @override
+  String get logsSourceApp => 'App';
+
+  @override
+  String get logsClearAll => 'Cancella tutti i registri';
+
+  @override
+  String get logsClearConfirm => 'Eliminare tutte le voci di registro?';
+
+  @override
+  String logsEntryCount(int count) {
+    return '$count voci';
+  }
+
+  @override
+  String get logsCleared => 'Registri cancellati';
+
+  @override
+  String logsPurged(int count) {
+    return '$count vecchie voci eliminate';
+  }
+
+  @override
+  String get cronDeleteGroup => 'Eliminare tutte le esecuzioni di questo cron?';
+
+  @override
+  String get cronDeleteExecution => 'Eliminare questa esecuzione?';
+
+  @override
+  String cronDeleteGroupCount(int count) {
+    return 'Questo eliminerà $count sessioni.';
+  }
 }

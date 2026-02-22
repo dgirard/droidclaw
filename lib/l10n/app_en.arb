@@ -389,5 +389,28 @@
   "@notifLastCron": { "placeholders": { "name": { "type": "String" } } },
 
   "cronLastRun": "Last: {date}",
-  "@cronLastRun": { "placeholders": { "date": { "type": "String" } } }
+  "@cronLastRun": { "placeholders": { "date": { "type": "String" } } },
+
+  "logsTitle": "Logs",
+  "logsEmpty": "No log entries",
+  "logsFilterAll": "All",
+  "logsFilterInfo": "Info",
+  "logsFilterWarning": "Warning",
+  "logsFilterError": "Error",
+  "logsSourceAgent": "Agent",
+  "logsSourceCron": "Cron",
+  "logsSourceService": "Service",
+  "logsSourceTelegram": "Telegram",
+  "logsSourceApp": "App",
+  "logsClearAll": "Clear all logs",
+  "logsClearConfirm": "Delete all log entries?",
+  "logsEntryCount": "{count} entries",
+  "@logsEntryCount": { "placeholders": { "count": { "type": "int" } } },
+  "logsCleared": "Logs cleared",
+  "logsPurged": "Purged {count} old log entries",
+  "@logsPurged": { "placeholders": { "count": { "type": "int" } } },
+  "cronDeleteGroup": "Delete all executions for this cron?",
+  "cronDeleteExecution": "Delete this execution?",
+  "cronDeleteGroupCount": "This will delete {count} sessions.",
+  "@cronDeleteGroupCount": { "placeholders": { "count": { "type": "int" } } }
 }

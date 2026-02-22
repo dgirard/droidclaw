@@ -2071,6 +2071,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Last: {date}'**
   String cronLastRun(String date);
+
+  /// No description provided for @logsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs'**
+  String get logsTitle;
+
+  /// No description provided for @logsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No log entries'**
+  String get logsEmpty;
+
+  /// No description provided for @logsFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get logsFilterAll;
+
+  /// No description provided for @logsFilterInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Info'**
+  String get logsFilterInfo;
+
+  /// No description provided for @logsFilterWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning'**
+  String get logsFilterWarning;
+
+  /// No description provided for @logsFilterError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get logsFilterError;
+
+  /// No description provided for @logsSourceAgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent'**
+  String get logsSourceAgent;
+
+  /// No description provided for @logsSourceCron.
+  ///
+  /// In en, this message translates to:
+  /// **'Cron'**
+  String get logsSourceCron;
+
+  /// No description provided for @logsSourceService.
+  ///
+  /// In en, this message translates to:
+  /// **'Service'**
+  String get logsSourceService;
+
+  /// No description provided for @logsSourceTelegram.
+  ///
+  /// In en, this message translates to:
+  /// **'Telegram'**
+  String get logsSourceTelegram;
+
+  /// No description provided for @logsSourceApp.
+  ///
+  /// In en, this message translates to:
+  /// **'App'**
+  String get logsSourceApp;
+
+  /// No description provided for @logsClearAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all logs'**
+  String get logsClearAll;
+
+  /// No description provided for @logsClearConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete all log entries?'**
+  String get logsClearConfirm;
+
+  /// No description provided for @logsEntryCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} entries'**
+  String logsEntryCount(int count);
+
+  /// No description provided for @logsCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs cleared'**
+  String get logsCleared;
+
+  /// No description provided for @logsPurged.
+  ///
+  /// In en, this message translates to:
+  /// **'Purged {count} old log entries'**
+  String logsPurged(int count);
+
+  /// No description provided for @cronDeleteGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete all executions for this cron?'**
+  String get cronDeleteGroup;
+
+  /// No description provided for @cronDeleteExecution.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this execution?'**
+  String get cronDeleteExecution;
+
+  /// No description provided for @cronDeleteGroupCount.
+  ///
+  /// In en, this message translates to:
+  /// **'This will delete {count} sessions.'**
+  String cronDeleteGroupCount(int count);
 }
 
 class _AppLocalizationsDelegate

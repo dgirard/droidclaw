@@ -3,8 +3,10 @@ import 'dart:async';
 import '../../l10n/l10n.dart';
 import '../../shared/constants.dart';
 import '../config/app_config.dart';
+import '../config/log_entry.dart';
 import '../providers/llm_provider.dart';
 import '../providers/llm_response.dart';
+import '../services/app_logger.dart';
 import '../session/session.dart';
 import '../session/session_manager.dart';
 import '../tools/tool.dart';
@@ -93,8 +95,8 @@ class AgentLoop {
 
       final totalChars =
           messages.fold<int>(0, (sum, m) => sum + m.content.length);
-      // ignore: avoid_print
-      print('[AgentLoop] iter=$iteration, msgs=${messages.length}, '
+      AppLogger.instance.debug(LogSource.agent,
+          'iter=$iteration, msgs=${messages.length}, '
           'chars=$totalChars, model=${config.agent.model}');
 
       yield ThinkingEvent(iteration: iteration);
@@ -110,14 +112,14 @@ class AgentLoop {
             'temperature': config.agent.temperature,
           },
         );
-        // ignore: avoid_print
-        print('[AgentLoop] LLM responded: '
-            'content=${response.content.length} chars, '
+        AppLogger.instance.info(LogSource.agent,
+            'LLM responded: content=${response.content.length} chars, '
             'toolCalls=${response.toolCalls.length}, '
-            'finish=${response.finishReason}');
+            'finish=${response.finishReason}',
+            sessionKey: sessionKey);
       } catch (e) {
-        // ignore: avoid_print
-        print('[AgentLoop] LLM error: $e');
+        AppLogger.instance.error(LogSource.agent, 'LLM error: $e',
+            sessionKey: sessionKey);
         yield ErrorEvent(tr(config.resolvedLocale).agentLlmError(e.toString()));
         return;
       }
@@ -143,8 +145,8 @@ class AgentLoop {
         yield ToolCallEvent(name: toolCall.name, arguments: toolCall.arguments);
 
         final result = await tools.execute(toolCall.name, toolCall.arguments);
-        // ignore: avoid_print
-        print('[AgentLoop] Tool ${toolCall.name} result: '
+        AppLogger.instance.debug(LogSource.agent,
+            'Tool ${toolCall.name} result: '
             '${result.forLLM.length} chars, error=${result.isError}');
 
         yield ToolResultEvent(name: toolCall.name, result: result);
