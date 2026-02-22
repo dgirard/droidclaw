@@ -1037,7 +1037,8 @@ class AppLocalizationsEs extends AppLocalizations {
   String get localeItalian => 'Italiano';
 
   @override
-  String get agentRespondInstructions => 'Respond in Spanish.';
+  String get agentRespondInstructions =>
+      'Responde siempre en español, independientemente del idioma usado en los mensajes anteriores.';
 
   @override
   String get batteryCharging => 'cargando';
@@ -1181,4 +1182,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String cronDeleteGroupCount(int count) {
     return 'Esto eliminará $count sesiones.';
   }
+
+  @override
+  String get agentSummarizeInstructions => 'Escribe el resumen en español.';
 }

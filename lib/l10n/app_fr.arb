@@ -327,7 +327,7 @@
   "localeGerman": "Allemand",
   "localeItalian": "Italien",
 
-  "agentRespondInstructions": "Réponds en français.",
+  "agentRespondInstructions": "Réponds toujours en français, quelle que soit la langue utilisée dans les messages précédents.",
 
   "batteryCharging": "en charge",
   "batteryDischarging": "décharge",
@@ -377,5 +377,7 @@
   "cronDeleteGroup": "Supprimer toutes les exécutions de ce cron ?",
   "cronDeleteExecution": "Supprimer cette exécution ?",
   "cronDeleteGroupCount": "Cela supprimera {count} sessions.",
-  "@cronDeleteGroupCount": { "placeholders": { "count": { "type": "int" } } }
+  "@cronDeleteGroupCount": { "placeholders": { "count": { "type": "int" } } },
+
+  "agentSummarizeInstructions": "Rédige le résumé en français."
 }

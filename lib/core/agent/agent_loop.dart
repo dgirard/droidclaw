@@ -193,12 +193,13 @@ class AgentLoop {
         .join('\n');
 
     try {
+      final summaryLang = tr(config.resolvedLocale).agentSummarizeInstructions;
       final response = await provider.chat(
         messages: [
-          const Message(
+          Message(
             role: 'system',
             content:
-                'Summarize the following conversation concisely, preserving key facts, decisions, and context.',
+                'Summarize the following conversation concisely, preserving key facts, decisions, and context. $summaryLang',
           ),
           Message(role: 'user', content: summaryContent),
         ],

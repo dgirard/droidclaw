@@ -358,7 +358,7 @@
   "localeGerman": "Deutsch",
   "localeItalian": "Italienisch",
 
-  "agentRespondInstructions": "Respond in German.",
+  "agentRespondInstructions": "Antworte immer auf Deutsch, unabhängig von der Sprache in vorherigen Nachrichten.",
 
   "batteryCharging": "lädt",
   "batteryDischarging": "entlädt sich",
@@ -412,5 +412,7 @@
   "cronDeleteGroup": "Alle Ausführungen dieses Crons löschen?",
   "cronDeleteExecution": "Diese Ausführung löschen?",
   "cronDeleteGroupCount": "Dies löscht {count} Sitzungen.",
-  "@cronDeleteGroupCount": { "placeholders": { "count": { "type": "int" } } }
+  "@cronDeleteGroupCount": { "placeholders": { "count": { "type": "int" } } },
+
+  "agentSummarizeInstructions": "Schreibe die Zusammenfassung auf Deutsch."
 }

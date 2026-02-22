@@ -1937,7 +1937,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentRespondInstructions.
   ///
   /// In en, this message translates to:
-  /// **'Respond in English.'**
+  /// **'Always respond in English, regardless of the language used in previous messages.'**
   String get agentRespondInstructions;
 
   /// No description provided for @batteryCharging.
@@ -2185,6 +2185,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This will delete {count} sessions.'**
   String cronDeleteGroupCount(int count);
+
+  /// No description provided for @agentSummarizeInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Write the summary in English.'**
+  String get agentSummarizeInstructions;
 }
 
 class _AppLocalizationsDelegate

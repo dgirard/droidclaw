@@ -58,7 +58,11 @@ class ContextBuilder {
     final toolsListing = _buildToolsListing();
     if (toolsListing.isNotEmpty) {
       buffer.writeln(toolsListing);
+      buffer.writeln();
     }
+
+    // 6. Language instruction — positioned last for maximum LLM influence
+    buffer.writeln('IMPORTANT: ${tr(locale).agentRespondInstructions}');
 
     return buffer.toString().trimRight();
   }
@@ -72,8 +76,7 @@ Version: ${AppConstants.appVersion}
 
 You have access to tools that let you search the web, fetch web pages, and manage files in your workspace.
 When you need current information, use the web_search tool.
-Be concise and helpful. Use markdown formatting in your responses.
-${tr(locale).agentRespondInstructions}''';
+Be concise and helpful. Use markdown formatting in your responses.''';
   }
 
   Future<String> _loadBootstrapFiles() async {
