@@ -5,24 +5,16 @@ import 'package:http/http.dart' as http;
 import 'tool.dart';
 
 /// Geocoding tool: converts a text address into GPS coordinates
-/// using the OpenRouteService Geocoding API (Pelias-based).
-/// Reuses the same ORS API key as DirectionsTool.
+/// using the Nominatim (OpenStreetMap) Search API. Free, no API key required.
 class GeocodeTool extends Tool {
-  final String? apiKey;
-
-  GeocodeTool({this.apiKey});
-
-  static const _baseUrl = 'https://api.openrouteservice.org/geocode/search';
-
   @override
   String get name => 'geocode';
 
   @override
   String get description =>
       'Convert a text address or place name into GPS coordinates (latitude, longitude). '
-      'Returns up to N matching results with confidence scores. '
-      'Use this before get_directions or get_transit when the user provides an address instead of coordinates. '
-      'Requires an OpenRouteService API key (same as get_directions).';
+      'Returns up to N matching results with relevance scores. '
+      'Use this before get_directions or get_transit when the user provides an address instead of coordinates.';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -49,12 +41,6 @@ class GeocodeTool extends Tool {
 
   @override
   Future<ToolResult> execute(Map<String, dynamic> arguments) async {
-    if (apiKey == null || apiKey!.isEmpty) {
-      return ToolResult.error(
-          'OpenRouteService API key not configured. '
-          'Set it in Settings > Routing.');
-    }
-
     final address = arguments['address'] as String?;
     if (address == null || address.trim().isEmpty) {
       return ToolResult.error('Missing required parameter: address');
@@ -66,32 +52,31 @@ class GeocodeTool extends Tool {
 
     try {
       final queryParams = <String, String>{
-        'text': address.trim(),
-        'size': maxResults.toString(),
+        'q': address.trim(),
+        'format': 'jsonv2',
+        'limit': maxResults.toString(),
+        'addressdetails': '1',
       };
       if (country != null && country.isNotEmpty) {
-        queryParams['boundary.country'] = country.toUpperCase();
+        queryParams['countrycodes'] = country.toLowerCase();
       }
 
-      final uri = Uri.parse(_baseUrl).replace(queryParameters: queryParams);
+      final uri = Uri.https(
+          'nominatim.openstreetmap.org', '/search', queryParams);
 
       final response = await http.get(uri, headers: {
-        'Authorization': apiKey!,
+        'User-Agent': 'DroidClaw/1.0',
         'Accept': 'application/json',
       });
 
-      if (response.statusCode == 429) {
-        return ToolResult.error('Rate limit exceeded. Try again in a minute.');
-      }
-
       if (response.statusCode != 200) {
-        return _parseError(response);
+        return ToolResult.error(
+            'Nominatim API error: HTTP ${response.statusCode}');
       }
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final features = data['features'] as List? ?? [];
+      final data = jsonDecode(response.body) as List;
 
-      if (features.isEmpty) {
+      if (data.isEmpty) {
         return ToolResult.error(
             'No results found for "$address". '
             'Try a more specific address or different spelling.');
@@ -100,26 +85,17 @@ class GeocodeTool extends Tool {
       final results = <String>[];
       final userResults = <String>[];
 
-      for (var i = 0; i < features.length; i++) {
-        final feature = features[i] as Map<String, dynamic>;
-        final geometry = feature['geometry'] as Map<String, dynamic>? ?? {};
-        final coords = geometry['coordinates'] as List? ?? [];
-        final props = feature['properties'] as Map<String, dynamic>? ?? {};
+      for (var i = 0; i < data.length; i++) {
+        final item = data[i] as Map<String, dynamic>;
 
-        if (coords.length < 2) continue;
+        final lat = double.tryParse(item['lat']?.toString() ?? '');
+        final lon = double.tryParse(item['lon']?.toString() ?? '');
+        if (lat == null || lon == null) continue;
 
-        // ORS returns [lon, lat] — present as lat, lon
-        final lon = (coords[0] as num).toDouble();
-        final lat = (coords[1] as num).toDouble();
-        final label = props['label'] as String? ?? address;
-        final confidence = (props['confidence'] as num?)?.toDouble();
-        final country = props['country'] as String? ?? '';
-        final region = props['region'] as String? ?? '';
-        final locality = props['locality'] as String? ?? '';
-
-        final confStr = confidence != null
-            ? ' (confidence: ${confidence.toStringAsFixed(2)})'
-            : '';
+        final label = item['display_name'] as String? ?? address;
+        final type = item['type'] as String? ?? '';
+        final importance = (item['importance'] as num?)?.toDouble();
+        final addr = item['address'] as Map<String, dynamic>? ?? {};
 
         // LLM gets structured data
         final llmEntry = StringBuffer()
@@ -127,16 +103,33 @@ class GeocodeTool extends Tool {
           ..writeln('  Label: $label')
           ..writeln('  Latitude: $lat')
           ..writeln('  Longitude: $lon');
-        if (confidence != null) {
-          llmEntry.writeln('  Confidence: ${confidence.toStringAsFixed(2)}');
+        if (type.isNotEmpty) llmEntry.writeln('  Type: $type');
+        if (importance != null) {
+          llmEntry.writeln('  Importance: ${importance.toStringAsFixed(3)}');
         }
-        if (locality.isNotEmpty) llmEntry.writeln('  Locality: $locality');
-        if (region.isNotEmpty) llmEntry.writeln('  Region: $region');
-        if (country.isNotEmpty) llmEntry.writeln('  Country: $country');
+        // Address components
+        final road = addr['road'] ?? addr['pedestrian'] ?? '';
+        final city = addr['city'] ??
+            addr['town'] ??
+            addr['village'] ??
+            addr['municipality'] ??
+            '';
+        final state = addr['state'] ?? '';
+        final countryName = addr['country'] ?? '';
+        final postcode = addr['postcode'] ?? '';
+        if (road.toString().isNotEmpty) llmEntry.writeln('  Road: $road');
+        if (city.toString().isNotEmpty) llmEntry.writeln('  City: $city');
+        if (postcode.toString().isNotEmpty) {
+          llmEntry.writeln('  Postcode: $postcode');
+        }
+        if (state.toString().isNotEmpty) llmEntry.writeln('  State: $state');
+        if (countryName.toString().isNotEmpty) {
+          llmEntry.writeln('  Country: $countryName');
+        }
         results.add(llmEntry.toString().trimRight());
 
         // User gets compact display
-        userResults.add('$label ($lat, $lon)$confStr');
+        userResults.add('$label ($lat, $lon)');
       }
 
       if (results.isEmpty) {
@@ -149,20 +142,6 @@ class GeocodeTool extends Tool {
       return ToolResult.dual(forLLM: forLLM, forUser: forUser);
     } catch (e) {
       return ToolResult.error('Geocoding failed: $e');
-    }
-  }
-
-  ToolResult _parseError(http.Response response) {
-    try {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final message = data['error'] as String? ??
-          (data['geocoding'] as Map<String, dynamic>?)?['errors'] ??
-          response.body;
-      return ToolResult.error(
-          'ORS Geocoding error (${response.statusCode}): $message');
-    } catch (_) {
-      return ToolResult.error(
-          'ORS Geocoding error (${response.statusCode}): ${response.body}');
     }
   }
 }

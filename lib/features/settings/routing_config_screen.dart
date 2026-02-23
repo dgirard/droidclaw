@@ -98,11 +98,6 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
 
   Future<void> _testGeocode() async {
     final l = AppLocalizations.of(context);
-    final apiKey = _orsKeyController.text.trim();
-    if (apiKey.isEmpty) {
-      setState(() => _geocodeTestResult = l.commonEnterApiKey);
-      return;
-    }
 
     setState(() {
       _testingGeocode = true;
@@ -110,7 +105,7 @@ class _RoutingConfigScreenState extends ConsumerState<RoutingConfigScreen> {
     });
 
     try {
-      final tool = GeocodeTool(apiKey: apiKey);
+      final tool = GeocodeTool();
       final result = await tool.execute({
         'address': 'Tour Eiffel, Paris',
         'max_results': 1,

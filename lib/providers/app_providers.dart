@@ -173,7 +173,7 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
     registry.register(DirectionsTool(apiKey: orsApiKey));
   }
   if (!disabled.contains('geocode')) {
-    registry.register(GeocodeTool(apiKey: orsApiKey));
+    registry.register(GeocodeTool());
   }
   if (!disabled.contains('get_transit')) {
     registry.register(TransitTool(sncfApiKey: sncfApiKey, primApiKey: primApiKey, locale: locale));
