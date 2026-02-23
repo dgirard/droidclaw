@@ -416,5 +416,10 @@
   "cronDeleteGroupCount": "Questo eliminerà {count} sessioni.",
   "@cronDeleteGroupCount": { "placeholders": { "count": { "type": "int" } } },
 
+  "chatListening": "In ascolto...",
+  "chatSpeechError": "Errore riconoscimento vocale: {error}",
+  "@chatSpeechError": { "placeholders": { "error": { "type": "String" } } },
+  "chatSpeechUnavailable": "Riconoscimento vocale non disponibile su questo dispositivo",
+
   "agentSummarizeInstructions": "Scrivi il riassunto in italiano."
 }

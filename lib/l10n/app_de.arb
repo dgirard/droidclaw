@@ -416,5 +416,10 @@
   "cronDeleteGroupCount": "Dies löscht {count} Sitzungen.",
   "@cronDeleteGroupCount": { "placeholders": { "count": { "type": "int" } } },
 
+  "chatListening": "Zuhören...",
+  "chatSpeechError": "Spracherkennungsfehler: {error}",
+  "@chatSpeechError": { "placeholders": { "error": { "type": "String" } } },
+  "chatSpeechUnavailable": "Spracherkennung auf diesem Gerät nicht verfügbar",
+
   "agentSummarizeInstructions": "Schreibe die Zusammenfassung auf Deutsch."
 }

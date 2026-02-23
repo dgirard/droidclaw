@@ -1188,6 +1188,18 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get chatListening => 'Zuhören...';
+
+  @override
+  String chatSpeechError(String error) {
+    return 'Spracherkennungsfehler: $error';
+  }
+
+  @override
+  String get chatSpeechUnavailable =>
+      'Spracherkennung auf diesem Gerät nicht verfügbar';
+
+  @override
   String get agentSummarizeInstructions =>
       'Schreibe die Zusammenfassung auf Deutsch.';
 }

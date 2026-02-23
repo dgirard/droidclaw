@@ -48,7 +48,7 @@ dependencies:
   intl: ^0.20.2
   connectivity_plus: ^7.0.0
   url_launcher: ^6.3.2
-  record: ^6.2.0
+  speech_to_text: ^7.0.0
   path: ^1.9.1
   flutter_foreground_task: ^9.2.0
   geolocator: ^14.0.0

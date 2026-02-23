@@ -1169,5 +1169,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get chatListening => 'Listening...';
+
+  @override
+  String chatSpeechError(String error) {
+    return 'Speech recognition error: $error';
+  }
+
+  @override
+  String get chatSpeechUnavailable =>
+      'Speech recognition unavailable on this device';
+
+  @override
   String get agentSummarizeInstructions => 'Write the summary in English.';
 }

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:speech_to_text/speech_recognition_error.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
@@ -18,10 +21,73 @@ class ChatScreen extends ConsumerStatefulWidget {
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _scrollController = ScrollController();
+  final _inputBarKey = GlobalKey<InputBarState>();
+  final SpeechToText _speech = SpeechToText();
+  bool _speechAvailable = false;
+  bool _isListening = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initSpeech();
+  }
+
+  Future<void> _initSpeech() async {
+    _speechAvailable = await _speech.initialize(
+      onStatus: _onSpeechStatus,
+      onError: _onSpeechError,
+    );
+    if (mounted) setState(() {});
+  }
+
+  void _toggleListening() {
+    if (_isListening) {
+      _speech.stop();
+      setState(() => _isListening = false);
+    } else {
+      final locale = ref.read(appConfigProvider).resolvedLocale;
+      _speech.listen(
+        onResult: _onSpeechResult,
+        localeId: locale,
+        listenOptions: SpeechListenOptions(
+          listenMode: ListenMode.dictation,
+          partialResults: true,
+        ),
+      );
+      setState(() => _isListening = true);
+    }
+  }
+
+  void _onSpeechResult(SpeechRecognitionResult result) {
+    _inputBarKey.currentState?.setText(result.recognizedWords);
+  }
+
+  void _onSpeechStatus(String status) {
+    if (status == 'done' || status == 'notListening') {
+      if (mounted) setState(() => _isListening = false);
+    }
+  }
+
+  void _onSpeechError(SpeechRecognitionError error) {
+    if (mounted) {
+      setState(() => _isListening = false);
+      // Don't show error for normal speech timeout
+      if (error.errorMsg != 'error_speech_timeout') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).chatSpeechError(error.errorMsg),
+            ),
+          ),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _speech.stop();
     super.dispose();
   }
 
@@ -94,7 +160,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
           // Input bar
           InputBar(
-            onSend: (text) => chatNotifier.sendMessage(text),
+            key: _inputBarKey,
+            onSend: (text) {
+              // Stop listening if active when sending
+              if (_isListening) {
+                _speech.stop();
+                setState(() => _isListening = false);
+              }
+              chatNotifier.sendMessage(text);
+            },
+            onMicToggle: _speechAvailable ? _toggleListening : null,
+            isListening: _isListening,
             enabled: !chatState.isProcessing,
           ),
         ],

@@ -2198,6 +2198,24 @@ abstract class AppLocalizations {
   /// **'This will delete {count} sessions.'**
   String cronDeleteGroupCount(int count);
 
+  /// No description provided for @chatListening.
+  ///
+  /// In en, this message translates to:
+  /// **'Listening...'**
+  String get chatListening;
+
+  /// No description provided for @chatSpeechError.
+  ///
+  /// In en, this message translates to:
+  /// **'Speech recognition error: {error}'**
+  String chatSpeechError(String error);
+
+  /// No description provided for @chatSpeechUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Speech recognition unavailable on this device'**
+  String get chatSpeechUnavailable;
+
   /// No description provided for @agentSummarizeInstructions.
   ///
   /// In en, this message translates to:

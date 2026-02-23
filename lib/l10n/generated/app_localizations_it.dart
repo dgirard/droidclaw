@@ -1188,5 +1188,17 @@ class AppLocalizationsIt extends AppLocalizations {
   }
 
   @override
+  String get chatListening => 'In ascolto...';
+
+  @override
+  String chatSpeechError(String error) {
+    return 'Errore riconoscimento vocale: $error';
+  }
+
+  @override
+  String get chatSpeechUnavailable =>
+      'Riconoscimento vocale non disponibile su questo dispositivo';
+
+  @override
   String get agentSummarizeInstructions => 'Scrivi il riassunto in italiano.';
 }

@@ -2,24 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/l10n.dart';
 
-/// Chat input bar with text field, send button, and mic button.
+/// Chat input bar with text field and dynamic right-side button (mic or send).
 class InputBar extends StatefulWidget {
   final void Function(String text) onSend;
-  final VoidCallback? onMicPressed;
+  final VoidCallback? onMicToggle;
   final bool enabled;
+  final bool isListening;
 
   const InputBar({
     super.key,
     required this.onSend,
-    this.onMicPressed,
+    this.onMicToggle,
     this.enabled = true,
+    this.isListening = false,
   });
 
   @override
-  State<InputBar> createState() => _InputBarState();
+  State<InputBar> createState() => InputBarState();
 }
 
-class _InputBarState extends State<InputBar> {
+class InputBarState extends State<InputBar> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
 
@@ -33,6 +35,28 @@ class _InputBarState extends State<InputBar> {
     _focusNode.requestFocus();
   }
 
+  /// Replace entire text content (used by speech-to-text partial results).
+  void setText(String text) {
+    _controller.text = text;
+    _controller.selection = TextSelection.collapsed(offset: text.length);
+    setState(() {});
+  }
+
+  /// Insert text at cursor position.
+  void insertText(String text) {
+    final currentText = _controller.text;
+    final selection = _controller.selection;
+    // Clamp selection to valid range (can be stale after clear())
+    final start = selection.start.clamp(0, currentText.length);
+    final end = selection.end.clamp(0, currentText.length);
+    final newText = currentText.replaceRange(start, end, text);
+    _controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: start + text.length),
+    );
+    setState(() {});
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -43,6 +67,7 @@ class _InputBarState extends State<InputBar> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context);
 
     return Container(
       padding: EdgeInsets.only(
@@ -60,14 +85,6 @@ class _InputBarState extends State<InputBar> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // Mic button
-          if (widget.onMicPressed != null)
-            IconButton(
-              icon: const Icon(Icons.mic_outlined),
-              onPressed: widget.enabled ? widget.onMicPressed : null,
-              tooltip: AppLocalizations.of(context).chatVoiceInput,
-            ),
-
           // Text field
           Expanded(
             child: TextField(
@@ -79,7 +96,7 @@ class _InputBarState extends State<InputBar> {
               textInputAction: TextInputAction.newline,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: AppLocalizations.of(context).chatInputHint,
+                hintText: l.chatInputHint,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
@@ -96,34 +113,42 @@ class _InputBarState extends State<InputBar> {
 
           const SizedBox(width: 4),
 
-          // Send button
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            child: IconButton.filled(
-              icon: const Icon(Icons.send),
-              onPressed: _hasText && widget.enabled ? _send : null,
-              tooltip: AppLocalizations.of(context).chatSend,
-            ),
-          ),
+          // Dynamic action button: send (when text) or mic (when empty)
+          _buildActionButton(theme, l),
         ],
       ),
     );
   }
 
-  /// Insert text at cursor position (used by voice input).
-  void insertText(String text) {
-    final selection = _controller.selection;
-    final newText = _controller.text.replaceRange(
-      selection.start,
-      selection.end,
-      text,
-    );
-    _controller.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(
-        offset: selection.start + text.length,
+  Widget _buildActionButton(ThemeData theme, AppLocalizations l) {
+    if (_hasText) {
+      return IconButton.filled(
+        icon: const Icon(Icons.send),
+        onPressed: widget.enabled ? _send : null,
+        tooltip: l.chatSend,
+      );
+    }
+
+    if (widget.onMicToggle == null) {
+      // No mic support — show disabled send button
+      return IconButton.filled(
+        icon: const Icon(Icons.send),
+        onPressed: null,
+        tooltip: l.chatSend,
+      );
+    }
+
+    // Mic button — green when idle, red when listening
+    return IconButton.filled(
+      icon: Icon(widget.isListening ? Icons.mic : Icons.mic_none),
+      style: IconButton.styleFrom(
+        backgroundColor: widget.isListening
+            ? theme.colorScheme.error
+            : Colors.green,
+        foregroundColor: Colors.white,
       ),
+      onPressed: widget.enabled ? widget.onMicToggle : null,
+      tooltip: widget.isListening ? l.chatListening : l.chatVoiceInput,
     );
-    setState(() {});
   }
 }
