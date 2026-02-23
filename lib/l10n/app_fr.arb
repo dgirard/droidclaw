@@ -261,6 +261,8 @@
   "toolTransitDesc": "Métro, RER, bus, train (SNCF + IDFM)",
   "toolWeather": "Météo",
   "toolWeatherDesc": "Prévisions météo via Open-Meteo (modèles Météo-France)",
+  "toolRadio": "Radio France",
+  "toolRadioDesc": "Écouter les radios France en direct (France Inter, FIP, etc.)",
 
   "weatherClearSky": "Ciel dégagé",
   "weatherMainlyClear": "Peu nuageux",

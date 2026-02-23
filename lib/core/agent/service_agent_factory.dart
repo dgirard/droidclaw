@@ -139,6 +139,7 @@ class ServiceAgentFactory {
     // - CalendarTool (ContentProvider unreliable from background)
     // - PickImageTool (image picker UI needs Activity)
     // - VolumeControlTool (MethodChannel registered on Activity FlutterEngine only)
+    // - RadioTool (MediaSessionService requires Activity FlutterEngine)
 
     // 5. Create StorageService with pre-resolved workspace path
     final storageService = StorageService(

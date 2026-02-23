@@ -164,6 +164,12 @@ List<_ToolInfo> _tools(AppLocalizations l) => [
     description: l.toolWeatherDesc,
     icon: Icons.cloud_outlined,
   ),
+  _ToolInfo(
+    name: 'radio',
+    label: l.toolRadio,
+    description: l.toolRadioDesc,
+    icon: Icons.radio_outlined,
+  ),
 ];
 
 /// Screen to enable/disable individual agent tools.

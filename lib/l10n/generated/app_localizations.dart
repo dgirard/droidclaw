@@ -1574,6 +1574,18 @@ abstract class AppLocalizations {
   /// **'Weather forecast via Open-Meteo (Météo-France models)'**
   String get toolWeatherDesc;
 
+  /// No description provided for @toolRadio.
+  ///
+  /// In en, this message translates to:
+  /// **'Radio France'**
+  String get toolRadio;
+
+  /// No description provided for @toolRadioDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Play live Radio France streams (France Inter, FIP, etc.)'**
+  String get toolRadioDesc;
+
   /// No description provided for @weatherClearSky.
   ///
   /// In en, this message translates to:

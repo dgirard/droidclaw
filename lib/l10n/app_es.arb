@@ -285,6 +285,8 @@
   "toolTransitDesc": "Rutas de metro, RER, autobús, tren (SNCF + IDFM)",
   "toolWeather": "Tiempo",
   "toolWeatherDesc": "Previsión meteorológica mediante Open-Meteo (modelos Météo-France)",
+  "toolRadio": "Radio France",
+  "toolRadioDesc": "Escuchar emisoras de Radio France en directo (France Inter, FIP, etc.)",
 
   "weatherClearSky": "Cielo despejado",
   "weatherMainlyClear": "Mayormente despejado",

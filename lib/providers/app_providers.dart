@@ -31,6 +31,7 @@ import '../core/tools/set_alarm_tool.dart';
 import '../core/tools/speak_tool.dart';
 import '../core/tools/subagent_tool.dart';
 import '../core/tools/transit_tool.dart';
+import '../core/tools/radio_tool.dart';
 import '../core/tools/volume_control_tool.dart';
 import '../core/tools/weather_tool.dart';
 import '../core/tools/tool.dart';
@@ -180,6 +181,9 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   }
   if (!disabled.contains('weather')) {
     registry.register(WeatherTool(locale: locale));
+  }
+  if (!disabled.contains('radio')) {
+    registry.register(RadioTool());
   }
 
   return registry;

@@ -832,6 +832,13 @@ class AppLocalizationsEs extends AppLocalizations {
       'Previsión meteorológica mediante Open-Meteo (modelos Météo-France)';
 
   @override
+  String get toolRadio => 'Radio France';
+
+  @override
+  String get toolRadioDesc =>
+      'Escuchar emisoras de Radio France en directo (France Inter, FIP, etc.)';
+
+  @override
   String get weatherClearSky => 'Cielo despejado';
 
   @override

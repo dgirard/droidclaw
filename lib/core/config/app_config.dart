@@ -177,7 +177,7 @@ class ToolsConfig {
   static const _defaultDisabledTools = {
     'speak', 'open_app', 'set_alarm',
     'notifications', 'contacts', 'calendar',
-    'pick_image',
+    'pick_image', 'radio',
   };
 
   const ToolsConfig({
