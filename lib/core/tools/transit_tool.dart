@@ -46,7 +46,7 @@ class TransitTool extends Tool {
       'Covers Ile-de-France (RATP, Transilien) and national trains (TGV, TER). '
       'Auto-selects the best API based on trip location. '
       'Coordinates: use get_location for current position, or provide lat/lon. '
-      'Chain with get_address to resolve place names to coordinates.';
+      'Chain with geocode to resolve place names to coordinates.';
 
   @override
   Map<String, dynamic> get parameters => {

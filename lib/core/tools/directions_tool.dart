@@ -32,6 +32,7 @@ class DirectionsTool extends Tool {
       'Returns distance, duration, elevation, and turn-by-turn instructions. '
       'Can also compute isochrones (reachable area in N minutes). '
       'Coordinates: use get_location for current position, or provide lat/lon. '
+      'Chain with geocode to resolve place names to coordinates. '
       'Requires an OpenRouteService API key (free at openrouteservice.org).';
 
   @override
