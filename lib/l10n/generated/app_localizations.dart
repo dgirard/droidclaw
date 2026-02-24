@@ -2221,6 +2221,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Write the summary in English.'**
   String get agentSummarizeInstructions;
+
+  /// No description provided for @settingsExportConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Export Conversations'**
+  String get settingsExportConversations;
+
+  /// No description provided for @settingsExportSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share all conversations as JSON'**
+  String get settingsExportSubtitle;
+
+  /// No description provided for @exportProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Exporting...'**
+  String get exportProgress;
+
+  /// No description provided for @exportSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} conversations exported'**
+  String exportSuccess(int count);
+
+  /// No description provided for @exportEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No conversations to export'**
+  String get exportEmpty;
+
+  /// No description provided for @exportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Export failed: {error}'**
+  String exportFailed(String error);
 }
 
 class _AppLocalizationsDelegate

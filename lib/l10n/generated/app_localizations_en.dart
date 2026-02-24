@@ -1182,4 +1182,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentSummarizeInstructions => 'Write the summary in English.';
+
+  @override
+  String get settingsExportConversations => 'Export Conversations';
+
+  @override
+  String get settingsExportSubtitle => 'Share all conversations as JSON';
+
+  @override
+  String get exportProgress => 'Exporting...';
+
+  @override
+  String exportSuccess(int count) {
+    return '$count conversations exported';
+  }
+
+  @override
+  String get exportEmpty => 'No conversations to export';
+
+  @override
+  String exportFailed(String error) {
+    return 'Export failed: $error';
+  }
 }

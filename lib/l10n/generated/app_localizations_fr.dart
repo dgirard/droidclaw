@@ -1202,4 +1202,27 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get agentSummarizeInstructions => 'Rédige le résumé en français.';
+
+  @override
+  String get settingsExportConversations => 'Exporter les conversations';
+
+  @override
+  String get settingsExportSubtitle =>
+      'Partager toutes les conversations en JSON';
+
+  @override
+  String get exportProgress => 'Exportation...';
+
+  @override
+  String exportSuccess(int count) {
+    return '$count conversations exportées';
+  }
+
+  @override
+  String get exportEmpty => 'Aucune conversation à exporter';
+
+  @override
+  String exportFailed(String error) {
+    return 'Échec de l\'export : $error';
+  }
 }

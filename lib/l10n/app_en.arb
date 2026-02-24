@@ -421,5 +421,14 @@
   "@chatSpeechError": { "placeholders": { "error": { "type": "String" } } },
   "chatSpeechUnavailable": "Speech recognition unavailable on this device",
 
-  "agentSummarizeInstructions": "Write the summary in English."
+  "agentSummarizeInstructions": "Write the summary in English.",
+
+  "settingsExportConversations": "Export Conversations",
+  "settingsExportSubtitle": "Share all conversations as JSON",
+  "exportProgress": "Exporting...",
+  "exportSuccess": "{count} conversations exported",
+  "@exportSuccess": { "placeholders": { "count": { "type": "int" } } },
+  "exportEmpty": "No conversations to export",
+  "exportFailed": "Export failed: {error}",
+  "@exportFailed": { "placeholders": { "error": { "type": "String" } } }
 }

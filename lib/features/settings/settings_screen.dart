@@ -1,5 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
@@ -145,12 +150,65 @@ class SettingsScreen extends ConsumerWidget {
           // About
           _SectionHeader(title: l.settingsSectionAbout),
           ListTile(
+            leading: const Icon(Icons.upload_outlined),
+            title: Text(l.settingsExportConversations),
+            subtitle: Text(l.settingsExportSubtitle),
+            onTap: () => _exportConversations(context, ref),
+          ),
+          ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text(AppConstants.appName),
             subtitle: const Text('v${AppConstants.appVersion}'),
           ),
         ],
       ),
+    );
+  }
+}
+
+Future<void> _exportConversations(BuildContext context, WidgetRef ref) async {
+  final l = AppLocalizations.of(context);
+  final messenger = ScaffoldMessenger.of(context);
+
+  messenger.showSnackBar(SnackBar(content: Text(l.exportProgress)));
+
+  try {
+    final sessions = await ref.read(sessionManagerProvider.future);
+    final allSessions = sessions.getAllSessions();
+
+    if (allSessions.isEmpty) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text(l.exportEmpty)));
+      return;
+    }
+
+    final export = {
+      'app': AppConstants.appName,
+      'version': AppConstants.appVersion,
+      'exportedAt': DateTime.now().toUtc().toIso8601String(),
+      'sessionCount': allSessions.length,
+      'sessions': allSessions.map((s) => s.toJson()).toList(),
+    };
+
+    final json = const JsonEncoder.withIndent('  ').convert(export);
+    final dir = await getTemporaryDirectory();
+    final date = DateTime.now().toIso8601String().substring(0, 10);
+    final file = File('${dir.path}/droidclaw_export_$date.json');
+    await file.writeAsString(json);
+
+    messenger.hideCurrentSnackBar();
+
+    await SharePlus.instance.share(
+      ShareParams(files: [XFile(file.path)]),
+    );
+
+    messenger.showSnackBar(
+      SnackBar(content: Text(l.exportSuccess(allSessions.length))),
+    );
+  } catch (e) {
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(content: Text(l.exportFailed(e.toString()))),
     );
   }
 }

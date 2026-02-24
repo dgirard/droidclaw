@@ -1202,4 +1202,26 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get agentSummarizeInstructions =>
       'Schreibe die Zusammenfassung auf Deutsch.';
+
+  @override
+  String get settingsExportConversations => 'Unterhaltungen exportieren';
+
+  @override
+  String get settingsExportSubtitle => 'Alle Unterhaltungen als JSON teilen';
+
+  @override
+  String get exportProgress => 'Exportiere...';
+
+  @override
+  String exportSuccess(int count) {
+    return '$count Unterhaltungen exportiert';
+  }
+
+  @override
+  String get exportEmpty => 'Keine Unterhaltungen zum Exportieren';
+
+  @override
+  String exportFailed(String error) {
+    return 'Export fehlgeschlagen: $error';
+  }
 }

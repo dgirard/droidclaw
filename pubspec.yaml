@@ -66,6 +66,7 @@ dependencies:
   google_mlkit_text_recognition: ^0.15.1
   qr_flutter: ^4.1.0
   image_picker: ^1.2.1
+  share_plus: ^11.0.0
 
 dev_dependencies:
   flutter_test:
