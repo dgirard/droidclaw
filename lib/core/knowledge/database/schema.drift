@@ -1,0 +1,223 @@
+-- ══════════════════════════════════════════════
+-- ENTITIES (Knowledge Graph nodes)
+-- ══════════════════════════════════════════════
+CREATE TABLE entities (
+  id            INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  name          TEXT    NOT NULL,
+  entity_type   TEXT    NOT NULL DEFAULT 'CONCEPT',
+  summary       TEXT,
+  properties    TEXT    NOT NULL DEFAULT '{}',
+  embedding     BLOB,
+  -- Bi-temporal
+  created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  valid_at      INTEGER,
+  invalid_at    INTEGER,
+  ingested_at   INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  expired_at    INTEGER,
+  -- Activation & decay
+  last_accessed INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  access_count  INTEGER NOT NULL DEFAULT 1,
+  temperature   TEXT    NOT NULL DEFAULT 'warm' CHECK(temperature IN ('hot','warm','cool','cold')),
+  base_score    REAL    NOT NULL DEFAULT 0.5,
+  -- RAPTOR hierarchy
+  parent_summary_id INTEGER REFERENCES summary_nodes(id),
+  is_active     INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE INDEX idx_entities_type ON entities(entity_type);
+CREATE INDEX idx_entities_temperature ON entities(temperature);
+CREATE INDEX idx_entities_valid ON entities(valid_at, invalid_at);
+CREATE INDEX idx_entities_active ON entities(is_active, temperature);
+
+-- ══════════════════════════════════════════════
+-- RELATIONS (Knowledge Graph edges / triplets)
+-- ══════════════════════════════════════════════
+CREATE TABLE relations (
+  id            INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  source_id     INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  target_id     INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  predicate     TEXT    NOT NULL,
+  weight        REAL    NOT NULL DEFAULT 1.0,
+  properties    TEXT    NOT NULL DEFAULT '{}',
+  embedding     BLOB,
+  -- Bi-temporal
+  created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  valid_at      INTEGER,
+  invalid_at    INTEGER,
+  ingested_at   INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  expired_at    INTEGER,
+  -- Activation
+  last_accessed INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  access_count  INTEGER NOT NULL DEFAULT 1,
+  confidence    REAL    NOT NULL DEFAULT 1.0,
+  source_text   TEXT,
+  is_active     INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE INDEX idx_rel_source ON relations(source_id) WHERE is_active = 1;
+CREATE INDEX idx_rel_target ON relations(target_id) WHERE is_active = 1;
+CREATE INDEX idx_rel_predicate ON relations(predicate);
+CREATE UNIQUE INDEX idx_rel_triplet ON relations(source_id, predicate, target_id)
+  WHERE is_active = 1 AND expired_at IS NULL;
+
+-- ══════════════════════════════════════════════
+-- FACTS (key-value per entity)
+-- ══════════════════════════════════════════════
+CREATE TABLE facts (
+  id            INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  entity_id     INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  fact_key      TEXT    NOT NULL,
+  fact_value    TEXT    NOT NULL,
+  value_type    TEXT    NOT NULL DEFAULT 'string',
+  valid_at      INTEGER,
+  invalid_at    INTEGER,
+  ingested_at   INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  expired_at    INTEGER,
+  confidence    REAL    NOT NULL DEFAULT 1.0,
+  source_text   TEXT
+);
+
+CREATE UNIQUE INDEX idx_facts_active ON facts(entity_id, fact_key)
+  WHERE expired_at IS NULL;
+
+-- ══════════════════════════════════════════════
+-- ALIASES (fuzzy entity resolution)
+-- ══════════════════════════════════════════════
+CREATE TABLE aliases (
+  id            INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  entity_id     INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  alias_name    TEXT    NOT NULL COLLATE NOCASE,
+  alias_type    TEXT    NOT NULL DEFAULT 'name',
+  confidence    REAL    NOT NULL DEFAULT 1.0
+);
+
+CREATE INDEX idx_aliases_name ON aliases(alias_name COLLATE NOCASE);
+CREATE INDEX idx_aliases_entity ON aliases(entity_id);
+
+-- ══════════════════════════════════════════════
+-- SUMMARY NODES (RAPTOR-style hierarchy)
+-- ══════════════════════════════════════════════
+CREATE TABLE summary_nodes (
+  id            INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  parent_id     INTEGER REFERENCES summary_nodes(id),
+  level         INTEGER NOT NULL DEFAULT 0,
+  summary_text  TEXT    NOT NULL,
+  embedding     BLOB,
+  member_ids    TEXT    NOT NULL DEFAULT '[]',
+  cluster_label INTEGER,
+  created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  last_updated  INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+
+CREATE INDEX idx_summary_parent ON summary_nodes(parent_id);
+CREATE INDEX idx_summary_level ON summary_nodes(level);
+
+-- ══════════════════════════════════════════════
+-- FTS5 — Full-text search
+-- ══════════════════════════════════════════════
+CREATE VIRTUAL TABLE entities_fts USING fts5(
+  name,
+  summary,
+  entity_type,
+  content=entities,
+  content_rowid=id,
+  prefix='2 3',
+  tokenize='unicode61'
+);
+
+CREATE VIRTUAL TABLE facts_fts USING fts5(
+  fact_key,
+  fact_value,
+  content=facts,
+  content_rowid=id,
+  prefix='2 3',
+  tokenize='unicode61'
+);
+
+-- FTS5 sync triggers for entities
+CREATE TRIGGER entities_ai AFTER INSERT ON entities BEGIN
+  INSERT INTO entities_fts(rowid, name, summary, entity_type)
+  VALUES (new.id, new.name, new.summary, new.entity_type);
+END;
+
+CREATE TRIGGER entities_ad AFTER DELETE ON entities BEGIN
+  INSERT INTO entities_fts(entities_fts, rowid, name, summary, entity_type)
+  VALUES('delete', old.id, old.name, old.summary, old.entity_type);
+END;
+
+CREATE TRIGGER entities_au AFTER UPDATE ON entities BEGIN
+  INSERT INTO entities_fts(entities_fts, rowid, name, summary, entity_type)
+  VALUES('delete', old.id, old.name, old.summary, old.entity_type);
+  INSERT INTO entities_fts(rowid, name, summary, entity_type)
+  VALUES (new.id, new.name, new.summary, new.entity_type);
+END;
+
+-- FTS5 sync triggers for facts
+CREATE TRIGGER facts_ai AFTER INSERT ON facts BEGIN
+  INSERT INTO facts_fts(rowid, fact_key, fact_value)
+  VALUES (new.id, new.fact_key, new.fact_value);
+END;
+
+CREATE TRIGGER facts_ad AFTER DELETE ON facts BEGIN
+  INSERT INTO facts_fts(facts_fts, rowid, fact_key, fact_value)
+  VALUES('delete', old.id, old.fact_key, old.fact_value);
+END;
+
+CREATE TRIGGER facts_au AFTER UPDATE ON facts BEGIN
+  INSERT INTO facts_fts(facts_fts, rowid, fact_key, fact_value)
+  VALUES('delete', old.id, old.fact_key, old.fact_value);
+  INSERT INTO facts_fts(rowid, fact_key, fact_value)
+  VALUES (new.id, new.fact_key, new.fact_value);
+END;
+
+-- ══════════════════════════════════════════════
+-- NAMED QUERIES
+-- ══════════════════════════════════════════════
+
+searchEntities:
+  SELECT e.*, bm25(entities_fts, 5.0, 2.0, 1.0) AS rank
+  FROM entities_fts
+  JOIN entities e ON e.id = entities_fts.rowid
+  WHERE entities_fts MATCH :query AND e.is_active = 1
+  ORDER BY rank LIMIT :lim;
+
+searchFacts:
+  SELECT f.*, bm25(facts_fts, 2.0, 5.0) AS rank
+  FROM facts_fts
+  JOIN facts f ON f.id = facts_fts.rowid
+  WHERE facts_fts MATCH :query AND f.expired_at IS NULL
+  ORDER BY rank LIMIT :lim;
+
+findNeighbors:
+  SELECT e.*, r.predicate, r.weight, r.confidence AS rel_confidence
+  FROM relations r
+  JOIN entities e ON (
+    (r.target_id = e.id AND r.source_id = :entityId) OR
+    (r.source_id = e.id AND r.target_id = :entityId)
+  )
+  WHERE r.is_active = 1 AND r.expired_at IS NULL
+  ORDER BY r.weight DESC;
+
+resolveAlias:
+  SELECT e.* FROM entities e
+  JOIN aliases a ON a.entity_id = e.id
+  WHERE a.alias_name = :name COLLATE NOCASE AND e.is_active = 1
+  ORDER BY a.confidence DESC LIMIT 1;
+
+getEntityFacts:
+  SELECT * FROM facts
+  WHERE entity_id = :entityId AND expired_at IS NULL
+  ORDER BY fact_key;
+
+getActiveEntities:
+  SELECT id, base_score, last_accessed, access_count, temperature
+  FROM entities WHERE is_active = 1;
+
+getEntityById:
+  SELECT * FROM entities WHERE id = :id;
+
+countEntities:
+  SELECT COUNT(*) AS cnt FROM entities WHERE is_active = 1;
+
+countRelations:
+  SELECT COUNT(*) AS cnt FROM relations WHERE is_active = 1 AND expired_at IS NULL;

@@ -837,6 +837,20 @@ class AppLocalizationsDe extends AppLocalizations {
       'Radio-France-Sender live streamen (France Inter, FIP, usw.)';
 
   @override
+  String get toolKnowledgeSearch => 'Wissenssuche';
+
+  @override
+  String get toolKnowledgeSearchDesc =>
+      'Gespeichertes Wissen aus früheren Gesprächen durchsuchen';
+
+  @override
+  String get toolKnowledgeStore => 'Wissensspeicher';
+
+  @override
+  String get toolKnowledgeStoreDesc =>
+      'Einen Fakt zum Merken über Gespräche hinweg speichern';
+
+  @override
   String get weatherClearSky => 'Klarer Himmel';
 
   @override
@@ -1224,4 +1238,241 @@ class AppLocalizationsDe extends AppLocalizations {
   String exportFailed(String error) {
     return 'Export fehlgeschlagen: $error';
   }
+
+  @override
+  String get knowledgeTitle => 'Wissensgraph';
+
+  @override
+  String get knowledgeSubtitle =>
+      'Dauerhaftes Gedächtnis über Gespräche hinweg';
+
+  @override
+  String get knowledgeEnable => 'Wissensgraph aktivieren';
+
+  @override
+  String get knowledgeEnableDesc =>
+      'Wissen aus Gesprächen automatisch extrahieren und merken';
+
+  @override
+  String get knowledgeAutoExtract => 'Automatische Extraktion';
+
+  @override
+  String get knowledgeAutoExtractDesc =>
+      'Entitäten und Fakten nach jeder Antwort extrahieren';
+
+  @override
+  String knowledgeStatsEntities(int count) {
+    return '$count Entitäten';
+  }
+
+  @override
+  String knowledgeStatsRelations(int count) {
+    return '$count Beziehungen';
+  }
+
+  @override
+  String knowledgeStatsSize(String size) {
+    return 'Datenbankgröße: $size';
+  }
+
+  @override
+  String get knowledgeForgetAll => 'Alles vergessen';
+
+  @override
+  String get knowledgeForgetAllDesc => 'Alles gespeicherte Wissen löschen';
+
+  @override
+  String get knowledgeForgetConfirmTitle => 'Alles vergessen?';
+
+  @override
+  String get knowledgeForgetConfirmBody =>
+      'Dadurch werden alle Entitäten, Beziehungen und Fakten aus dem Wissensgraph dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.';
+
+  @override
+  String get knowledgeForgetConfirmButton => 'Alles vergessen';
+
+  @override
+  String get knowledgeEmpty => 'Noch kein Wissen gespeichert';
+
+  @override
+  String get knowledgeForgotten => 'Alles Wissen gelöscht';
+
+  @override
+  String get settingsKnowledge => 'Wissensgraph';
+
+  @override
+  String get settingsKnowledgeSubtitle =>
+      'Einstellungen für dauerhaftes Gedächtnis';
+
+  @override
+  String get llmTracesTitle => 'LLM-Traces';
+
+  @override
+  String get llmTracesEmpty => 'Keine Traces aufgezeichnet';
+
+  @override
+  String llmTracesStatsHeader(int count, String tokens, String latency) {
+    return '$count Aufrufe · $tokens Tokens · ${latency}s Durchschn.';
+  }
+
+  @override
+  String get llmTracesLast24h => 'Letzte 24 Stunden';
+
+  @override
+  String get llmTracesFilterAll => 'Alle';
+
+  @override
+  String get llmTracesFilterChat => 'Chat';
+
+  @override
+  String get llmTracesFilterSummarize => 'Zusammenfassung';
+
+  @override
+  String get llmTracesFilterExtract => 'Extraktion';
+
+  @override
+  String get llmTracesClearAll => 'Alle Traces löschen';
+
+  @override
+  String get llmTracesClearConfirm => 'Alle LLM-Traces löschen?';
+
+  @override
+  String get llmTracesCleared => 'Traces gelöscht';
+
+  @override
+  String get llmTraceDetailTitle => 'Trace-Details';
+
+  @override
+  String get llmTraceTokens => 'Tokens';
+
+  @override
+  String get llmTraceTokensIn => 'Eingang';
+
+  @override
+  String get llmTraceTokensOut => 'Ausgang';
+
+  @override
+  String get llmTraceTokensTotal => 'Gesamt';
+
+  @override
+  String llmTraceLatency(int ms) {
+    return 'Latenz: $ms ms';
+  }
+
+  @override
+  String llmTraceSystemPrompt(int chars) {
+    return 'Systemprompt ($chars Zeichen)';
+  }
+
+  @override
+  String llmTraceMessages(int count) {
+    return 'Nachrichten ($count)';
+  }
+
+  @override
+  String llmTraceResponse(int chars) {
+    return 'Antwort ($chars Zeichen)';
+  }
+
+  @override
+  String get llmTraceToolsCalled => 'Aufgerufene Tools';
+
+  @override
+  String get llmTraceFinishReason => 'Abschlussgrund';
+
+  @override
+  String get llmTraceError => 'Fehler';
+
+  @override
+  String llmTraceIteration(int n) {
+    return 'Iter $n';
+  }
+
+  @override
+  String get settingsLlmTraces => 'LLM-Traces';
+
+  @override
+  String get settingsLlmTracesSubtitle =>
+      'API-Aufrufverlauf und Token-Verbrauch';
+
+  @override
+  String get knowledgeBrowse => 'Entitäten durchsuchen';
+
+  @override
+  String get knowledgeBrowseSubtitle => 'Gespeichertes Wissen inspizieren';
+
+  @override
+  String get kgBrowserTitle => 'Wissensbrowser';
+
+  @override
+  String get kgBrowserSearch => 'Entitäten suchen...';
+
+  @override
+  String get kgBrowserEmpty => 'Keine Entitäten gefunden';
+
+  @override
+  String get kgFilterAll => 'Alle';
+
+  @override
+  String get kgFilterPerson => 'Person';
+
+  @override
+  String get kgFilterPlace => 'Ort';
+
+  @override
+  String get kgFilterOrg => 'Org';
+
+  @override
+  String get kgFilterEvent => 'Ereignis';
+
+  @override
+  String get kgFilterConcept => 'Konzept';
+
+  @override
+  String get kgFilterDate => 'Datum';
+
+  @override
+  String get kgFilterHot => 'Heiß';
+
+  @override
+  String get kgFilterWarm => 'Warm';
+
+  @override
+  String get kgFilterCool => 'Kühl';
+
+  @override
+  String get kgFilterCold => 'Kalt';
+
+  @override
+  String get kgEntityFacts => 'Fakten';
+
+  @override
+  String get kgEntityRelations => 'Beziehungen';
+
+  @override
+  String get kgEntityAliases => 'Aliase';
+
+  @override
+  String get kgEntityDecay => 'Verfall-Diagnostik';
+
+  @override
+  String get kgEntityDelete => 'Entität löschen';
+
+  @override
+  String get kgEntityDeleteConfirm =>
+      'Diese Entität deaktivieren? Sie wird nicht mehr in Abfragen erscheinen.';
+
+  @override
+  String get kgEntityDeleted => 'Entität deaktiviert';
+
+  @override
+  String kgFactCount(int count) {
+    return '$count Fakten';
+  }
+
+  @override
+  String get kgRetentionScore => 'Retentionswert';
+
+  @override
+  String get kgLoadMore => 'Mehr laden';
 }

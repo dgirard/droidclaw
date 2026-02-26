@@ -818,6 +818,20 @@ class AppLocalizationsEn extends AppLocalizations {
       'Play live Radio France streams (France Inter, FIP, etc.)';
 
   @override
+  String get toolKnowledgeSearch => 'Knowledge Search';
+
+  @override
+  String get toolKnowledgeSearchDesc =>
+      'Search remembered knowledge from past conversations';
+
+  @override
+  String get toolKnowledgeStore => 'Knowledge Store';
+
+  @override
+  String get toolKnowledgeStoreDesc =>
+      'Store a fact to remember across conversations';
+
+  @override
   String get weatherClearSky => 'Clear sky';
 
   @override
@@ -1204,4 +1218,238 @@ class AppLocalizationsEn extends AppLocalizations {
   String exportFailed(String error) {
     return 'Export failed: $error';
   }
+
+  @override
+  String get knowledgeTitle => 'Knowledge Graph';
+
+  @override
+  String get knowledgeSubtitle => 'Persistent memory across conversations';
+
+  @override
+  String get knowledgeEnable => 'Enable Knowledge Graph';
+
+  @override
+  String get knowledgeEnableDesc =>
+      'Automatically extract and remember knowledge from conversations';
+
+  @override
+  String get knowledgeAutoExtract => 'Auto-extract';
+
+  @override
+  String get knowledgeAutoExtractDesc =>
+      'Extract entities and facts after each response';
+
+  @override
+  String knowledgeStatsEntities(int count) {
+    return '$count entities';
+  }
+
+  @override
+  String knowledgeStatsRelations(int count) {
+    return '$count relations';
+  }
+
+  @override
+  String knowledgeStatsSize(String size) {
+    return 'Database size: $size';
+  }
+
+  @override
+  String get knowledgeForgetAll => 'Forget Everything';
+
+  @override
+  String get knowledgeForgetAllDesc => 'Delete all remembered knowledge';
+
+  @override
+  String get knowledgeForgetConfirmTitle => 'Forget Everything?';
+
+  @override
+  String get knowledgeForgetConfirmBody =>
+      'This will permanently delete all entities, relations, and facts from the knowledge graph. This cannot be undone.';
+
+  @override
+  String get knowledgeForgetConfirmButton => 'Forget All';
+
+  @override
+  String get knowledgeEmpty => 'No knowledge stored yet';
+
+  @override
+  String get knowledgeForgotten => 'All knowledge deleted';
+
+  @override
+  String get settingsKnowledge => 'Knowledge Graph';
+
+  @override
+  String get settingsKnowledgeSubtitle => 'Persistent memory settings';
+
+  @override
+  String get llmTracesTitle => 'LLM Traces';
+
+  @override
+  String get llmTracesEmpty => 'No traces recorded';
+
+  @override
+  String llmTracesStatsHeader(int count, String tokens, String latency) {
+    return '$count calls · $tokens tokens · ${latency}s avg';
+  }
+
+  @override
+  String get llmTracesLast24h => 'Last 24 hours';
+
+  @override
+  String get llmTracesFilterAll => 'All';
+
+  @override
+  String get llmTracesFilterChat => 'Chat';
+
+  @override
+  String get llmTracesFilterSummarize => 'Summarize';
+
+  @override
+  String get llmTracesFilterExtract => 'Extract';
+
+  @override
+  String get llmTracesClearAll => 'Clear all traces';
+
+  @override
+  String get llmTracesClearConfirm => 'Delete all LLM trace entries?';
+
+  @override
+  String get llmTracesCleared => 'Traces cleared';
+
+  @override
+  String get llmTraceDetailTitle => 'Trace Detail';
+
+  @override
+  String get llmTraceTokens => 'Tokens';
+
+  @override
+  String get llmTraceTokensIn => 'In';
+
+  @override
+  String get llmTraceTokensOut => 'Out';
+
+  @override
+  String get llmTraceTokensTotal => 'Total';
+
+  @override
+  String llmTraceLatency(int ms) {
+    return 'Latency: $ms ms';
+  }
+
+  @override
+  String llmTraceSystemPrompt(int chars) {
+    return 'System prompt ($chars chars)';
+  }
+
+  @override
+  String llmTraceMessages(int count) {
+    return 'Messages ($count)';
+  }
+
+  @override
+  String llmTraceResponse(int chars) {
+    return 'Response ($chars chars)';
+  }
+
+  @override
+  String get llmTraceToolsCalled => 'Tools called';
+
+  @override
+  String get llmTraceFinishReason => 'Finish reason';
+
+  @override
+  String get llmTraceError => 'Error';
+
+  @override
+  String llmTraceIteration(int n) {
+    return 'iter $n';
+  }
+
+  @override
+  String get settingsLlmTraces => 'LLM Traces';
+
+  @override
+  String get settingsLlmTracesSubtitle => 'API call history and token usage';
+
+  @override
+  String get knowledgeBrowse => 'Browse Entities';
+
+  @override
+  String get knowledgeBrowseSubtitle => 'Inspect stored knowledge';
+
+  @override
+  String get kgBrowserTitle => 'Knowledge Browser';
+
+  @override
+  String get kgBrowserSearch => 'Search entities...';
+
+  @override
+  String get kgBrowserEmpty => 'No entities found';
+
+  @override
+  String get kgFilterAll => 'All';
+
+  @override
+  String get kgFilterPerson => 'Person';
+
+  @override
+  String get kgFilterPlace => 'Place';
+
+  @override
+  String get kgFilterOrg => 'Org';
+
+  @override
+  String get kgFilterEvent => 'Event';
+
+  @override
+  String get kgFilterConcept => 'Concept';
+
+  @override
+  String get kgFilterDate => 'Date';
+
+  @override
+  String get kgFilterHot => 'Hot';
+
+  @override
+  String get kgFilterWarm => 'Warm';
+
+  @override
+  String get kgFilterCool => 'Cool';
+
+  @override
+  String get kgFilterCold => 'Cold';
+
+  @override
+  String get kgEntityFacts => 'Facts';
+
+  @override
+  String get kgEntityRelations => 'Relations';
+
+  @override
+  String get kgEntityAliases => 'Aliases';
+
+  @override
+  String get kgEntityDecay => 'Decay Diagnostics';
+
+  @override
+  String get kgEntityDelete => 'Delete Entity';
+
+  @override
+  String get kgEntityDeleteConfirm =>
+      'Deactivate this entity? It will no longer appear in queries.';
+
+  @override
+  String get kgEntityDeleted => 'Entity deactivated';
+
+  @override
+  String kgFactCount(int count) {
+    return '$count facts';
+  }
+
+  @override
+  String get kgRetentionScore => 'Retention score';
+
+  @override
+  String get kgLoadMore => 'Load more';
 }

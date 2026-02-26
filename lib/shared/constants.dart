@@ -58,6 +58,17 @@ class AppConstants {
   static const String cronDefinitionsKey = 'cron_definitions';
   static const String cronPendingTriggersKey = 'cron_pending_triggers';
 
+  // LLM Trace
+  static const int llmTraceMaxEntries = 500;
+  static const int llmTraceRetentionHours = 24;
+
+  // Knowledge Graph
+  static const String knowledgeDbFilename = 'knowledge_graph.db';
+  static const int knowledgeMaxEntities = 100000;
+  static const int knowledgeDecayHalfLifeDays = 30;
+  static const int knowledgeMaxContextChars = 2000;
+  static const String cachedKnowledgeEnabledKey = 'cached_knowledge_enabled';
+
   // Cached secrets for service isolate (SharedPreferences mirror of SecureStorage)
   static const String cachedApiKeyKey = 'cached_api_key';
   static const String cachedProviderNameKey = 'cached_provider_name';

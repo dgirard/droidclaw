@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
 import 'core/services/app_logger.dart';
+import 'core/services/llm_trace_logger.dart';
 import 'providers/app_providers.dart';
 
 Future<void> main() async {
@@ -22,6 +23,10 @@ Future<void> main() async {
   final appDir = await getApplicationDocumentsDirectory();
   AppLogger.init(dirPath: appDir.path, isolateName: 'main');
   await AppLogger.instance.purge();
+
+  // Initialize LLM trace logger
+  LlmTraceLogger.init(dirPath: appDir.path, isolateName: 'main');
+  await LlmTraceLogger.instance.purge();
 
   // Initialize SharedPreferences
   final prefs = await SharedPreferences.getInstance();

@@ -839,6 +839,20 @@ class AppLocalizationsEs extends AppLocalizations {
       'Escuchar emisoras de Radio France en directo (France Inter, FIP, etc.)';
 
   @override
+  String get toolKnowledgeSearch => 'Búsqueda de conocimiento';
+
+  @override
+  String get toolKnowledgeSearchDesc =>
+      'Buscar conocimientos recordados de conversaciones anteriores';
+
+  @override
+  String get toolKnowledgeStore => 'Almacenamiento de conocimiento';
+
+  @override
+  String get toolKnowledgeStoreDesc =>
+      'Guardar un dato para recordar entre conversaciones';
+
+  @override
   String get weatherClearSky => 'Cielo despejado';
 
   @override
@@ -1227,4 +1241,241 @@ class AppLocalizationsEs extends AppLocalizations {
   String exportFailed(String error) {
     return 'Error al exportar: $error';
   }
+
+  @override
+  String get knowledgeTitle => 'Grafo de conocimiento';
+
+  @override
+  String get knowledgeSubtitle => 'Memoria persistente entre conversaciones';
+
+  @override
+  String get knowledgeEnable => 'Activar grafo de conocimiento';
+
+  @override
+  String get knowledgeEnableDesc =>
+      'Extraer y recordar conocimientos de las conversaciones automáticamente';
+
+  @override
+  String get knowledgeAutoExtract => 'Extracción automática';
+
+  @override
+  String get knowledgeAutoExtractDesc =>
+      'Extraer entidades y hechos después de cada respuesta';
+
+  @override
+  String knowledgeStatsEntities(int count) {
+    return '$count entidades';
+  }
+
+  @override
+  String knowledgeStatsRelations(int count) {
+    return '$count relaciones';
+  }
+
+  @override
+  String knowledgeStatsSize(String size) {
+    return 'Tamaño de la base: $size';
+  }
+
+  @override
+  String get knowledgeForgetAll => 'Olvidar todo';
+
+  @override
+  String get knowledgeForgetAllDesc =>
+      'Eliminar todo el conocimiento recordado';
+
+  @override
+  String get knowledgeForgetConfirmTitle => '¿Olvidar todo?';
+
+  @override
+  String get knowledgeForgetConfirmBody =>
+      'Esto eliminará permanentemente todas las entidades, relaciones y hechos del grafo de conocimiento. Esta acción no se puede deshacer.';
+
+  @override
+  String get knowledgeForgetConfirmButton => 'Olvidar todo';
+
+  @override
+  String get knowledgeEmpty => 'Sin conocimientos almacenados';
+
+  @override
+  String get knowledgeForgotten => 'Todo el conocimiento eliminado';
+
+  @override
+  String get settingsKnowledge => 'Grafo de conocimiento';
+
+  @override
+  String get settingsKnowledgeSubtitle => 'Ajustes de memoria persistente';
+
+  @override
+  String get llmTracesTitle => 'Trazas LLM';
+
+  @override
+  String get llmTracesEmpty => 'No hay trazas registradas';
+
+  @override
+  String llmTracesStatsHeader(int count, String tokens, String latency) {
+    return '$count llamadas · $tokens tokens · ${latency}s prom';
+  }
+
+  @override
+  String get llmTracesLast24h => 'Últimas 24 horas';
+
+  @override
+  String get llmTracesFilterAll => 'Todos';
+
+  @override
+  String get llmTracesFilterChat => 'Chat';
+
+  @override
+  String get llmTracesFilterSummarize => 'Resumen';
+
+  @override
+  String get llmTracesFilterExtract => 'Extracción';
+
+  @override
+  String get llmTracesClearAll => 'Borrar todas las trazas';
+
+  @override
+  String get llmTracesClearConfirm => '¿Eliminar todas las trazas LLM?';
+
+  @override
+  String get llmTracesCleared => 'Trazas borradas';
+
+  @override
+  String get llmTraceDetailTitle => 'Detalle de la traza';
+
+  @override
+  String get llmTraceTokens => 'Tokens';
+
+  @override
+  String get llmTraceTokensIn => 'Entrada';
+
+  @override
+  String get llmTraceTokensOut => 'Salida';
+
+  @override
+  String get llmTraceTokensTotal => 'Total';
+
+  @override
+  String llmTraceLatency(int ms) {
+    return 'Latencia: $ms ms';
+  }
+
+  @override
+  String llmTraceSystemPrompt(int chars) {
+    return 'Prompt del sistema ($chars car.)';
+  }
+
+  @override
+  String llmTraceMessages(int count) {
+    return 'Mensajes ($count)';
+  }
+
+  @override
+  String llmTraceResponse(int chars) {
+    return 'Respuesta ($chars car.)';
+  }
+
+  @override
+  String get llmTraceToolsCalled => 'Herramientas usadas';
+
+  @override
+  String get llmTraceFinishReason => 'Razón de fin';
+
+  @override
+  String get llmTraceError => 'Error';
+
+  @override
+  String llmTraceIteration(int n) {
+    return 'iter $n';
+  }
+
+  @override
+  String get settingsLlmTraces => 'Trazas LLM';
+
+  @override
+  String get settingsLlmTracesSubtitle =>
+      'Historial de llamadas API y uso de tokens';
+
+  @override
+  String get knowledgeBrowse => 'Explorar entidades';
+
+  @override
+  String get knowledgeBrowseSubtitle =>
+      'Inspeccionar el conocimiento almacenado';
+
+  @override
+  String get kgBrowserTitle => 'Explorador de conocimiento';
+
+  @override
+  String get kgBrowserSearch => 'Buscar entidades...';
+
+  @override
+  String get kgBrowserEmpty => 'No se encontraron entidades';
+
+  @override
+  String get kgFilterAll => 'Todos';
+
+  @override
+  String get kgFilterPerson => 'Persona';
+
+  @override
+  String get kgFilterPlace => 'Lugar';
+
+  @override
+  String get kgFilterOrg => 'Org';
+
+  @override
+  String get kgFilterEvent => 'Evento';
+
+  @override
+  String get kgFilterConcept => 'Concepto';
+
+  @override
+  String get kgFilterDate => 'Fecha';
+
+  @override
+  String get kgFilterHot => 'Caliente';
+
+  @override
+  String get kgFilterWarm => 'Tibio';
+
+  @override
+  String get kgFilterCool => 'Fresco';
+
+  @override
+  String get kgFilterCold => 'Frío';
+
+  @override
+  String get kgEntityFacts => 'Hechos';
+
+  @override
+  String get kgEntityRelations => 'Relaciones';
+
+  @override
+  String get kgEntityAliases => 'Alias';
+
+  @override
+  String get kgEntityDecay => 'Diagnóstico de deterioro';
+
+  @override
+  String get kgEntityDelete => 'Eliminar entidad';
+
+  @override
+  String get kgEntityDeleteConfirm =>
+      '¿Desactivar esta entidad? Ya no aparecerá en las búsquedas.';
+
+  @override
+  String get kgEntityDeleted => 'Entidad desactivada';
+
+  @override
+  String kgFactCount(int count) {
+    return '$count hechos';
+  }
+
+  @override
+  String get kgRetentionScore => 'Puntuación de retención';
+
+  @override
+  String get kgLoadMore => 'Cargar más';
 }

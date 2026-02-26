@@ -1,12 +1,18 @@
 import 'dart:async';
+import 'dart:math';
 
 import '../../l10n/l10n.dart';
 import '../../shared/constants.dart';
 import '../config/app_config.dart';
+import '../config/llm_trace.dart';
 import '../config/log_entry.dart';
+import '../knowledge/models/ranked_result.dart';
+import '../knowledge/services/ingestion_pipeline.dart';
+import '../knowledge/services/knowledge_service.dart';
 import '../providers/llm_provider.dart';
 import '../providers/llm_response.dart';
 import '../services/app_logger.dart';
+import '../services/llm_trace_logger.dart';
 import '../session/session.dart';
 import '../session/session_manager.dart';
 import '../tools/tool.dart';
@@ -56,6 +62,8 @@ class AgentLoop {
   final SessionManager sessions;
   final ToolRegistry tools;
   final ContextBuilder contextBuilder;
+  final KnowledgeService? knowledgeService;
+  final IngestionPipeline? ingestionPipeline;
 
   AgentLoop({
     required this.provider,
@@ -63,6 +71,8 @@ class AgentLoop {
     required this.sessions,
     required this.tools,
     required this.contextBuilder,
+    this.knowledgeService,
+    this.ingestionPipeline,
   });
 
   /// Process a user message and yield agent events.
@@ -78,8 +88,33 @@ class AgentLoop {
       await _summarize(session);
     }
 
-    // Build system prompt
-    final systemPrompt = await contextBuilder.buildSystemPrompt();
+    // Pre-query: inject Knowledge Graph context if available
+    String? kgContext;
+    if (knowledgeService != null) {
+      try {
+        // LLM query expansion: extract search keywords from user message
+        final expandedQuery = await _expandQueryForKG(userMessage);
+
+        final results = await knowledgeService!.queryRelevant(
+          expandedQuery,
+          limit: 10,
+        );
+        if (results.isNotEmpty) {
+          kgContext = formatKnowledgeContext(results);
+          AppLogger.instance.debug(LogSource.agent,
+              'KG pre-query: ${results.length} results '
+              '(expanded: "${expandedQuery.substring(0, min(100, expandedQuery.length))}...")');
+        }
+      } catch (e) {
+        AppLogger.instance.warning(LogSource.agent,
+            'KG pre-query failed: $e', sessionKey: sessionKey);
+      }
+    }
+
+    // Build system prompt (with optional KG context)
+    final systemPrompt = await contextBuilder.buildSystemPrompt(
+      knowledgeContext: kgContext,
+    );
 
     // Add user message to session
     session.addMessage(Message(role: 'user', content: userMessage));
@@ -102,6 +137,7 @@ class AgentLoop {
       yield ThinkingEvent(iteration: iteration);
 
       LLMResponse response;
+      final stopwatch = Stopwatch()..start();
       try {
         response = await provider.chat(
           messages: messages,
@@ -112,14 +148,56 @@ class AgentLoop {
             'temperature': config.agent.temperature,
           },
         );
+        stopwatch.stop();
         AppLogger.instance.info(LogSource.agent,
             'LLM responded: content=${response.content.length} chars, '
             'toolCalls=${response.toolCalls.length}, '
             'finish=${response.finishReason}',
             sessionKey: sessionKey);
+
+        LlmTraceLogger.instance.log(LlmTrace(
+          provider: provider.providerName,
+          model: config.agent.model,
+          callType: 'chat',
+          iteration: iteration,
+          sessionKey: sessionKey,
+          messageCount: messages.length,
+          systemPromptChars: systemPrompt.length,
+          systemPromptPreview: systemPrompt.substring(
+              0, min(500, systemPrompt.length)),
+          messages: _buildTraceMessages(messages),
+          toolDefinitionCount: tools.getDefinitions().length,
+          responseContent: response.content,
+          responseChars: response.content.length,
+          toolCalls:
+              response.toolCalls.map((tc) => tc.name).toList(),
+          finishReason: response.finishReason,
+          promptTokens: response.usage?.promptTokens,
+          completionTokens: response.usage?.completionTokens,
+          totalTokens: response.usage?.totalTokens,
+          latencyMs: stopwatch.elapsedMilliseconds,
+        ));
       } catch (e) {
+        stopwatch.stop();
         AppLogger.instance.error(LogSource.agent, 'LLM error: $e',
             sessionKey: sessionKey);
+
+        LlmTraceLogger.instance.log(LlmTrace(
+          provider: provider.providerName,
+          model: config.agent.model,
+          callType: 'chat',
+          iteration: iteration,
+          sessionKey: sessionKey,
+          messageCount: messages.length,
+          systemPromptChars: systemPrompt.length,
+          systemPromptPreview: systemPrompt.substring(
+              0, min(500, systemPrompt.length)),
+          messages: _buildTraceMessages(messages),
+          toolDefinitionCount: tools.getDefinitions().length,
+          error: e.toString(),
+          latencyMs: stopwatch.elapsedMilliseconds,
+        ));
+
         yield ErrorEvent(tr(config.resolvedLocale).agentLlmError(e.toString()));
         return;
       }
@@ -130,6 +208,11 @@ class AgentLoop {
             Message(role: 'assistant', content: response.content));
         await sessions.save(session);
         yield ResponseEvent(content: response.content, usage: response.usage);
+
+        // Post-response: fire-and-forget KG extraction
+        if (ingestionPipeline != null && config.knowledge.autoExtract) {
+          _extractAsync(userMessage, response.content, sessionKey);
+        }
         return;
       }
 
@@ -166,6 +249,75 @@ class AgentLoop {
     yield ErrorEvent(tr(config.resolvedLocale).agentMaxIterations);
   }
 
+  /// Expand a user query into search keywords for Knowledge Graph retrieval.
+  ///
+  /// Uses a fast LLM call (max_tokens: 50) to bridge the semantic gap between
+  /// natural language questions and stored entity/fact tokens.
+  /// Example: "Où est-ce que j'habite?" → "address home residence habite domicile lieu habitation"
+  Future<String> _expandQueryForKG(String userMessage) async {
+    try {
+      final response = await provider.chat(
+        messages: [
+          const Message(
+            role: 'system',
+            content: 'You are a keyword extractor for a knowledge graph search. '
+                'Given a user message, output ONLY search keywords (single words) '
+                'that would match stored entities, facts, or relations. '
+                'Include: the original key terms, synonyms, translations (FR/EN/DE/ES/IT), '
+                'and related concepts. Output one line of space-separated keywords. '
+                'No punctuation, no explanations.',
+          ),
+          Message(role: 'user', content: userMessage),
+        ],
+        model: config.agent.model,
+        options: {'max_tokens': 50, 'temperature': 0.0},
+      );
+      final keywords = response.content.trim();
+      if (keywords.isNotEmpty) {
+        // Combine original message with expanded keywords for broader FTS matching
+        return '$userMessage $keywords';
+      }
+    } catch (e) {
+      AppLogger.instance.debug(LogSource.agent,
+          'KG query expansion failed, using raw query: $e');
+    }
+    return userMessage;
+  }
+
+  /// Fire-and-forget async Knowledge Graph extraction.
+  /// Does NOT block the agent stream. Errors are logged, not surfaced.
+  void _extractAsync(
+      String userMessage, String assistantResponse, String sessionKey) {
+    Future(() async {
+      try {
+        final count = await ingestionPipeline!.extractAndStore(
+          userMessage: userMessage,
+          assistantResponse: assistantResponse,
+        );
+        if (count > 0) {
+          AppLogger.instance.debug(LogSource.agent,
+              'KG extraction: $count items stored (session=$sessionKey)');
+        }
+      } catch (e) {
+        AppLogger.instance.warning(LogSource.agent,
+            'KG extraction failed: $e', sessionKey: sessionKey);
+      }
+    });
+  }
+
+  /// Build compact trace messages from a message list.
+  List<LlmTraceMessage> _buildTraceMessages(List<Message> messages) {
+    return messages.map((m) {
+      final previewLen = m.role == 'tool' ? 200 : 200;
+      return LlmTraceMessage(
+        role: m.role,
+        contentLength: m.content.length,
+        preview: m.content.substring(0, min(previewLen, m.content.length)),
+        toolName: m.name,
+      );
+    }).toList();
+  }
+
   /// Check if the session needs summarization.
   /// Triggered at 20+ messages OR estimated tokens > 75% of maxTokens.
   bool _needsSummarization(Session session) {
@@ -194,18 +346,37 @@ class AgentLoop {
 
     try {
       final summaryLang = tr(config.resolvedLocale).agentSummarizeInstructions;
+      final summarizeSystemPrompt =
+          'Summarize the following conversation concisely, preserving key facts, decisions, and context. $summaryLang';
+      final summarizeMessages = [
+        Message(role: 'system', content: summarizeSystemPrompt),
+        Message(role: 'user', content: summaryContent),
+      ];
+      final sw = Stopwatch()..start();
       final response = await provider.chat(
-        messages: [
-          Message(
-            role: 'system',
-            content:
-                'Summarize the following conversation concisely, preserving key facts, decisions, and context. $summaryLang',
-          ),
-          Message(role: 'user', content: summaryContent),
-        ],
+        messages: summarizeMessages,
         model: config.agent.model,
         options: {'max_tokens': 1024, 'temperature': 0.3},
       );
+      sw.stop();
+
+      LlmTraceLogger.instance.log(LlmTrace(
+        provider: provider.providerName,
+        model: config.agent.model,
+        callType: 'summarize',
+        messageCount: summarizeMessages.length,
+        systemPromptChars: summarizeSystemPrompt.length,
+        systemPromptPreview: summarizeSystemPrompt.substring(
+            0, min(500, summarizeSystemPrompt.length)),
+        messages: _buildTraceMessages(summarizeMessages),
+        responseContent: response.content,
+        responseChars: response.content.length,
+        finishReason: response.finishReason,
+        promptTokens: response.usage?.promptTokens,
+        completionTokens: response.usage?.completionTokens,
+        totalTokens: response.usage?.totalTokens,
+        latencyMs: sw.elapsedMilliseconds,
+      ));
 
       session.summary = response.content;
     } catch (_) {

@@ -7,6 +7,11 @@ import 'features/chat/history_screen.dart';
 import 'features/onboarding/onboard_screen.dart';
 import 'features/settings/cron_config_screen.dart';
 import 'features/settings/cron_edit_screen.dart';
+import 'features/settings/knowledge_browser_screen.dart';
+import 'features/settings/knowledge_config_screen.dart';
+import 'features/settings/knowledge_entity_detail_screen.dart';
+import 'features/settings/llm_trace_detail_screen.dart';
+import 'features/settings/llm_traces_screen.dart';
 import 'features/settings/locale_config_screen.dart';
 import 'features/settings/logs_screen.dart';
 import 'features/settings/provider_config_screen.dart';
@@ -61,8 +66,13 @@ class DroidClawApp extends ConsumerWidget {
         '/settings/routing': (context) => const RoutingConfigScreen(),
         '/settings/crons': (context) => const CronConfigScreen(),
         '/settings/crons/edit': (context) => const CronEditScreen(),
+        '/settings/knowledge': (context) => const KnowledgeConfigScreen(),
+        '/settings/knowledge-browser': (context) => const KnowledgeBrowserScreen(),
+        '/settings/knowledge-entity': (context) => const KnowledgeEntityDetailScreen(),
         '/settings/locale': (context) => const LocaleConfigScreen(),
         '/settings/logs': (context) => const LogsScreen(),
+        '/settings/llm-traces': (context) => const LlmTracesScreen(),
+        '/settings/llm-trace-detail': (context) => const LlmTraceDetailScreen(),
       },
     );
   }

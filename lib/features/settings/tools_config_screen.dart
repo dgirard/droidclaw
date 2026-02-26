@@ -170,6 +170,18 @@ List<_ToolInfo> _tools(AppLocalizations l) => [
     description: l.toolRadioDesc,
     icon: Icons.radio_outlined,
   ),
+  _ToolInfo(
+    name: 'knowledge_search',
+    label: l.toolKnowledgeSearch,
+    description: l.toolKnowledgeSearchDesc,
+    icon: Icons.psychology_outlined,
+  ),
+  _ToolInfo(
+    name: 'knowledge_store',
+    label: l.toolKnowledgeStore,
+    description: l.toolKnowledgeStoreDesc,
+    icon: Icons.save_outlined,
+  ),
 ];
 
 /// Screen to enable/disable individual agent tools.

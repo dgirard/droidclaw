@@ -1586,6 +1586,30 @@ abstract class AppLocalizations {
   /// **'Play live Radio France streams (France Inter, FIP, etc.)'**
   String get toolRadioDesc;
 
+  /// No description provided for @toolKnowledgeSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge Search'**
+  String get toolKnowledgeSearch;
+
+  /// No description provided for @toolKnowledgeSearchDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Search remembered knowledge from past conversations'**
+  String get toolKnowledgeSearchDesc;
+
+  /// No description provided for @toolKnowledgeStore.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge Store'**
+  String get toolKnowledgeStore;
+
+  /// No description provided for @toolKnowledgeStoreDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Store a fact to remember across conversations'**
+  String get toolKnowledgeStoreDesc;
+
   /// No description provided for @weatherClearSky.
   ///
   /// In en, this message translates to:
@@ -2257,6 +2281,426 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Export failed: {error}'**
   String exportFailed(String error);
+
+  /// No description provided for @knowledgeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge Graph'**
+  String get knowledgeTitle;
+
+  /// No description provided for @knowledgeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Persistent memory across conversations'**
+  String get knowledgeSubtitle;
+
+  /// No description provided for @knowledgeEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable Knowledge Graph'**
+  String get knowledgeEnable;
+
+  /// No description provided for @knowledgeEnableDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically extract and remember knowledge from conversations'**
+  String get knowledgeEnableDesc;
+
+  /// No description provided for @knowledgeAutoExtract.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-extract'**
+  String get knowledgeAutoExtract;
+
+  /// No description provided for @knowledgeAutoExtractDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract entities and facts after each response'**
+  String get knowledgeAutoExtractDesc;
+
+  /// No description provided for @knowledgeStatsEntities.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} entities'**
+  String knowledgeStatsEntities(int count);
+
+  /// No description provided for @knowledgeStatsRelations.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} relations'**
+  String knowledgeStatsRelations(int count);
+
+  /// No description provided for @knowledgeStatsSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Database size: {size}'**
+  String knowledgeStatsSize(String size);
+
+  /// No description provided for @knowledgeForgetAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Forget Everything'**
+  String get knowledgeForgetAll;
+
+  /// No description provided for @knowledgeForgetAllDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete all remembered knowledge'**
+  String get knowledgeForgetAllDesc;
+
+  /// No description provided for @knowledgeForgetConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Forget Everything?'**
+  String get knowledgeForgetConfirmTitle;
+
+  /// No description provided for @knowledgeForgetConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This will permanently delete all entities, relations, and facts from the knowledge graph. This cannot be undone.'**
+  String get knowledgeForgetConfirmBody;
+
+  /// No description provided for @knowledgeForgetConfirmButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Forget All'**
+  String get knowledgeForgetConfirmButton;
+
+  /// No description provided for @knowledgeEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No knowledge stored yet'**
+  String get knowledgeEmpty;
+
+  /// No description provided for @knowledgeForgotten.
+  ///
+  /// In en, this message translates to:
+  /// **'All knowledge deleted'**
+  String get knowledgeForgotten;
+
+  /// No description provided for @settingsKnowledge.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge Graph'**
+  String get settingsKnowledge;
+
+  /// No description provided for @settingsKnowledgeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Persistent memory settings'**
+  String get settingsKnowledgeSubtitle;
+
+  /// No description provided for @llmTracesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'LLM Traces'**
+  String get llmTracesTitle;
+
+  /// No description provided for @llmTracesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No traces recorded'**
+  String get llmTracesEmpty;
+
+  /// No description provided for @llmTracesStatsHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} calls · {tokens} tokens · {latency}s avg'**
+  String llmTracesStatsHeader(int count, String tokens, String latency);
+
+  /// No description provided for @llmTracesLast24h.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 24 hours'**
+  String get llmTracesLast24h;
+
+  /// No description provided for @llmTracesFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get llmTracesFilterAll;
+
+  /// No description provided for @llmTracesFilterChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat'**
+  String get llmTracesFilterChat;
+
+  /// No description provided for @llmTracesFilterSummarize.
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize'**
+  String get llmTracesFilterSummarize;
+
+  /// No description provided for @llmTracesFilterExtract.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract'**
+  String get llmTracesFilterExtract;
+
+  /// No description provided for @llmTracesClearAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all traces'**
+  String get llmTracesClearAll;
+
+  /// No description provided for @llmTracesClearConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete all LLM trace entries?'**
+  String get llmTracesClearConfirm;
+
+  /// No description provided for @llmTracesCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Traces cleared'**
+  String get llmTracesCleared;
+
+  /// No description provided for @llmTraceDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trace Detail'**
+  String get llmTraceDetailTitle;
+
+  /// No description provided for @llmTraceTokens.
+  ///
+  /// In en, this message translates to:
+  /// **'Tokens'**
+  String get llmTraceTokens;
+
+  /// No description provided for @llmTraceTokensIn.
+  ///
+  /// In en, this message translates to:
+  /// **'In'**
+  String get llmTraceTokensIn;
+
+  /// No description provided for @llmTraceTokensOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Out'**
+  String get llmTraceTokensOut;
+
+  /// No description provided for @llmTraceTokensTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get llmTraceTokensTotal;
+
+  /// No description provided for @llmTraceLatency.
+  ///
+  /// In en, this message translates to:
+  /// **'Latency: {ms} ms'**
+  String llmTraceLatency(int ms);
+
+  /// No description provided for @llmTraceSystemPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'System prompt ({chars} chars)'**
+  String llmTraceSystemPrompt(int chars);
+
+  /// No description provided for @llmTraceMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages ({count})'**
+  String llmTraceMessages(int count);
+
+  /// No description provided for @llmTraceResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'Response ({chars} chars)'**
+  String llmTraceResponse(int chars);
+
+  /// No description provided for @llmTraceToolsCalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Tools called'**
+  String get llmTraceToolsCalled;
+
+  /// No description provided for @llmTraceFinishReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish reason'**
+  String get llmTraceFinishReason;
+
+  /// No description provided for @llmTraceError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get llmTraceError;
+
+  /// No description provided for @llmTraceIteration.
+  ///
+  /// In en, this message translates to:
+  /// **'iter {n}'**
+  String llmTraceIteration(int n);
+
+  /// No description provided for @settingsLlmTraces.
+  ///
+  /// In en, this message translates to:
+  /// **'LLM Traces'**
+  String get settingsLlmTraces;
+
+  /// No description provided for @settingsLlmTracesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'API call history and token usage'**
+  String get settingsLlmTracesSubtitle;
+
+  /// No description provided for @knowledgeBrowse.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse Entities'**
+  String get knowledgeBrowse;
+
+  /// No description provided for @knowledgeBrowseSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspect stored knowledge'**
+  String get knowledgeBrowseSubtitle;
+
+  /// No description provided for @kgBrowserTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge Browser'**
+  String get kgBrowserTitle;
+
+  /// No description provided for @kgBrowserSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search entities...'**
+  String get kgBrowserSearch;
+
+  /// No description provided for @kgBrowserEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No entities found'**
+  String get kgBrowserEmpty;
+
+  /// No description provided for @kgFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get kgFilterAll;
+
+  /// No description provided for @kgFilterPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Person'**
+  String get kgFilterPerson;
+
+  /// No description provided for @kgFilterPlace.
+  ///
+  /// In en, this message translates to:
+  /// **'Place'**
+  String get kgFilterPlace;
+
+  /// No description provided for @kgFilterOrg.
+  ///
+  /// In en, this message translates to:
+  /// **'Org'**
+  String get kgFilterOrg;
+
+  /// No description provided for @kgFilterEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Event'**
+  String get kgFilterEvent;
+
+  /// No description provided for @kgFilterConcept.
+  ///
+  /// In en, this message translates to:
+  /// **'Concept'**
+  String get kgFilterConcept;
+
+  /// No description provided for @kgFilterDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get kgFilterDate;
+
+  /// No description provided for @kgFilterHot.
+  ///
+  /// In en, this message translates to:
+  /// **'Hot'**
+  String get kgFilterHot;
+
+  /// No description provided for @kgFilterWarm.
+  ///
+  /// In en, this message translates to:
+  /// **'Warm'**
+  String get kgFilterWarm;
+
+  /// No description provided for @kgFilterCool.
+  ///
+  /// In en, this message translates to:
+  /// **'Cool'**
+  String get kgFilterCool;
+
+  /// No description provided for @kgFilterCold.
+  ///
+  /// In en, this message translates to:
+  /// **'Cold'**
+  String get kgFilterCold;
+
+  /// No description provided for @kgEntityFacts.
+  ///
+  /// In en, this message translates to:
+  /// **'Facts'**
+  String get kgEntityFacts;
+
+  /// No description provided for @kgEntityRelations.
+  ///
+  /// In en, this message translates to:
+  /// **'Relations'**
+  String get kgEntityRelations;
+
+  /// No description provided for @kgEntityAliases.
+  ///
+  /// In en, this message translates to:
+  /// **'Aliases'**
+  String get kgEntityAliases;
+
+  /// No description provided for @kgEntityDecay.
+  ///
+  /// In en, this message translates to:
+  /// **'Decay Diagnostics'**
+  String get kgEntityDecay;
+
+  /// No description provided for @kgEntityDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Entity'**
+  String get kgEntityDelete;
+
+  /// No description provided for @kgEntityDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Deactivate this entity? It will no longer appear in queries.'**
+  String get kgEntityDeleteConfirm;
+
+  /// No description provided for @kgEntityDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Entity deactivated'**
+  String get kgEntityDeleted;
+
+  /// No description provided for @kgFactCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} facts'**
+  String kgFactCount(int count);
+
+  /// No description provided for @kgRetentionScore.
+  ///
+  /// In en, this message translates to:
+  /// **'Retention score'**
+  String get kgRetentionScore;
+
+  /// No description provided for @kgLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get kgLoadMore;
 }
 
 class _AppLocalizationsDelegate

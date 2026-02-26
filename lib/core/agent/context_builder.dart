@@ -26,7 +26,10 @@ class ContextBuilder {
   });
 
   /// Build the complete system prompt.
-  Future<String> buildSystemPrompt() async {
+  ///
+  /// [knowledgeContext] is an optional XML block from the Knowledge Graph,
+  /// injected when KG is enabled and relevant entities are found.
+  Future<String> buildSystemPrompt({String? knowledgeContext}) async {
     final buffer = StringBuffer();
 
     // 1. Identity section
@@ -47,21 +50,31 @@ class ContextBuilder {
       buffer.writeln();
     }
 
-    // 4. Memory context
+    // 4. Memory context (MEMORY.md + daily notes)
     final memoryContext = await memoryManager.getMemoryContext();
     if (memoryContext.isNotEmpty) {
       buffer.writeln(memoryContext);
       buffer.writeln();
     }
 
-    // 5. Tools listing
+    // 5. Knowledge Graph context (auto-extracted structured knowledge)
+    if (knowledgeContext != null && knowledgeContext.isNotEmpty) {
+      buffer.writeln(
+          'The following structured knowledge was automatically extracted from previous conversations. '
+          'Use it to provide context-aware responses. The memory notes above are user-curated, '
+          'while this knowledge graph is auto-extracted — both are complementary.');
+      buffer.writeln(knowledgeContext);
+      buffer.writeln();
+    }
+
+    // 6. Tools listing
     final toolsListing = _buildToolsListing();
     if (toolsListing.isNotEmpty) {
       buffer.writeln(toolsListing);
       buffer.writeln();
     }
 
-    // 6. Language instruction — positioned last for maximum LLM influence
+    // 7. Language instruction — positioned last for maximum LLM influence
     buffer.writeln('IMPORTANT: ${tr(locale).agentRespondInstructions}');
 
     return buffer.toString().trimRight();

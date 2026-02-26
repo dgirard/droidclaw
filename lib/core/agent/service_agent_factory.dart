@@ -1,11 +1,15 @@
 import 'dart:convert';
 
 import 'package:hive/hive.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/local/storage_service.dart';
 import '../../shared/constants.dart';
 import '../config/app_config.dart';
+import '../knowledge/database/knowledge_graph_db.dart';
+import '../knowledge/services/entity_resolver.dart';
+import '../knowledge/services/knowledge_service.dart';
 import '../providers/provider_factory.dart';
 import '../session/session_manager.dart';
 import '../skills/skill_loader.dart';
@@ -14,6 +18,8 @@ import '../tools/device_info_tool.dart';
 import '../tools/directions_tool.dart';
 import '../tools/geocode_tool.dart';
 import '../tools/file_tool.dart';
+import '../tools/knowledge_search_tool.dart';
+import '../tools/knowledge_store_tool.dart';
 import '../tools/location_tool.dart';
 import '../tools/ocr_tool.dart';
 import '../tools/qr_generate_tool.dart';
@@ -141,6 +147,27 @@ class ServiceAgentFactory {
     // - VolumeControlTool (MethodChannel registered on Activity FlutterEngine only)
     // - RadioTool (MediaSessionService requires Activity FlutterEngine)
 
+    // 4b. Knowledge Graph tools (degraded mode: FTS5 + graph only, no embeddings)
+    KnowledgeService? knowledgeService;
+    final kgEnabled = prefs.getBool(AppConstants.cachedKnowledgeEnabledKey) ?? false;
+    if (kgEnabled) {
+      try {
+        final dbPath = p.join(workspacePath, AppConstants.knowledgeDbFilename);
+        final kgDb = KnowledgeGraphDB(dbPath);
+        knowledgeService = KnowledgeService(db: kgDb);
+
+        if (!disabled.contains('knowledge_search')) {
+          registry.register(KnowledgeSearchTool(knowledgeService: knowledgeService));
+        }
+        if (!disabled.contains('knowledge_store')) {
+          final resolver = EntityResolver(kgDb);
+          registry.register(KnowledgeStoreTool(db: kgDb, resolver: resolver));
+        }
+      } catch (_) {
+        // KG init failed in service isolate — continue without it
+      }
+    }
+
     // 5. Create StorageService with pre-resolved workspace path
     final storageService = StorageService(
       prefs: prefs,
@@ -165,6 +192,7 @@ class ServiceAgentFactory {
       sessions: sessionManager,
       tools: registry,
       contextBuilder: contextBuilder,
+      knowledgeService: knowledgeService,
     );
   }
 }

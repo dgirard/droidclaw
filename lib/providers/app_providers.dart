@@ -1,14 +1,24 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:path/path.dart' as p;
+
 import '../core/agent/agent_loop.dart';
 import '../core/agent/context_builder.dart';
 import '../core/agent/memory_manager.dart';
 import '../core/config/app_config.dart';
 import '../core/config/config_storage.dart';
+import '../core/knowledge/database/knowledge_graph_db.dart';
+import '../core/knowledge/services/entity_extractor.dart';
+import '../core/knowledge/services/entity_resolver.dart';
+import '../core/knowledge/services/ingestion_pipeline.dart';
+import '../core/knowledge/services/knowledge_service.dart';
 import '../core/providers/llm_provider.dart';
 import '../core/providers/provider_factory.dart';
 import '../core/session/session_manager.dart';
+import '../core/tools/knowledge_search_tool.dart';
+import '../core/tools/knowledge_store_tool.dart';
+import '../shared/constants.dart';
 import '../core/skills/skill_installer.dart';
 import '../core/skills/skill_loader.dart';
 import '../core/tools/calendar_tool.dart';
@@ -76,6 +86,27 @@ final sessionManagerProvider = FutureProvider<SessionManager>((ref) async {
 /// Memory manager.
 final memoryManagerProvider = Provider<MemoryManager>((ref) {
   return MemoryManager(ref.watch(storageServiceProvider));
+});
+
+/// Knowledge Graph database — null when KG is disabled in config.
+final knowledgeGraphDbProvider =
+    FutureProvider<KnowledgeGraphDB?>((ref) async {
+  final config = ref.watch(appConfigProvider);
+  if (!config.knowledge.enabled) return null;
+
+  final storage = ref.watch(storageServiceProvider);
+  final workspacePath = await storage.workspacePath;
+  final dbPath = p.join(workspacePath, AppConstants.knowledgeDbFilename);
+
+  return KnowledgeGraphDB(dbPath);
+});
+
+/// Knowledge Service — null when KG is disabled.
+final knowledgeServiceProvider =
+    FutureProvider<KnowledgeService?>((ref) async {
+  final db = await ref.watch(knowledgeGraphDbProvider.future);
+  if (db == null) return null;
+  return KnowledgeService(db: db);
 });
 
 /// Skill loader.
@@ -186,6 +217,19 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
     registry.register(RadioTool());
   }
 
+  // Knowledge Graph tools (require KG to be enabled)
+  final kgDb = await ref.watch(knowledgeGraphDbProvider.future);
+  final kgService = await ref.watch(knowledgeServiceProvider.future);
+  if (kgDb != null && kgService != null) {
+    if (!disabled.contains('knowledge_search')) {
+      registry.register(KnowledgeSearchTool(knowledgeService: kgService));
+    }
+    if (!disabled.contains('knowledge_store')) {
+      final resolver = EntityResolver(kgDb);
+      registry.register(KnowledgeStoreTool(db: kgDb, resolver: resolver));
+    }
+  }
+
   return registry;
 });
 
@@ -235,12 +279,26 @@ final agentLoopProvider = FutureProvider<AgentLoop?>((ref) async {
   final tools = await ref.watch(toolRegistryProvider.future);
   final contextBuilder = await ref.watch(contextBuilderProvider.future);
 
+  // Wire Knowledge Graph (optional)
+  final kgService2 = await ref.watch(knowledgeServiceProvider.future);
+  final kgDb2 = await ref.watch(knowledgeGraphDbProvider.future);
+  IngestionPipeline? ingestionPipeline;
+  if (kgService2 != null && kgDb2 != null && config.knowledge.autoExtract) {
+    ingestionPipeline = IngestionPipeline(
+      extractor: EntityExtractor(provider: provider, model: config.agent.model),
+      resolver: EntityResolver(kgDb2),
+      db: kgDb2,
+    );
+  }
+
   final agentLoop = AgentLoop(
     provider: provider,
     config: config,
     sessions: sessions,
     tools: tools,
     contextBuilder: contextBuilder,
+    knowledgeService: kgService2,
+    ingestionPipeline: ingestionPipeline,
   );
 
   // Wire SubagentTool executor: creates a fresh session, processes the task,

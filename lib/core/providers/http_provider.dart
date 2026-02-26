@@ -56,32 +56,60 @@ class HttpProvider implements LLMProvider {
     }
 
     final uri = Uri.parse('$apiBase/chat/completions');
-    final response = await http.post(
-      uri,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $apiKey',
-        ..._extraHeaders,
-      },
-      body: jsonEncode(body),
-    );
 
-    if (response.statusCode != 200) {
-      throw LLMException(
-        'API error ${response.statusCode}',
-        statusCode: response.statusCode,
-        body: response.body,
+    // Retry with exponential backoff for transient failures
+    const maxRetries = 2;
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $apiKey',
+          ..._extraHeaders,
+        },
+        body: jsonEncode(body),
       );
+
+      if (response.statusCode != 200) {
+        // Retry on 429 (rate limit) or 5xx (server errors)
+        if (attempt < maxRetries &&
+            (response.statusCode == 429 || response.statusCode >= 500)) {
+          await Future.delayed(Duration(milliseconds: 500 * (attempt + 1)));
+          continue;
+        }
+        throw LLMException(
+          'API error ${response.statusCode}',
+          statusCode: response.statusCode,
+          body: response.body,
+        );
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      try {
+        return _parseResponse(data);
+      } on LLMException {
+        // Retry on empty choices (transient provider issue)
+        if (attempt < maxRetries) {
+          await Future.delayed(Duration(milliseconds: 500 * (attempt + 1)));
+          continue;
+        }
+        rethrow;
+      }
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return _parseResponse(data);
+    // Unreachable, but Dart requires it
+    throw LLMException('Max retries exceeded');
   }
 
   LLMResponse _parseResponse(Map<String, dynamic> data) {
     final choices = data['choices'] as List?;
     if (choices == null || choices.isEmpty) {
-      throw LLMException('No choices in response');
+      // Include response body for diagnostics (truncated)
+      final preview = data.toString();
+      throw LLMException(
+        'No choices in response',
+        body: preview.length > 500 ? preview.substring(0, 500) : preview,
+      );
     }
 
     final choice = choices.first as Map<String, dynamic>;

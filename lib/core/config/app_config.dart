@@ -7,6 +7,7 @@ class AppConfig {
   final AgentConfig agent;
   final Map<String, ProviderConfig> providers;
   final ToolsConfig tools;
+  final KnowledgeConfig knowledge;
 
   /// Locale setting: 'en', 'fr', or 'system' (follow device language).
   final String locale;
@@ -15,6 +16,7 @@ class AppConfig {
     required this.agent,
     this.providers = const {},
     this.tools = const ToolsConfig(),
+    this.knowledge = const KnowledgeConfig(),
     this.locale = 'system',
   });
 
@@ -22,6 +24,7 @@ class AppConfig {
         agent: AgentConfig.defaults(),
         providers: {},
         tools: const ToolsConfig(),
+        knowledge: const KnowledgeConfig(),
         locale: 'system',
       );
 
@@ -37,6 +40,10 @@ class AppConfig {
         tools: json['tools'] != null
             ? ToolsConfig.fromJson(json['tools'] as Map<String, dynamic>)
             : const ToolsConfig(),
+        knowledge: json['knowledge'] != null
+            ? KnowledgeConfig.fromJson(
+                json['knowledge'] as Map<String, dynamic>)
+            : const KnowledgeConfig(),
         locale: json['locale'] as String? ?? 'system',
       );
 
@@ -44,6 +51,7 @@ class AppConfig {
         'agent': agent.toJson(),
         'providers': providers.map((k, v) => MapEntry(k, v.toJson())),
         'tools': tools.toJson(),
+        'knowledge': knowledge.toJson(),
         'locale': locale,
       };
 
@@ -51,12 +59,14 @@ class AppConfig {
     AgentConfig? agent,
     Map<String, ProviderConfig>? providers,
     ToolsConfig? tools,
+    KnowledgeConfig? knowledge,
     String? locale,
   }) =>
       AppConfig(
         agent: agent ?? this.agent,
         providers: providers ?? this.providers,
         tools: tools ?? this.tools,
+        knowledge: knowledge ?? this.knowledge,
         locale: locale ?? this.locale,
       );
 
@@ -178,6 +188,7 @@ class ToolsConfig {
     'speak', 'open_app', 'set_alarm',
     'notifications', 'contacts', 'calendar',
     'pick_image', 'radio',
+    'knowledge_search', 'knowledge_store',
   };
 
   const ToolsConfig({
@@ -206,5 +217,50 @@ class ToolsConfig {
       ToolsConfig(
         webSearchMaxResults: webSearchMaxResults ?? this.webSearchMaxResults,
         disabledTools: disabledTools ?? this.disabledTools,
+      );
+}
+
+/// Knowledge Graph configuration.
+class KnowledgeConfig {
+  final bool enabled;
+  final int maxEntities;
+  final int decayHalfLifeDays;
+  final bool autoExtract;
+
+  const KnowledgeConfig({
+    this.enabled = false,
+    this.maxEntities = AppConstants.knowledgeMaxEntities,
+    this.decayHalfLifeDays = AppConstants.knowledgeDecayHalfLifeDays,
+    this.autoExtract = true,
+  });
+
+  factory KnowledgeConfig.fromJson(Map<String, dynamic> json) =>
+      KnowledgeConfig(
+        enabled: json['enabled'] as bool? ?? false,
+        maxEntities:
+            json['max_entities'] as int? ?? AppConstants.knowledgeMaxEntities,
+        decayHalfLifeDays: json['decay_half_life_days'] as int? ??
+            AppConstants.knowledgeDecayHalfLifeDays,
+        autoExtract: json['auto_extract'] as bool? ?? true,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'enabled': enabled,
+        'max_entities': maxEntities,
+        'decay_half_life_days': decayHalfLifeDays,
+        'auto_extract': autoExtract,
+      };
+
+  KnowledgeConfig copyWith({
+    bool? enabled,
+    int? maxEntities,
+    int? decayHalfLifeDays,
+    bool? autoExtract,
+  }) =>
+      KnowledgeConfig(
+        enabled: enabled ?? this.enabled,
+        maxEntities: maxEntities ?? this.maxEntities,
+        decayHalfLifeDays: decayHalfLifeDays ?? this.decayHalfLifeDays,
+        autoExtract: autoExtract ?? this.autoExtract,
       );
 }

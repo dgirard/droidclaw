@@ -98,6 +98,15 @@ class SettingsScreen extends ConsumerWidget {
                 Navigator.pushNamed(context, '/settings/crons'),
           ),
 
+          ListTile(
+            leading: const Icon(Icons.psychology_outlined),
+            title: Text(l.settingsKnowledge),
+            subtitle: Text(l.settingsKnowledgeSubtitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () =>
+                Navigator.pushNamed(context, '/settings/knowledge'),
+          ),
+
           const Divider(),
 
           // Channels section
@@ -143,6 +152,15 @@ class SettingsScreen extends ConsumerWidget {
             title: Text(l.logsTitle),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.pushNamed(context, '/settings/logs'),
+          ),
+
+          // LLM Traces
+          ListTile(
+            leading: const Icon(Icons.analytics_outlined),
+            title: Text(l.settingsLlmTraces),
+            subtitle: Text(l.settingsLlmTracesSubtitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.pushNamed(context, '/settings/llm-traces'),
           ),
 
           const Divider(),

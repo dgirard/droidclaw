@@ -195,6 +195,10 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
 
       // Cache resolved locale
       await prefs.setString(AppConstants.cachedLocaleKey, config.resolvedLocale);
+
+      // Cache Knowledge Graph enabled flag
+      await prefs.setBool(
+          AppConstants.cachedKnowledgeEnabledKey, config.knowledge.enabled);
     } catch (e) {
       // Non-critical — service isolate will fall back to pending queue
       AppLogger.instance.warning(LogSource.service,
