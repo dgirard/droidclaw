@@ -8,7 +8,9 @@ import '../../data/local/storage_service.dart';
 import '../../shared/constants.dart';
 import '../config/app_config.dart';
 import '../knowledge/database/knowledge_graph_db.dart';
+import '../knowledge/services/entity_extractor.dart';
 import '../knowledge/services/entity_resolver.dart';
+import '../knowledge/services/ingestion_pipeline.dart';
 import '../knowledge/services/knowledge_service.dart';
 import '../providers/embedding_provider.dart';
 import '../providers/embedding_provider_factory.dart';
@@ -169,8 +171,9 @@ class ServiceAgentFactory {
       }
     }
 
-    // 4c. Knowledge Graph tools (degraded mode: FTS5 + graph only, no embeddings)
+    // 4c. Knowledge Graph tools (with optional vector search via embeddings)
     KnowledgeService? knowledgeService;
+    IngestionPipeline? ingestionPipeline;
     final kgEnabled = prefs.getBool(AppConstants.cachedKnowledgeEnabledKey) ?? false;
     if (kgEnabled) {
       try {
@@ -178,8 +181,22 @@ class ServiceAgentFactory {
         final kgDb = KnowledgeGraphDB(dbPath);
         knowledgeService = KnowledgeService(
           db: kgDb,
-          hasEmbedder: embeddingProviderInstance != null,
+          embeddingProvider: embeddingProviderInstance,
+          embeddingModel: embeddingModel,
+          embeddingDimensions: embeddingDimensions,
         );
+
+        if (config.knowledge.autoExtract) {
+          final resolver = EntityResolver(kgDb);
+          ingestionPipeline = IngestionPipeline(
+            extractor: EntityExtractor(provider: provider, model: config.agent.model),
+            resolver: resolver,
+            db: kgDb,
+            embeddingProvider: embeddingProviderInstance,
+            embeddingModel: embeddingModel,
+            embeddingDimensions: embeddingDimensions,
+          );
+        }
 
         if (!disabled.contains('knowledge_search')) {
           registry.register(KnowledgeSearchTool(knowledgeService: knowledgeService));
@@ -218,6 +235,7 @@ class ServiceAgentFactory {
       tools: registry,
       contextBuilder: contextBuilder,
       knowledgeService: knowledgeService,
+      ingestionPipeline: ingestionPipeline,
     );
   }
 }

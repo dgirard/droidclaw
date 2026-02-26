@@ -107,11 +107,21 @@ final knowledgeGraphDbProvider =
 });
 
 /// Knowledge Service — null when KG is disabled.
+/// Watches embeddingProviderProvider to enable vector search when available.
 final knowledgeServiceProvider =
     FutureProvider<KnowledgeService?>((ref) async {
   final db = await ref.watch(knowledgeGraphDbProvider.future);
   if (db == null) return null;
-  return KnowledgeService(db: db);
+
+  final config = ref.watch(appConfigProvider);
+  final embeddingProvider = await ref.watch(embeddingProviderProvider.future);
+
+  return KnowledgeService(
+    db: db,
+    embeddingProvider: embeddingProvider,
+    embeddingModel: config.embedding.model,
+    embeddingDimensions: config.embedding.dimensions,
+  );
 });
 
 /// Skill loader.
@@ -317,12 +327,16 @@ final agentLoopProvider = FutureProvider<AgentLoop?>((ref) async {
   // Wire Knowledge Graph (optional)
   final kgService2 = await ref.watch(knowledgeServiceProvider.future);
   final kgDb2 = await ref.watch(knowledgeGraphDbProvider.future);
+  final embeddingProvider = await ref.watch(embeddingProviderProvider.future);
   IngestionPipeline? ingestionPipeline;
   if (kgService2 != null && kgDb2 != null && config.knowledge.autoExtract) {
     ingestionPipeline = IngestionPipeline(
       extractor: EntityExtractor(provider: provider, model: config.agent.model),
       resolver: EntityResolver(kgDb2),
       db: kgDb2,
+      embeddingProvider: embeddingProvider,
+      embeddingModel: config.embedding.model,
+      embeddingDimensions: config.embedding.dimensions,
     );
   }
 

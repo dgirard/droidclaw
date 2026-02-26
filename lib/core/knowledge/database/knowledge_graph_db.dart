@@ -226,6 +226,34 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     });
   }
 
+  /// Update embedding BLOB for an entity.
+  Future<void> updateEntityEmbedding(int entityId, Uint8List embedding) async {
+    await customStatement(
+      'UPDATE entities SET embedding = ? WHERE id = ?',
+      [embedding, entityId],
+    );
+  }
+
+  /// Load all active entity embeddings for brute-force vector search.
+  /// Returns (id, embedding) pairs for entities that have embeddings.
+  Future<List<({int id, Uint8List embedding})>> getActiveEntityEmbeddings({
+    int limit = 1000,
+  }) async {
+    final results = await customSelect(
+      'SELECT id, embedding FROM entities '
+      'WHERE is_active = 1 AND embedding IS NOT NULL '
+      'LIMIT ?',
+      variables: [Variable.withInt(limit)],
+    ).get();
+
+    return results.map((r) {
+      return (
+        id: r.read<int>('id'),
+        embedding: r.read<Uint8List>('embedding'),
+      );
+    }).toList();
+  }
+
   /// Delete all data (forget everything).
   Future<void> deleteAllData() async {
     await transaction(() async {

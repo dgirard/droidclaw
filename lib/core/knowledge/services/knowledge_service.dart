@@ -1,4 +1,10 @@
+import 'dart:typed_data';
+
+import '../../config/log_entry.dart';
+import '../../providers/embedding_provider.dart';
+import '../../services/app_logger.dart';
 import '../algorithms/hybrid_scorer.dart';
+import '../algorithms/memory_clusterer.dart';
 import '../algorithms/memory_decay.dart';
 import '../algorithms/spreading_activation.dart';
 import '../database/knowledge_graph_db.dart';
@@ -8,19 +14,33 @@ import '../models/ranked_result.dart';
 /// High-level API for the Knowledge Graph.
 ///
 /// Wraps the Drift database + algorithms to provide:
-/// - Hybrid query pipeline (queryRelevant)
+/// - Hybrid query pipeline (queryRelevant) with optional vector search
 /// - Batch decay recalculation
 /// - Entity/fact/relation CRUD
 /// - Statistics
 class KnowledgeService {
   final KnowledgeGraphDB db;
 
-  /// Whether vector similarity is available (main isolate only).
-  final bool hasEmbedder;
+  /// Optional embedding provider for vector similarity search.
+  final EmbeddingProvider? embeddingProvider;
+
+  /// Model name for embedding API calls.
+  final String embeddingModel;
+
+  /// Output dimensions for embeddings.
+  final int embeddingDimensions;
+
+  /// Whether vector similarity is available.
+  bool get hasEmbedder => embeddingProvider != null;
 
   final _spreading = const SpreadingActivation();
 
-  KnowledgeService({required this.db, this.hasEmbedder = false});
+  KnowledgeService({
+    required this.db,
+    this.embeddingProvider,
+    this.embeddingModel = '',
+    this.embeddingDimensions = 768,
+  });
 
   /// Query the knowledge graph for entities relevant to a text query.
   ///
@@ -66,11 +86,42 @@ class KnowledgeService {
       }
     }
 
-    // 2. Vector similarity — Phase 4 will add embedder-based search here
-    // For now, only FTS5 + graph signals are used (degraded mode weights).
+    // 2. Vector similarity search (if embedder is available)
+    final vectorScores = <int, double>{};
+    if (hasEmbedder) {
+      try {
+        final queryResult = await embeddingProvider!.embed(
+          texts: [query],
+          model: embeddingModel,
+          dimensions: embeddingDimensions,
+          taskType: 'RETRIEVAL_QUERY',
+        );
+        if (queryResult.embeddings.isNotEmpty) {
+          final queryVec = Float32List.fromList(queryResult.embeddings.first);
+          final entityEmbeddings =
+              await db.getActiveEntityEmbeddings(limit: 1000);
 
-    // 3. Union candidates
-    final candidateIds = <int>{...bm25Scores.keys};
+          for (final entry in entityEmbeddings) {
+            final entVec = Float32List.view(
+              Uint8List.fromList(entry.embedding).buffer,
+            );
+            if (entVec.length != queryVec.length) continue;
+            final sim = MemoryClusterer.cosineSimilarity(queryVec, entVec);
+            if (sim > 0.5) {
+              vectorScores[entry.id] = sim;
+            }
+          }
+        }
+      } catch (e) {
+        AppLogger.instance.warning(
+          LogSource.agent,
+          'KG vector search failed, falling back to degraded mode: $e',
+        );
+      }
+    }
+
+    // 3. Union candidates (FTS + vector)
+    final candidateIds = <int>{...bm25Scores.keys, ...vectorScores.keys};
 
     // 4. Load 2-hop subgraph neighbors
     final neighborMap = <int, List<({int entityId, double weight})>>{};
@@ -133,10 +184,11 @@ class KnowledgeService {
       }
     }
 
-    // 7. Score fusion (degraded mode: no vector signal until Phase 4)
+    // 7. Score fusion (full mode if vectorScores available, degraded otherwise)
     final scored = HybridScorer.fuse(
       candidates: expandedIds,
       bm25Scores: bm25Scores,
+      vectorScores: vectorScores.isNotEmpty ? vectorScores : null,
       activationScores: activationScores,
       decayScores: decayScores,
     );

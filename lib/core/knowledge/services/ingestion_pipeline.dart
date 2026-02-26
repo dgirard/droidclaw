@@ -1,22 +1,37 @@
+import 'dart:typed_data';
+
 import 'package:drift/drift.dart';
 
 import '../../config/log_entry.dart';
+import '../../providers/embedding_provider.dart';
 import '../../services/app_logger.dart';
 import '../database/knowledge_graph_db.dart';
 import 'entity_extractor.dart';
 import 'entity_resolver.dart';
 
 /// Orchestrates the full ingestion flow:
-/// LLM extraction → entity resolution → bi-temporal storage.
+/// LLM extraction → entity resolution → bi-temporal storage → embedding.
 class IngestionPipeline {
   final EntityExtractor extractor;
   final EntityResolver resolver;
   final KnowledgeGraphDB db;
 
+  /// Optional embedding provider for computing entity vectors.
+  final EmbeddingProvider? embeddingProvider;
+
+  /// Model name for embedding API calls.
+  final String embeddingModel;
+
+  /// Output dimensions for embeddings.
+  final int embeddingDimensions;
+
   IngestionPipeline({
     required this.extractor,
     required this.resolver,
     required this.db,
+    this.embeddingProvider,
+    this.embeddingModel = '',
+    this.embeddingDimensions = 768,
   });
 
   /// Extract and store knowledge from a conversation turn.
@@ -35,11 +50,11 @@ class IngestionPipeline {
     if (result.isEmpty) return 0;
 
     var storedCount = 0;
+    final entityIds = <String, int>{};
 
     try {
       await db.transaction(() async {
         // 2. Resolve entities (creates new ones if needed)
-        final entityIds = <String, int>{};
         for (final e in result.entities) {
           final id = await resolver.resolve(
             name: e.name,
@@ -96,6 +111,11 @@ class IngestionPipeline {
         '${result.relations.length} relations, '
         '${result.facts.length} facts → $storedCount stored',
       );
+
+      // 5. Compute and store entity embeddings (outside transaction)
+      if (embeddingProvider != null && entityIds.isNotEmpty) {
+        await _embedEntities(result.entities, entityIds);
+      }
     } catch (e) {
       AppLogger.instance.warning(
         LogSource.agent,
@@ -104,5 +124,52 @@ class IngestionPipeline {
     }
 
     return storedCount;
+  }
+
+  /// Compute embeddings for resolved entities and store in DB.
+  Future<void> _embedEntities(
+    List<ExtractedEntity> entities,
+    Map<String, int> entityIds,
+  ) async {
+    try {
+      // Build embedding texts: "Name (TYPE): summary" for rich context
+      final texts = entities.map((e) {
+        final parts = [e.name];
+        if (e.type != 'CONCEPT') parts.add('(${e.type})');
+        if (e.summary != null && e.summary!.isNotEmpty) {
+          parts.add(': ${e.summary}');
+        }
+        return parts.join(' ');
+      }).toList();
+
+      final result = await embeddingProvider!.embed(
+        texts: texts,
+        model: embeddingModel,
+        dimensions: embeddingDimensions,
+        taskType: 'RETRIEVAL_DOCUMENT',
+      );
+
+      // Store each embedding as a Float32 BLOB
+      for (var i = 0; i < entities.length; i++) {
+        final entityId = entityIds[entities[i].name.toLowerCase()];
+        if (entityId == null || i >= result.embeddings.length) continue;
+
+        final float32 = Float32List.fromList(result.embeddings[i]);
+        final blob = float32.buffer.asUint8List();
+        await db.updateEntityEmbedding(entityId, blob);
+      }
+
+      AppLogger.instance.info(
+        LogSource.agent,
+        'KG embeddings: ${entities.length} entities embedded '
+        '(${embeddingDimensions}d, $embeddingModel)',
+      );
+    } catch (e) {
+      // Embedding failure should not break ingestion
+      AppLogger.instance.warning(
+        LogSource.agent,
+        'KG embedding failed (ingestion continues): $e',
+      );
+    }
   }
 }

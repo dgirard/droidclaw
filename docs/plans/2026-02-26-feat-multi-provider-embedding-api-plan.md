@@ -415,17 +415,24 @@ Add parameters: `embeddingApiKey?`, `embeddingProvider`, `embeddingModel`, `embe
 - [x] Network timeout → 30s timeout, clear error
 - [x] Gemini `embedContent` vs `batchEmbedContents` — different response shapes handled correctly
 
-## Phase 2 Preview (Out of Scope — for design awareness only)
+## Phase 2: KG Integration (IMPLEMENTED)
 
-These items are NOT implemented in this phase but inform design decisions:
+Phase 2 integrates the embedding infrastructure into the Knowledge Graph pipeline:
 
-- **Vector storage format**: Float32 little-endian BLOBs via `VectorConverter` (`Float32List.fromList(v).buffer.asUint8List()` ↔ `Uint8List.buffer.asFloat32List().toList()`). A 768-dim vector = 3072 bytes.
-- **Model provenance**: Store `providerId` + `dimensions` alongside each embedding BLOB. When user changes provider/model, stale vectors can be detected and re-embedded.
-- **Cosine similarity**: Custom Dart function registered at Drift database open time (SQLite `createFunction`), or computed in Dart by `HybridScorer`. Brute-force over 10K 768-dim vectors: ~30-80ms on modern Android.
-- **Dimension normalization**: If provider returns more dimensions than configured, Matryoshka truncation (take first N dims + L2 re-normalize) is valid for OpenAI/Gemini models. A `DimensionNormalizer` utility class can handle this.
-- **Ingestion pipeline**: Compute embeddings after entity resolution in `IngestionPipeline`, before storage.
-- **Retrieval**: Pass `vectorScores` to `HybridScorer.fuse()` (currently receives `null` → degraded mode).
-- **Dimension change**: Changing model/dimensions after data is embedded requires re-embedding all existing vectors. UI should warn about this.
+- [x] **Vector storage**: Float32 little-endian BLOBs (`Float32List.fromList(v).buffer.asUint8List()`). `updateEntityEmbedding()` and `getActiveEntityEmbeddings()` methods in `KnowledgeGraphDB`.
+- [x] **Ingestion pipeline**: `IngestionPipeline` computes embeddings after entity resolution (stage 2b). Texts formatted as `"Name (TYPE): summary"` for rich context. Uses `taskType: RETRIEVAL_DOCUMENT`. Errors logged but don't block ingestion.
+- [x] **Retrieval**: `KnowledgeService.queryRelevant()` embeds query text (`taskType: RETRIEVAL_QUERY`), loads all active entity embeddings, computes cosine similarity (reuses `MemoryClusterer.cosineSimilarity()`), filters by threshold (>0.5), passes `vectorScores` to `HybridScorer.fuse()`.
+- [x] **Full/degraded mode**: HybridScorer automatically uses full weights (0.30 BM25 + 0.30 vector + 0.25 activation + 0.15 decay) when vectorScores available, degrades gracefully when null.
+- [x] **KnowledgeService refactored**: `hasEmbedder` bool replaced with `EmbeddingProvider?` + model/dimensions. `hasEmbedder` is now a getter.
+- [x] **Riverpod wiring**: `knowledgeServiceProvider` watches `embeddingProviderProvider`, passes provider to KnowledgeService. `agentLoopProvider` passes provider to IngestionPipeline.
+- [x] **Service isolate**: `ServiceAgentFactory` passes embedding provider to both `KnowledgeService` and `IngestionPipeline`. Cron-executed conversations get both vector search and embedding ingestion.
+
+### Not yet implemented (future work)
+
+- **Model provenance**: Track `providerId` + `dimensions` alongside each embedding BLOB for stale detection.
+- **Dimension normalization**: Matryoshka truncation when provider returns more dimensions than configured.
+- **Dimension change warning**: UI warning when changing model/dimensions after data is embedded.
+- **Re-embedding**: Batch re-embed all existing entities when model/dimensions change.
 
 ## Dependencies & Risks
 
