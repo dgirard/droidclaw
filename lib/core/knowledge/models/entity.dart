@@ -38,24 +38,15 @@ class KnowledgeEntity {
   final String name;
   final EntityType entityType;
   final String? summary;
-  final Map<String, dynamic> properties;
-  final List<double>? embedding;
 
-  // Bi-temporal
+  // Temporal
   final int? createdAt;
-  final int? validAt;
-  final int? invalidAt;
-  final int? ingestedAt;
-  final int? expiredAt;
 
   // Activation & decay
   final int? lastAccessed;
   final int accessCount;
   final Temperature temperature;
   final double baseScore;
-
-  // RAPTOR hierarchy
-  final int? parentSummaryId;
   final bool isActive;
 
   const KnowledgeEntity({
@@ -63,18 +54,11 @@ class KnowledgeEntity {
     required this.name,
     this.entityType = EntityType.concept,
     this.summary,
-    this.properties = const {},
-    this.embedding,
     this.createdAt,
-    this.validAt,
-    this.invalidAt,
-    this.ingestedAt,
-    this.expiredAt,
     this.lastAccessed,
     this.accessCount = 1,
     this.temperature = Temperature.warm,
     this.baseScore = 0.5,
-    this.parentSummaryId,
     this.isActive = true,
   });
 
@@ -85,20 +69,12 @@ class KnowledgeEntity {
         entityType: EntityType.fromString(
             json['entity_type'] as String? ?? 'CONCEPT'),
         summary: json['summary'] as String?,
-        properties: json['properties'] is Map
-            ? Map<String, dynamic>.from(json['properties'] as Map)
-            : const {},
         createdAt: json['created_at'] as int?,
-        validAt: json['valid_at'] as int?,
-        invalidAt: json['invalid_at'] as int?,
-        ingestedAt: json['ingested_at'] as int?,
-        expiredAt: json['expired_at'] as int?,
         lastAccessed: json['last_accessed'] as int?,
         accessCount: json['access_count'] as int? ?? 1,
         temperature:
             Temperature.fromString(json['temperature'] as String? ?? 'warm'),
         baseScore: (json['base_score'] as num?)?.toDouble() ?? 0.5,
-        parentSummaryId: json['parent_summary_id'] as int?,
         isActive: (json['is_active'] as int? ?? 1) == 1,
       );
 
@@ -107,53 +83,13 @@ class KnowledgeEntity {
         'name': name,
         'entity_type': entityType.label,
         'summary': summary,
-        'properties': properties,
         'created_at': createdAt,
-        'valid_at': validAt,
-        'invalid_at': invalidAt,
-        'ingested_at': ingestedAt,
-        'expired_at': expiredAt,
         'last_accessed': lastAccessed,
         'access_count': accessCount,
         'temperature': temperature.name,
         'base_score': baseScore,
-        'parent_summary_id': parentSummaryId,
         'is_active': isActive ? 1 : 0,
       };
-
-  KnowledgeEntity copyWith({
-    int? id,
-    String? name,
-    EntityType? entityType,
-    String? summary,
-    Map<String, dynamic>? properties,
-    List<double>? embedding,
-    int? lastAccessed,
-    int? accessCount,
-    Temperature? temperature,
-    double? baseScore,
-    int? parentSummaryId,
-    bool? isActive,
-  }) =>
-      KnowledgeEntity(
-        id: id ?? this.id,
-        name: name ?? this.name,
-        entityType: entityType ?? this.entityType,
-        summary: summary ?? this.summary,
-        properties: properties ?? this.properties,
-        embedding: embedding ?? this.embedding,
-        createdAt: createdAt,
-        validAt: validAt,
-        invalidAt: invalidAt,
-        ingestedAt: ingestedAt,
-        expiredAt: expiredAt,
-        lastAccessed: lastAccessed ?? this.lastAccessed,
-        accessCount: accessCount ?? this.accessCount,
-        temperature: temperature ?? this.temperature,
-        baseScore: baseScore ?? this.baseScore,
-        parentSummaryId: parentSummaryId ?? this.parentSummaryId,
-        isActive: isActive ?? this.isActive,
-      );
 }
 
 /// A Knowledge Graph relation (edge / triplet).
@@ -163,22 +99,8 @@ class KnowledgeRelation {
   final int targetId;
   final String predicate;
   final double weight;
-  final Map<String, dynamic> properties;
-  final List<double>? embedding;
-
-  // Bi-temporal
-  final int? createdAt;
-  final int? validAt;
-  final int? invalidAt;
-  final int? ingestedAt;
-  final int? expiredAt;
-
-  // Activation
-  final int? lastAccessed;
-  final int accessCount;
   final double confidence;
   final String? sourceText;
-  final bool isActive;
 
   const KnowledgeRelation({
     this.id,
@@ -186,18 +108,8 @@ class KnowledgeRelation {
     required this.targetId,
     required this.predicate,
     this.weight = 1.0,
-    this.properties = const {},
-    this.embedding,
-    this.createdAt,
-    this.validAt,
-    this.invalidAt,
-    this.ingestedAt,
-    this.expiredAt,
-    this.lastAccessed,
-    this.accessCount = 1,
     this.confidence = 1.0,
     this.sourceText,
-    this.isActive = true,
   });
 
   factory KnowledgeRelation.fromJson(Map<String, dynamic> json) =>
@@ -207,19 +119,8 @@ class KnowledgeRelation {
         targetId: json['target_id'] as int,
         predicate: json['predicate'] as String,
         weight: (json['weight'] as num?)?.toDouble() ?? 1.0,
-        properties: json['properties'] is Map
-            ? Map<String, dynamic>.from(json['properties'] as Map)
-            : const {},
-        createdAt: json['created_at'] as int?,
-        validAt: json['valid_at'] as int?,
-        invalidAt: json['invalid_at'] as int?,
-        ingestedAt: json['ingested_at'] as int?,
-        expiredAt: json['expired_at'] as int?,
-        lastAccessed: json['last_accessed'] as int?,
-        accessCount: json['access_count'] as int? ?? 1,
         confidence: (json['confidence'] as num?)?.toDouble() ?? 1.0,
         sourceText: json['source_text'] as String?,
-        isActive: (json['is_active'] as int? ?? 1) == 1,
       );
 
   Map<String, dynamic> toJson() => {
@@ -228,17 +129,8 @@ class KnowledgeRelation {
         'target_id': targetId,
         'predicate': predicate,
         'weight': weight,
-        'properties': properties,
-        'created_at': createdAt,
-        'valid_at': validAt,
-        'invalid_at': invalidAt,
-        'ingested_at': ingestedAt,
-        'expired_at': expiredAt,
-        'last_accessed': lastAccessed,
-        'access_count': accessCount,
         'confidence': confidence,
         'source_text': sourceText,
-        'is_active': isActive ? 1 : 0,
       };
 }
 

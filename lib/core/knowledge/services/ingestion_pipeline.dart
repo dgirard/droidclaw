@@ -37,27 +37,25 @@ class IngestionPipeline {
     var storedCount = 0;
 
     try {
-      // 2. Resolve entities (creates new ones if needed)
-      final entityIds = <String, int>{};
-      for (final e in result.entities) {
-        final id = await resolver.resolve(
-          name: e.name,
-          entityType: e.type,
-          summary: e.summary,
-        );
-        entityIds[e.name.toLowerCase()] = id;
-      }
+      await db.transaction(() async {
+        // 2. Resolve entities (creates new ones if needed)
+        final entityIds = <String, int>{};
+        for (final e in result.entities) {
+          final id = await resolver.resolve(
+            name: e.name,
+            entityType: e.type,
+            summary: e.summary,
+          );
+          entityIds[e.name.toLowerCase()] = id;
+        }
 
-      // 3. Store relations
-      for (final r in result.relations) {
-        // Resolve source and target entities
-        final sourceId = entityIds[r.source.toLowerCase()] ??
-            await resolver.resolve(name: r.source);
-        final targetId = entityIds[r.target.toLowerCase()] ??
-            await resolver.resolve(name: r.target);
+        // 3. Store relations (insertOrIgnore for existing triplets)
+        for (final r in result.relations) {
+          final sourceId = entityIds[r.source.toLowerCase()] ??
+              await resolver.resolve(name: r.source);
+          final targetId = entityIds[r.target.toLowerCase()] ??
+              await resolver.resolve(name: r.target);
 
-        // Upsert: check if this exact triplet already exists
-        try {
           await db.into(db.relations).insert(
                 RelationsCompanion.insert(
                   sourceId: sourceId,
@@ -69,24 +67,22 @@ class IngestionPipeline {
                 mode: InsertMode.insertOrIgnore,
               );
           storedCount++;
-        } catch (_) {
-          // Unique constraint violation — relation already exists
         }
-      }
 
-      // 4. Store facts bi-temporally
-      for (final f in result.facts) {
-        final entityId = entityIds[f.entity.toLowerCase()] ??
-            await resolver.resolve(name: f.entity);
+        // 4. Store facts bi-temporally
+        for (final f in result.facts) {
+          final entityId = entityIds[f.entity.toLowerCase()] ??
+              await resolver.resolve(name: f.entity);
 
-        await db.updateFactBiTemporal(
-          entityId: entityId,
-          key: f.key,
-          newValue: f.value,
-          valueType: f.type,
-        );
-        storedCount++;
-      }
+          await db.updateFactBiTemporal(
+            entityId: entityId,
+            key: f.key,
+            newValue: f.value,
+            valueType: f.type,
+          );
+          storedCount++;
+        }
+      });
 
       AppLogger.instance.info(
         LogSource.agent,
@@ -99,6 +95,7 @@ class IngestionPipeline {
         LogSource.agent,
         'KG ingestion error: $e',
       );
+      storedCount = 0; // Transaction rolled back, nothing was stored
     }
 
     return storedCount;

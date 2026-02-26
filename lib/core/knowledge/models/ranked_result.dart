@@ -9,7 +9,6 @@ class RankedEntity {
 
   /// Individual signal scores for debugging/tuning.
   final double bm25Score;
-  final double vectorScore;
   final double activationScore;
   final double decayScore;
 
@@ -19,7 +18,6 @@ class RankedEntity {
     this.relations = const [],
     required this.score,
     this.bm25Score = 0.0,
-    this.vectorScore = 0.0,
     this.activationScore = 0.0,
     this.decayScore = 0.0,
   });
@@ -66,7 +64,6 @@ class RankedEntity {
         'relations': relations.map((r) => r.toJson()).toList(),
         'score': score,
         'bm25_score': bm25Score,
-        'vector_score': vectorScore,
         'activation_score': activationScore,
         'decay_score': decayScore,
       };

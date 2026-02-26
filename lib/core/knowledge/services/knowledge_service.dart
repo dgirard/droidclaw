@@ -15,12 +15,9 @@ import '../models/ranked_result.dart';
 class KnowledgeService {
   final KnowledgeGraphDB db;
 
-  /// Whether vector similarity is available (main isolate only).
-  final bool hasEmbedder;
-
   final _spreading = const SpreadingActivation();
 
-  KnowledgeService({required this.db, this.hasEmbedder = false});
+  KnowledgeService({required this.db});
 
   /// Query the knowledge graph for entities relevant to a text query.
   ///
@@ -66,10 +63,7 @@ class KnowledgeService {
       }
     }
 
-    // 2. Vector similarity — Phase 4 will add embedder-based search here
-    // For now, only FTS5 + graph signals are used (degraded mode weights).
-
-    // 3. Union candidates
+    // 2. Union candidates
     final candidateIds = <int>{...bm25Scores.keys};
 
     // 4. Load 2-hop subgraph neighbors
@@ -133,7 +127,7 @@ class KnowledgeService {
       }
     }
 
-    // 7. Score fusion (degraded mode: no vector signal until Phase 4)
+    // 6. Score fusion
     final scored = HybridScorer.fuse(
       candidates: expandedIds,
       bm25Scores: bm25Scores,
@@ -198,7 +192,6 @@ class KnowledgeService {
         relations: knowledgeRelations,
         score: s.score,
         bm25Score: s.bm25Score,
-        vectorScore: s.vectorScore,
         activationScore: s.activationScore,
         decayScore: s.decayScore,
       ));

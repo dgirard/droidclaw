@@ -63,6 +63,9 @@ class KnowledgeStoreTool extends Tool {
     if (value == null || value.trim().isEmpty) {
       return ToolResult.error('Missing required parameter: value');
     }
+    if (entityName.length > 200 || key.length > 200 || value.length > 5000) {
+      return ToolResult.error('Input too long (entity/key max 200, value max 5000 chars)');
+    }
 
     try {
       // Resolve or create the entity
