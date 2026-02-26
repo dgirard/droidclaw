@@ -498,28 +498,143 @@ The LLM is guided by the tool descriptions to use a two-step approach:
 
 Both tools share a common `htmlToMarkdown()` utility that strips noise elements (`<nav>`, `<footer>`, `<aside>`, `<script>`, `<style>`) and produces clean Markdown with ATX headings and fenced code blocks.
 
-### Knowledge Graph & Embeddings
+### Knowledge Graph — Persistent Memory
 
-DroidClaw maintains a persistent **Knowledge Graph** that remembers information across conversations. The system operates in two phases:
+DroidClaw maintains a persistent **Knowledge Graph** (KG) — a local SQLite database that remembers information across conversations. Unlike simple chat history, the KG structures knowledge as interconnected entities, facts, and relations, enabling the assistant to recall and reason over past information.
 
-**Ingestion** (after each conversation turn):
-1. LLM extracts entities, relations, and facts from the conversation
-2. Entity resolution with fuzzy matching (Jaro-Winkler) avoids duplicates
-3. Facts stored bi-temporally (valid-at / expired-at for history tracking)
-4. Entity embeddings computed via the configured embedding API and stored as Float32 BLOBs
+#### Why a Knowledge Graph?
 
-**Retrieval** (before each LLM call):
-1. Query expansion via a fast LLM call to bridge vocabulary gaps
-2. FTS5 BM25 text search on entities and facts
-3. Vector cosine similarity search on entity embeddings (brute-force over all active entities)
-4. 2-hop graph neighbor loading + spreading activation
-5. Ebbinghaus memory decay scoring (hot/warm/cool/cold temperature)
-6. HybridScorer fuses all 4 signals: BM25 (0.30) + vector (0.30) + activation (0.25) + decay (0.15)
-7. Top-K entities injected into the system prompt as context
+Chat history is linear and ephemeral — it gets summarized and truncated. The Knowledge Graph solves this by extracting **structured knowledge** from every conversation and storing it permanently:
 
-When no embedding provider is configured, the scorer degrades gracefully: BM25 (0.55) + activation (0.30) + decay (0.15).
+- "My dentist is Dr. Martin" → Entity `Dr. Martin` (PERSON), fact `profession: dentist`, relation `User SEES Dr. Martin`
+- "I live at 9 rue la Paix" → Entity `User` (PERSON), fact `address: 9 rue la Paix`
+- "My meeting with Alice is Tuesday at 3pm" → Entity `Alice` (PERSON), relation `User MEETS Alice`, fact `meeting: Tuesday 3pm`
 
-Configure the embedding provider in **Settings > Embedding**. Enable the Knowledge Graph in **Settings > Knowledge**.
+Later, when the user asks "Who is my dentist?" or "Where do I live?", the KG retrieves the relevant entities and injects them into the system prompt — even if the original conversation was weeks ago and long since summarized.
+
+#### Data Model
+
+```
+Entity (node)                 Relation (edge)              Fact (attribute)
+┌──────────────┐              ┌──────────────┐             ┌──────────────┐
+│ id           │              │ source_id ───┼──→ Entity   │ entity_id ───┼──→ Entity
+│ name         │              │ target_id ───┼──→ Entity   │ key          │
+│ type         │              │ predicate    │             │ value        │
+│ summary      │              │ weight       │             │ value_type   │
+│ embedding    │ (BLOB)       │ embedding    │ (BLOB)      │ valid_at     │
+│ temperature  │              │ confidence   │             │ expired_at   │
+│ access_count │              └──────────────┘             └──────────────┘
+│ last_accessed│
+└──────────────┘
+```
+
+**Entity types**: PERSON, PLACE, ORG, EVENT, CONCEPT, DATE.
+
+**Temperature** (Ebbinghaus memory decay): entities are classified as `hot` (recently accessed), `warm` (moderate), `cool` (aging), or `cold` (candidates for deactivation). The decay follows an exponential retention curve: `R = e^(-t/S)` where stability increases with access frequency.
+
+**Bi-temporal facts**: when a fact changes (e.g., the user moves to a new address), the old value is expired (`expired_at` timestamp) and the new one inserted. The KG preserves full history — it knows both the current and previous values.
+
+#### Ingestion Pipeline
+
+After each conversation turn, the KG extraction runs **asynchronously** (fire-and-forget, never blocks the chat):
+
+```
+User message + Assistant response
+    │
+    ▼
+┌─────────────────────────────┐
+│ 1. LLM Entity Extraction    │  ← Structured JSON extraction prompt
+│    (entities, relations,     │     (temperature: 0.1, max_tokens: 2048)
+│     facts)                   │
+└──────────────┬──────────────┘
+               ▼
+┌─────────────────────────────┐
+│ 2. Entity Resolution         │  ← Jaro-Winkler fuzzy matching (0.88 threshold)
+│    (deduplicate against      │     + FTS5 candidate search + alias table
+│     existing entities)       │
+└──────────────┬──────────────┘
+               ▼
+┌─────────────────────────────┐
+│ 3. Relation + Fact Storage   │  ← Bi-temporal upsert (expire old, insert new)
+│    (inside DB transaction)   │     Unique triplet constraint (source, pred, target)
+└──────────────┬──────────────┘
+               ▼
+┌─────────────────────────────┐
+│ 4. Embedding Computation     │  ← Batch API call to configured provider
+│    (outside transaction)     │     Text: "Name (TYPE): summary"
+│                              │     Stored as Float32 BLOB (~3 KB per entity)
+└─────────────────────────────┘
+```
+
+Step 4 is optional — if no embedding provider is configured, entities are stored without vectors and the retrieval pipeline uses degraded scoring (text search only).
+
+#### Retrieval Pipeline
+
+Before each LLM call, the KG is queried for relevant context. The pipeline fuses **4 independent signals**:
+
+```
+User query: "Where do I live?"
+    │
+    ▼
+┌──────────────────────────────┐
+│ 1. Query Expansion (LLM)     │  "Where do I live?"
+│    max_tokens: 50, temp: 0   │  → "address home residence habite domicile lieu"
+└──────────────┬───────────────┘
+               ▼
+┌──────────────────────────────┐
+│ 2a. FTS5 BM25 Search         │  Text matching on entity names, summaries, facts
+│     (entities + facts)        │  → Signal 1: lexical relevance
+├──────────────────────────────┤
+│ 2b. Vector Similarity Search  │  Embed query → cosine similarity with all entity
+│     (cosine, threshold > 0.5) │  embeddings → Signal 2: semantic relevance
+└──────────────┬───────────────┘
+               ▼
+┌──────────────────────────────┐
+│ 3. Graph Neighbor Loading     │  Load 2-hop neighbors from candidate entities
+│    (2-hop subgraph)           │  → Expands candidate pool via graph structure
+└──────────────┬───────────────┘
+               ▼
+┌──────────────────────────────┐
+│ 4. Spreading Activation       │  BFS propagation from seed entities across
+│    (decay 0.85, 4 hops)      │  weighted edges → Signal 3: graph centrality
+└──────────────┬───────────────┘
+               ▼
+┌──────────────────────────────┐
+│ 5. Memory Decay (Ebbinghaus)  │  Retention score based on last access time +
+│    R = e^(-t/S)               │  access frequency → Signal 4: recency/importance
+└──────────────┬───────────────┘
+               ▼
+┌──────────────────────────────┐
+│ 6. HybridScorer Fusion        │  Normalizes + weighted sum of all 4 signals
+│                                │
+│  Full mode (with embeddings):  │  0.30 BM25 + 0.30 vector + 0.25 activation + 0.15 decay
+│  Degraded (no embeddings):     │  0.55 BM25 + 0.30 activation + 0.15 decay
+└──────────────┬───────────────┘
+               ▼
+┌──────────────────────────────┐
+│ 7. Top-K → System Prompt      │  Entities + facts + relations formatted as XML
+│    (reinforcement: touch)      │  and injected into the LLM context
+└──────────────────────────────┘
+```
+
+This hybrid approach means the KG can find relevant information even when the user's query uses different vocabulary than the stored data. For example, "Where do I live?" matches the fact `address: 9 rue la Paix` through three complementary paths:
+- **Query expansion** generates keywords like "address", "home", "domicile"
+- **Vector similarity** bridges the semantic gap between "live" and "address"
+- **Graph activation** boosts the User entity and its connected facts
+
+#### Embedding Providers
+
+Vector similarity search requires an embedding provider. DroidClaw supports three providers, all via remote API calls:
+
+| Provider | Default Model | Free Tier | Dimensions |
+|----------|--------------|-----------|------------|
+| **Gemini** (recommended) | `gemini-embedding-001` | Generous free tier | 768 (up to 3072) |
+| **OpenAI** | `text-embedding-3-small` | No | 768 (up to 1536) |
+| **OpenRouter** | `openai/text-embedding-3-small` | No | 768 (up to 1536) |
+
+By default, the embedding provider reuses the LLM provider's API key. A separate key can be configured if needed (e.g., using Anthropic for chat + Gemini for embeddings).
+
+Configure in **Settings > Embedding**. Enable the Knowledge Graph in **Settings > Knowledge**.
 
 ### Tool Registration Flow
 
