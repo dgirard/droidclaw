@@ -42,7 +42,7 @@ class EntityResolver {
         final similarity = jaroWinkler(name.toLowerCase(), c.name.toLowerCase());
         if (similarity >= similarityThreshold) {
           // Create alias for this match so future lookups are instant
-          await _db.into(_db.aliases).insert(AliasesCompanion.insert(
+          await _db.into(_db.aliases).insertOnConflictUpdate(AliasesCompanion.insert(
                 entityId: c.id,
                 aliasName: name,
               ));

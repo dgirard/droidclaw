@@ -63,7 +63,9 @@ class ContextBuilder {
           'The following structured knowledge was automatically extracted from previous conversations. '
           'Use it to provide context-aware responses. The memory notes above are user-curated, '
           'while this knowledge graph is auto-extracted — both are complementary.');
+      buffer.writeln('<knowledge_context data-only="true">');
       buffer.writeln(knowledgeContext);
+      buffer.writeln('</knowledge_context>');
       buffer.writeln();
     }
 

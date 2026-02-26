@@ -92,13 +92,25 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   /// Deactivate cold entities older than a given epoch.
   /// Returns the number of deactivated entities.
   Future<int> purgeColdEntities(int olderThanEpoch) async {
-    await customStatement(
-      'UPDATE entities SET is_active = 0 '
-      'WHERE temperature = \'cold\' AND last_accessed < ? AND is_active = 1',
-      [olderThanEpoch],
-    );
-    final result = await customSelect('SELECT changes() AS cnt').getSingle();
-    return result.read<int>('cnt');
+    return await transaction(() async {
+      await customStatement(
+        'UPDATE entities SET is_active = 0 '
+        'WHERE temperature = \'cold\' AND last_accessed < ? AND is_active = 1',
+        [olderThanEpoch],
+      );
+      final result = await customSelect('SELECT changes() AS cnt').getSingle();
+      final count = result.read<int>('cnt');
+      // Also deactivate orphaned relations
+      if (count > 0) {
+        await customStatement(
+          'UPDATE relations SET is_active = 0 '
+          'WHERE is_active = 1 AND ('
+          '  source_id IN (SELECT id FROM entities WHERE is_active = 0) OR '
+          '  target_id IN (SELECT id FROM entities WHERE is_active = 0))',
+        );
+      }
+      return count;
+    });
   }
 
   /// Get database size on disk.
@@ -200,12 +212,18 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     return result.read<int>('cnt');
   }
 
-  /// Soft-delete an entity (set is_active = 0).
+  /// Soft-delete an entity and its relations (set is_active = 0).
   Future<void> deactivateEntity(int entityId) async {
-    await customStatement(
-      'UPDATE entities SET is_active = 0 WHERE id = ?',
-      [entityId],
-    );
+    await transaction(() async {
+      await customStatement(
+        'UPDATE entities SET is_active = 0 WHERE id = ?',
+        [entityId],
+      );
+      await customStatement(
+        'UPDATE relations SET is_active = 0 WHERE source_id = ? OR target_id = ?',
+        [entityId, entityId],
+      );
+    });
   }
 
   /// Delete all data (forget everything).

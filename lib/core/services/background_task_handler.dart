@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../l10n/l10n.dart';
@@ -11,8 +10,6 @@ import '../agent/agent_loop.dart';
 import '../agent/service_agent_factory.dart';
 import '../config/cron_config.dart';
 import '../config/log_entry.dart';
-import '../knowledge/database/knowledge_graph_db.dart';
-import '../knowledge/services/knowledge_service.dart';
 import '../../shared/constants.dart';
 import '../../features/telegram/telegram_api.dart';
 import 'app_logger.dart';
@@ -57,8 +54,7 @@ class BackgroundTaskHandler extends TaskHandler {
   int _purgeCounter = 0;
   static const _purgeIntervalSeconds = 21600;
 
-  // Knowledge Graph maintenance
-  KnowledgeService? _knowledgeService;
+  // Knowledge Graph maintenance (reuses AgentLoop's KnowledgeService instance)
   int _kgDecayCounter = 0;
   static const _kgDecayIntervalSeconds = 3600; // hourly
   int _kgPurgeCounter = 0;
@@ -102,10 +98,9 @@ class BackgroundTaskHandler extends TaskHandler {
         'telegram=${_api != null}');
 
     // Initialize AgentLoop for autonomous cron execution
+    // (AgentLoop also initializes KnowledgeService if KG is enabled,
+    //  which we reuse for maintenance tasks — no separate DB instance)
     _initAgentLoop(prefs);
-
-    // Initialize Knowledge Graph for maintenance tasks
-    _initKnowledgeGraph(prefs);
 
     FlutterForegroundTask.sendDataToMain({
       'type': 'started',
@@ -136,7 +131,7 @@ class BackgroundTaskHandler extends TaskHandler {
     }
 
     // KG decay recalculation every hour
-    if (_knowledgeService != null) {
+    if (_agentLoop?.knowledgeService != null) {
       _kgDecayCounter++;
       if (_kgDecayCounter >= _kgDecayIntervalSeconds) {
         _kgDecayCounter = 0;
@@ -330,28 +325,9 @@ class BackgroundTaskHandler extends TaskHandler {
 
   // --- Knowledge Graph maintenance ---
 
-  void _initKnowledgeGraph(SharedPreferences prefs) {
-    final enabled = prefs.getBool(AppConstants.cachedKnowledgeEnabledKey) ?? false;
-    if (!enabled) return;
-
-    final workspacePath = prefs.getString(AppConstants.cachedWorkspacePathKey);
-    if (workspacePath == null) return;
-
-    try {
-      final dbPath = p.join(workspacePath, AppConstants.knowledgeDbFilename);
-      final db = KnowledgeGraphDB(dbPath);
-      _knowledgeService = KnowledgeService(db: db);
-      AppLogger.instance.info(LogSource.service,
-          'KG initialized in service isolate');
-    } catch (e) {
-      AppLogger.instance.warning(LogSource.service,
-          'Failed to init KG in service: $e');
-    }
-  }
-
   Future<void> _runKgDecay() async {
     try {
-      final changed = await _knowledgeService!.recalculateDecay();
+      final changed = await _agentLoop!.knowledgeService!.recalculateDecay();
       if (changed > 0) {
         AppLogger.instance.info(LogSource.service,
             'KG decay: $changed entity temperatures updated');
@@ -368,7 +344,7 @@ class BackgroundTaskHandler extends TaskHandler {
               .subtract(Duration(days: AppConstants.knowledgeDecayHalfLifeDays))
               .millisecondsSinceEpoch ~/
           1000;
-      final purged = await _knowledgeService!.db.purgeColdEntities(cutoff);
+      final purged = await _agentLoop!.knowledgeService!.db.purgeColdEntities(cutoff);
       if (purged > 0) {
         AppLogger.instance.info(LogSource.service,
             'KG purge: $purged cold entities deactivated');

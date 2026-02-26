@@ -97,8 +97,11 @@ final knowledgeGraphDbProvider =
   final storage = ref.watch(storageServiceProvider);
   final workspacePath = await storage.workspacePath;
   final dbPath = p.join(workspacePath, AppConstants.knowledgeDbFilename);
+  final db = KnowledgeGraphDB(dbPath);
 
-  return KnowledgeGraphDB(dbPath);
+  ref.onDispose(() => db.close());
+
+  return db;
 });
 
 /// Knowledge Service — null when KG is disabled.

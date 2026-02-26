@@ -91,6 +91,7 @@ CREATE TABLE aliases (
   confidence    REAL    NOT NULL DEFAULT 1.0
 );
 
+CREATE UNIQUE INDEX idx_aliases_unique ON aliases(alias_name, entity_id);
 CREATE INDEX idx_aliases_name ON aliases(alias_name COLLATE NOCASE);
 CREATE INDEX idx_aliases_entity ON aliases(entity_id);
 

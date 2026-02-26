@@ -223,13 +223,11 @@ class ToolsConfig {
 /// Knowledge Graph configuration.
 class KnowledgeConfig {
   final bool enabled;
-  final int maxEntities;
   final int decayHalfLifeDays;
   final bool autoExtract;
 
   const KnowledgeConfig({
     this.enabled = false,
-    this.maxEntities = AppConstants.knowledgeMaxEntities,
     this.decayHalfLifeDays = AppConstants.knowledgeDecayHalfLifeDays,
     this.autoExtract = true,
   });
@@ -237,8 +235,6 @@ class KnowledgeConfig {
   factory KnowledgeConfig.fromJson(Map<String, dynamic> json) =>
       KnowledgeConfig(
         enabled: json['enabled'] as bool? ?? false,
-        maxEntities:
-            json['max_entities'] as int? ?? AppConstants.knowledgeMaxEntities,
         decayHalfLifeDays: json['decay_half_life_days'] as int? ??
             AppConstants.knowledgeDecayHalfLifeDays,
         autoExtract: json['auto_extract'] as bool? ?? true,
@@ -246,20 +242,17 @@ class KnowledgeConfig {
 
   Map<String, dynamic> toJson() => {
         'enabled': enabled,
-        'max_entities': maxEntities,
         'decay_half_life_days': decayHalfLifeDays,
         'auto_extract': autoExtract,
       };
 
   KnowledgeConfig copyWith({
     bool? enabled,
-    int? maxEntities,
     int? decayHalfLifeDays,
     bool? autoExtract,
   }) =>
       KnowledgeConfig(
         enabled: enabled ?? this.enabled,
-        maxEntities: maxEntities ?? this.maxEntities,
         decayHalfLifeDays: decayHalfLifeDays ?? this.decayHalfLifeDays,
         autoExtract: autoExtract ?? this.autoExtract,
       );

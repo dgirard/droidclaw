@@ -142,7 +142,10 @@ class LLMException implements Exception {
   String toString() {
     final parts = ['LLMException: $message'];
     if (statusCode != null) parts.add('status=$statusCode');
-    if (body != null && body!.length < 500) parts.add('body=$body');
+    if (body != null) {
+      final truncated = body!.length > 500 ? '${body!.substring(0, 500)}...' : body!;
+      parts.add('body=$truncated');
+    }
     return parts.join(', ');
   }
 }

@@ -15,3 +15,6 @@ build/
 # Flutter plugin cache
 .flutter-plugins
 .flutter-plugins-dependencies
+
+# SQLite databases
+*.db
