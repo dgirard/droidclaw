@@ -1475,4 +1475,53 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get kgLoadMore => 'Carica altro';
+
+  @override
+  String get settingsEmbedding => 'Embeddings';
+
+  @override
+  String get settingsEmbeddingSubtitle => 'Provider di vettori';
+
+  @override
+  String get embeddingTitle => 'Provider di Embedding';
+
+  @override
+  String get embeddingDescription =>
+      'Configura un\'API di embedding remota per la ricerca semantica nel Knowledge Graph. Gemini offre un generoso livello gratuito.';
+
+  @override
+  String get embeddingProvider => 'Provider';
+
+  @override
+  String get embeddingProviderNone => 'Nessuno (disattivato)';
+
+  @override
+  String get embeddingModel => 'Modello';
+
+  @override
+  String get embeddingDimensions => 'Dimensioni';
+
+  @override
+  String get embeddingUseOwnApiKey => 'Usa chiave API dedicata';
+
+  @override
+  String get embeddingUseOwnApiKeySubtitle =>
+      'Disattivato = riutilizza la chiave del LLM';
+
+  @override
+  String get embeddingApiKey => 'Chiave API Embedding';
+
+  @override
+  String get embeddingTestButton => 'Testa Embedding';
+
+  @override
+  String embeddingTestSuccess(int dims, int ms) {
+    return 'Successo! Vettore di $dims dimensioni in ${ms}ms';
+  }
+
+  @override
+  String get embeddingSave => 'Salva';
+
+  @override
+  String get embeddingSaved => 'Provider di embedding salvato';
 }

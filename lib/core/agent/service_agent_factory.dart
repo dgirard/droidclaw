@@ -10,6 +10,8 @@ import '../config/app_config.dart';
 import '../knowledge/database/knowledge_graph_db.dart';
 import '../knowledge/services/entity_resolver.dart';
 import '../knowledge/services/knowledge_service.dart';
+import '../providers/embedding_provider.dart';
+import '../providers/embedding_provider_factory.dart';
 import '../providers/provider_factory.dart';
 import '../session/session_manager.dart';
 import '../skills/skill_loader.dart';
@@ -58,6 +60,12 @@ class ServiceAgentFactory {
     String? sncfApiKey,
     String? primApiKey,
     String locale = 'en',
+    String? embeddingApiKey,
+    String embeddingProvider = '',
+    String embeddingModel = '',
+    int embeddingDimensions = 768,
+    String embeddingApiBase = '',
+    bool embeddingUseOwnKey = false,
   }) async {
     // 1. Initialize Hive (plain Dart — no initFlutter)
     Hive.init(hivePath);
@@ -147,14 +155,31 @@ class ServiceAgentFactory {
     // - VolumeControlTool (MethodChannel registered on Activity FlutterEngine only)
     // - RadioTool (MediaSessionService requires Activity FlutterEngine)
 
-    // 4b. Knowledge Graph tools (degraded mode: FTS5 + graph only, no embeddings)
+    // 4b. Embedding provider (pure HTTP — works in service isolate)
+    EmbeddingProvider? embeddingProviderInstance;
+    if (embeddingProvider.isNotEmpty) {
+      final embKey = embeddingUseOwnKey ? embeddingApiKey : apiKey;
+      if (embKey != null && embKey.isNotEmpty) {
+        embeddingProviderInstance = EmbeddingProviderFactory.create(
+          providerName: embeddingProvider,
+          apiKey: embKey,
+          apiBase: embeddingApiBase.isNotEmpty ? embeddingApiBase : null,
+          dimensions: embeddingDimensions,
+        );
+      }
+    }
+
+    // 4c. Knowledge Graph tools (degraded mode: FTS5 + graph only, no embeddings)
     KnowledgeService? knowledgeService;
     final kgEnabled = prefs.getBool(AppConstants.cachedKnowledgeEnabledKey) ?? false;
     if (kgEnabled) {
       try {
         final dbPath = p.join(workspacePath, AppConstants.knowledgeDbFilename);
         final kgDb = KnowledgeGraphDB(dbPath);
-        knowledgeService = KnowledgeService(db: kgDb);
+        knowledgeService = KnowledgeService(
+          db: kgDb,
+          hasEmbedder: embeddingProviderInstance != null,
+        );
 
         if (!disabled.contains('knowledge_search')) {
           registry.register(KnowledgeSearchTool(knowledgeService: knowledgeService));

@@ -13,6 +13,8 @@ import '../core/knowledge/services/entity_extractor.dart';
 import '../core/knowledge/services/entity_resolver.dart';
 import '../core/knowledge/services/ingestion_pipeline.dart';
 import '../core/knowledge/services/knowledge_service.dart';
+import '../core/providers/embedding_provider.dart';
+import '../core/providers/embedding_provider_factory.dart';
 import '../core/providers/llm_provider.dart';
 import '../core/providers/provider_factory.dart';
 import '../core/session/session_manager.dart';
@@ -254,6 +256,36 @@ final llmProviderProvider = FutureProvider<LLMProvider?>((ref) async {
     apiKey: apiKey,
     defaultModel: config.agent.model,
   );
+});
+
+/// Embedding provider — created from embedding config + API key.
+/// Returns null when no embedding provider is configured.
+final embeddingProviderProvider =
+    FutureProvider<EmbeddingProvider?>((ref) async {
+  final config = ref.watch(appConfigProvider);
+  if (config.embedding.provider.isEmpty) return null;
+
+  final configStorage = ref.read(configStorageProvider);
+  final String? apiKey;
+  if (config.embedding.useOwnApiKey) {
+    apiKey = await configStorage.getEmbeddingApiKey();
+  } else {
+    apiKey = await configStorage.getApiKey(config.agent.provider);
+  }
+  if (apiKey == null || apiKey.isEmpty) return null;
+
+  final provider = EmbeddingProviderFactory.create(
+    providerName: config.embedding.provider,
+    apiKey: apiKey,
+    apiBase: config.embedding.apiBase.isNotEmpty
+        ? config.embedding.apiBase
+        : null,
+    dimensions: config.embedding.dimensions,
+  );
+
+  ref.onDispose(() => provider.dispose());
+
+  return provider;
 });
 
 /// Context builder.

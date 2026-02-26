@@ -8,6 +8,7 @@ class AppConfig {
   final Map<String, ProviderConfig> providers;
   final ToolsConfig tools;
   final KnowledgeConfig knowledge;
+  final EmbeddingConfig embedding;
 
   /// Locale setting: 'en', 'fr', or 'system' (follow device language).
   final String locale;
@@ -17,6 +18,7 @@ class AppConfig {
     this.providers = const {},
     this.tools = const ToolsConfig(),
     this.knowledge = const KnowledgeConfig(),
+    this.embedding = const EmbeddingConfig(),
     this.locale = 'system',
   });
 
@@ -25,6 +27,7 @@ class AppConfig {
         providers: {},
         tools: const ToolsConfig(),
         knowledge: const KnowledgeConfig(),
+        embedding: const EmbeddingConfig(),
         locale: 'system',
       );
 
@@ -44,6 +47,10 @@ class AppConfig {
             ? KnowledgeConfig.fromJson(
                 json['knowledge'] as Map<String, dynamic>)
             : const KnowledgeConfig(),
+        embedding: json['embedding'] != null
+            ? EmbeddingConfig.fromJson(
+                json['embedding'] as Map<String, dynamic>)
+            : const EmbeddingConfig(),
         locale: json['locale'] as String? ?? 'system',
       );
 
@@ -52,6 +59,7 @@ class AppConfig {
         'providers': providers.map((k, v) => MapEntry(k, v.toJson())),
         'tools': tools.toJson(),
         'knowledge': knowledge.toJson(),
+        'embedding': embedding.toJson(),
         'locale': locale,
       };
 
@@ -60,6 +68,7 @@ class AppConfig {
     Map<String, ProviderConfig>? providers,
     ToolsConfig? tools,
     KnowledgeConfig? knowledge,
+    EmbeddingConfig? embedding,
     String? locale,
   }) =>
       AppConfig(
@@ -67,6 +76,7 @@ class AppConfig {
         providers: providers ?? this.providers,
         tools: tools ?? this.tools,
         knowledge: knowledge ?? this.knowledge,
+        embedding: embedding ?? this.embedding,
         locale: locale ?? this.locale,
       );
 
@@ -217,6 +227,65 @@ class ToolsConfig {
       ToolsConfig(
         webSearchMaxResults: webSearchMaxResults ?? this.webSearchMaxResults,
         disabledTools: disabledTools ?? this.disabledTools,
+      );
+}
+
+/// Embedding provider configuration.
+class EmbeddingConfig {
+  /// Provider name: 'gemini', 'openai', 'openrouter', '' (disabled).
+  final String provider;
+
+  /// Model identifier (e.g. 'gemini-embedding-001').
+  final String model;
+
+  /// Output vector dimensionality (e.g. 768).
+  final int dimensions;
+
+  /// Custom API base URL (empty = use default for provider).
+  final String apiBase;
+
+  /// When false, reuse the LLM provider's API key. When true, use a
+  /// dedicated embedding API key stored separately.
+  final bool useOwnApiKey;
+
+  const EmbeddingConfig({
+    this.provider = '',
+    this.model = '',
+    this.dimensions = 768,
+    this.apiBase = '',
+    this.useOwnApiKey = false,
+  });
+
+  factory EmbeddingConfig.fromJson(Map<String, dynamic> json) =>
+      EmbeddingConfig(
+        provider: json['provider'] as String? ?? '',
+        model: json['model'] as String? ?? '',
+        dimensions: json['dimensions'] as int? ?? 768,
+        apiBase: json['api_base'] as String? ?? '',
+        useOwnApiKey: json['use_own_api_key'] as bool? ?? false,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'provider': provider,
+        'model': model,
+        'dimensions': dimensions,
+        'api_base': apiBase,
+        'use_own_api_key': useOwnApiKey,
+      };
+
+  EmbeddingConfig copyWith({
+    String? provider,
+    String? model,
+    int? dimensions,
+    String? apiBase,
+    bool? useOwnApiKey,
+  }) =>
+      EmbeddingConfig(
+        provider: provider ?? this.provider,
+        model: model ?? this.model,
+        dimensions: dimensions ?? this.dimensions,
+        apiBase: apiBase ?? this.apiBase,
+        useOwnApiKey: useOwnApiKey ?? this.useOwnApiKey,
       );
 }
 

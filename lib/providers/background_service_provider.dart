@@ -199,6 +199,24 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
       // Cache Knowledge Graph enabled flag
       await prefs.setBool(
           AppConstants.cachedKnowledgeEnabledKey, config.knowledge.enabled);
+
+      // Cache embedding provider config
+      final embeddingKey = await configStorage.getEmbeddingApiKey();
+      if (embeddingKey != null && embeddingKey.isNotEmpty) {
+        await prefs.setString(
+            AppConstants.cachedEmbeddingApiKeyKey, embeddingKey);
+      }
+      await prefs.setString(
+          AppConstants.cachedEmbeddingProviderKey, config.embedding.provider);
+      await prefs.setString(
+          AppConstants.cachedEmbeddingModelKey, config.embedding.model);
+      await prefs.setInt(
+          AppConstants.cachedEmbeddingDimensionsKey, config.embedding.dimensions);
+      await prefs.setString(
+          AppConstants.cachedEmbeddingApiBaseKey, config.embedding.apiBase);
+      await prefs.setBool(
+          AppConstants.cachedEmbeddingUseOwnKeyKey,
+          config.embedding.useOwnApiKey);
     } catch (e) {
       // Non-critical — service isolate will fall back to pending queue
       AppLogger.instance.warning(LogSource.service,

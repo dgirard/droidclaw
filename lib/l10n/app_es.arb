@@ -511,5 +511,22 @@
   "kgFactCount": "{count} hechos",
   "@kgFactCount": { "placeholders": { "count": { "type": "int" } } },
   "kgRetentionScore": "Puntuación de retención",
-  "kgLoadMore": "Cargar más"
+  "kgLoadMore": "Cargar más",
+
+  "settingsEmbedding": "Embeddings",
+  "settingsEmbeddingSubtitle": "Proveedor de vectores",
+  "embeddingTitle": "Proveedor de Embeddings",
+  "embeddingDescription": "Configure una API de embedding remota para búsqueda semántica en el Knowledge Graph. Gemini ofrece un generoso nivel gratuito.",
+  "embeddingProvider": "Proveedor",
+  "embeddingProviderNone": "Ninguno (desactivado)",
+  "embeddingModel": "Modelo",
+  "embeddingDimensions": "Dimensiones",
+  "embeddingUseOwnApiKey": "Usar clave API dedicada",
+  "embeddingUseOwnApiKeySubtitle": "Desactivado = reutilizar la clave del LLM",
+  "embeddingApiKey": "Clave API de Embedding",
+  "embeddingTestButton": "Probar Embedding",
+  "embeddingTestSuccess": "¡Éxito! Vector de {dims} dimensiones en {ms}ms",
+  "@embeddingTestSuccess": { "placeholders": { "dims": { "type": "int" }, "ms": { "type": "int" } } },
+  "embeddingSave": "Guardar",
+  "embeddingSaved": "Proveedor de embedding guardado"
 }

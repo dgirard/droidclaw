@@ -77,4 +77,16 @@ class AppConstants {
   static const String cachedPrimApiKeyKey = 'cached_prim_api_key';
   static const String cachedWorkspacePathKey = 'cached_workspace_path';
   static const String cachedLocaleKey = 'cached_locale';
+
+  // Embedding provider
+  static const String geminiEmbeddingApiBase =
+      'https://generativelanguage.googleapis.com/v1beta';
+  static const String cachedEmbeddingApiKeyKey = 'cached_embedding_api_key';
+  static const String cachedEmbeddingProviderKey = 'cached_embedding_provider';
+  static const String cachedEmbeddingModelKey = 'cached_embedding_model';
+  static const String cachedEmbeddingDimensionsKey =
+      'cached_embedding_dimensions';
+  static const String cachedEmbeddingApiBaseKey = 'cached_embedding_api_base';
+  static const String cachedEmbeddingUseOwnKeyKey =
+      'cached_embedding_use_own_key';
 }

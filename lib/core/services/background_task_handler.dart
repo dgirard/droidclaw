@@ -391,6 +391,18 @@ class BackgroundTaskHandler extends TaskHandler {
         sncfApiKey: prefs.getString(AppConstants.cachedSncfApiKeyKey),
         primApiKey: prefs.getString(AppConstants.cachedPrimApiKeyKey),
         locale: prefs.getString(AppConstants.cachedLocaleKey) ?? 'en',
+        embeddingApiKey:
+            prefs.getString(AppConstants.cachedEmbeddingApiKeyKey),
+        embeddingProvider:
+            prefs.getString(AppConstants.cachedEmbeddingProviderKey) ?? '',
+        embeddingModel:
+            prefs.getString(AppConstants.cachedEmbeddingModelKey) ?? '',
+        embeddingDimensions:
+            prefs.getInt(AppConstants.cachedEmbeddingDimensionsKey) ?? 768,
+        embeddingApiBase:
+            prefs.getString(AppConstants.cachedEmbeddingApiBaseKey) ?? '',
+        embeddingUseOwnKey:
+            prefs.getBool(AppConstants.cachedEmbeddingUseOwnKeyKey) ?? false,
       );
 
       AppLogger.instance.info(LogSource.service,

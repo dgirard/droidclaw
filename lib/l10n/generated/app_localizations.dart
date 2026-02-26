@@ -2701,6 +2701,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Load more'**
   String get kgLoadMore;
+
+  /// No description provided for @settingsEmbedding.
+  ///
+  /// In en, this message translates to:
+  /// **'Embeddings'**
+  String get settingsEmbedding;
+
+  /// No description provided for @settingsEmbeddingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vector embedding provider'**
+  String get settingsEmbeddingSubtitle;
+
+  /// No description provided for @embeddingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Embedding Provider'**
+  String get embeddingTitle;
+
+  /// No description provided for @embeddingDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure a remote embedding API for semantic search in the Knowledge Graph. Gemini offers a generous free tier.'**
+  String get embeddingDescription;
+
+  /// No description provided for @embeddingProvider.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider'**
+  String get embeddingProvider;
+
+  /// No description provided for @embeddingProviderNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None (disabled)'**
+  String get embeddingProviderNone;
+
+  /// No description provided for @embeddingModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get embeddingModel;
+
+  /// No description provided for @embeddingDimensions.
+  ///
+  /// In en, this message translates to:
+  /// **'Dimensions'**
+  String get embeddingDimensions;
+
+  /// No description provided for @embeddingUseOwnApiKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Use dedicated API key'**
+  String get embeddingUseOwnApiKey;
+
+  /// No description provided for @embeddingUseOwnApiKeySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Off = reuse LLM provider key'**
+  String get embeddingUseOwnApiKeySubtitle;
+
+  /// No description provided for @embeddingApiKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Embedding API Key'**
+  String get embeddingApiKey;
+
+  /// No description provided for @embeddingTestButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Test Embedding'**
+  String get embeddingTestButton;
+
+  /// No description provided for @embeddingTestSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Success! Vector of {dims} dimensions in {ms}ms'**
+  String embeddingTestSuccess(int dims, int ms);
+
+  /// No description provided for @embeddingSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get embeddingSave;
+
+  /// No description provided for @embeddingSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Embedding provider saved'**
+  String get embeddingSaved;
 }
 
 class _AppLocalizationsDelegate

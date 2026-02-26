@@ -63,6 +63,14 @@ class ConfigStorage {
   Future<void> setPrimApiKey(String apiKey) =>
       _storage.setSecure('prim_api_key', apiKey);
 
+  /// Get embedding provider API key from secure storage.
+  Future<String?> getEmbeddingApiKey() =>
+      _storage.getSecure('embedding_api_key');
+
+  /// Save embedding provider API key to secure storage.
+  Future<void> setEmbeddingApiKey(String apiKey) =>
+      _storage.setSecure('embedding_api_key', apiKey);
+
   /// Check if onboarding has been completed.
   bool get isOnboardingComplete =>
       _storage.getBool(AppConstants.onboardingCompleteKey) ?? false;
