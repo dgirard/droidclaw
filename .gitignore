@@ -12,9 +12,6 @@ build/
 # macOS
 .DS_Store
 
-# SQLite databases
-*.db
-
 # Flutter plugin cache
 .flutter-plugins
 .flutter-plugins-dependencies

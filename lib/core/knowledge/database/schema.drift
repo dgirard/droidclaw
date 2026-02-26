@@ -6,18 +6,27 @@ CREATE TABLE entities (
   name          TEXT    NOT NULL,
   entity_type   TEXT    NOT NULL DEFAULT 'CONCEPT',
   summary       TEXT,
-  -- Temporal
+  properties    TEXT    NOT NULL DEFAULT '{}',
+  embedding     BLOB,
+  -- Bi-temporal
   created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  valid_at      INTEGER,
+  invalid_at    INTEGER,
+  ingested_at   INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  expired_at    INTEGER,
   -- Activation & decay
   last_accessed INTEGER NOT NULL DEFAULT (strftime('%s','now')),
   access_count  INTEGER NOT NULL DEFAULT 1,
   temperature   TEXT    NOT NULL DEFAULT 'warm' CHECK(temperature IN ('hot','warm','cool','cold')),
   base_score    REAL    NOT NULL DEFAULT 0.5,
+  -- RAPTOR hierarchy
+  parent_summary_id INTEGER REFERENCES summary_nodes(id),
   is_active     INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE INDEX idx_entities_type ON entities(entity_type);
 CREATE INDEX idx_entities_temperature ON entities(temperature);
+CREATE INDEX idx_entities_valid ON entities(valid_at, invalid_at);
 CREATE INDEX idx_entities_active ON entities(is_active, temperature);
 
 -- ══════════════════════════════════════════════
@@ -29,8 +38,13 @@ CREATE TABLE relations (
   target_id     INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
   predicate     TEXT    NOT NULL,
   weight        REAL    NOT NULL DEFAULT 1.0,
-  -- Temporal
+  properties    TEXT    NOT NULL DEFAULT '{}',
+  embedding     BLOB,
+  -- Bi-temporal
   created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  valid_at      INTEGER,
+  invalid_at    INTEGER,
+  ingested_at   INTEGER NOT NULL DEFAULT (strftime('%s','now')),
   expired_at    INTEGER,
   -- Activation
   last_accessed INTEGER NOT NULL DEFAULT (strftime('%s','now')),
@@ -79,8 +93,24 @@ CREATE TABLE aliases (
 
 CREATE INDEX idx_aliases_name ON aliases(alias_name COLLATE NOCASE);
 CREATE INDEX idx_aliases_entity ON aliases(entity_id);
-CREATE UNIQUE INDEX idx_aliases_unique ON aliases(alias_name COLLATE NOCASE, entity_id);
-CREATE UNIQUE INDEX idx_entities_name_type ON entities(name, entity_type) WHERE is_active = 1;
+
+-- ══════════════════════════════════════════════
+-- SUMMARY NODES (RAPTOR-style hierarchy)
+-- ══════════════════════════════════════════════
+CREATE TABLE summary_nodes (
+  id            INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  parent_id     INTEGER REFERENCES summary_nodes(id),
+  level         INTEGER NOT NULL DEFAULT 0,
+  summary_text  TEXT    NOT NULL,
+  embedding     BLOB,
+  member_ids    TEXT    NOT NULL DEFAULT '[]',
+  cluster_label INTEGER,
+  created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  last_updated  INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+
+CREATE INDEX idx_summary_parent ON summary_nodes(parent_id);
+CREATE INDEX idx_summary_level ON summary_nodes(level);
 
 -- ══════════════════════════════════════════════
 -- FTS5 — Full-text search

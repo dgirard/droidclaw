@@ -64,7 +64,9 @@ class AppConstants {
 
   // Knowledge Graph
   static const String knowledgeDbFilename = 'knowledge_graph.db';
+  static const int knowledgeMaxEntities = 100000;
   static const int knowledgeDecayHalfLifeDays = 30;
+  static const int knowledgeMaxContextChars = 2000;
   static const String cachedKnowledgeEnabledKey = 'cached_knowledge_enabled';
 
   // Cached secrets for service isolate (SharedPreferences mirror of SecureStorage)

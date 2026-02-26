@@ -92,14 +92,18 @@ class AgentLoop {
     String? kgContext;
     if (knowledgeService != null) {
       try {
+        // LLM query expansion: extract search keywords from user message
+        final expandedQuery = await _expandQueryForKG(userMessage);
+
         final results = await knowledgeService!.queryRelevant(
-          userMessage,
+          expandedQuery,
           limit: 10,
         );
         if (results.isNotEmpty) {
           kgContext = formatKnowledgeContext(results);
           AppLogger.instance.debug(LogSource.agent,
-              'KG pre-query: ${results.length} results');
+              'KG pre-query: ${results.length} results '
+              '(expanded: "${expandedQuery.substring(0, min(100, expandedQuery.length))}...")');
         }
       } catch (e) {
         AppLogger.instance.warning(LogSource.agent,
@@ -245,6 +249,41 @@ class AgentLoop {
     yield ErrorEvent(tr(config.resolvedLocale).agentMaxIterations);
   }
 
+  /// Expand a user query into search keywords for Knowledge Graph retrieval.
+  ///
+  /// Uses a fast LLM call (max_tokens: 50) to bridge the semantic gap between
+  /// natural language questions and stored entity/fact tokens.
+  /// Example: "Où est-ce que j'habite?" → "address home residence habite domicile lieu habitation"
+  Future<String> _expandQueryForKG(String userMessage) async {
+    try {
+      final response = await provider.chat(
+        messages: [
+          const Message(
+            role: 'system',
+            content: 'You are a keyword extractor for a knowledge graph search. '
+                'Given a user message, output ONLY search keywords (single words) '
+                'that would match stored entities, facts, or relations. '
+                'Include: the original key terms, synonyms, translations (FR/EN/DE/ES/IT), '
+                'and related concepts. Output one line of space-separated keywords. '
+                'No punctuation, no explanations.',
+          ),
+          Message(role: 'user', content: userMessage),
+        ],
+        model: config.agent.model,
+        options: {'max_tokens': 50, 'temperature': 0.0},
+      );
+      final keywords = response.content.trim();
+      if (keywords.isNotEmpty) {
+        // Combine original message with expanded keywords for broader FTS matching
+        return '$userMessage $keywords';
+      }
+    } catch (e) {
+      AppLogger.instance.debug(LogSource.agent,
+          'KG query expansion failed, using raw query: $e');
+    }
+    return userMessage;
+  }
+
   /// Fire-and-forget async Knowledge Graph extraction.
   /// Does NOT block the agent stream. Errors are logged, not surfaced.
   void _extractAsync(
@@ -269,7 +308,7 @@ class AgentLoop {
   /// Build compact trace messages from a message list.
   List<LlmTraceMessage> _buildTraceMessages(List<Message> messages) {
     return messages.map((m) {
-      const previewLen = 200;
+      final previewLen = m.role == 'tool' ? 200 : 200;
       return LlmTraceMessage(
         role: m.role,
         contentLength: m.content.length,

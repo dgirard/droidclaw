@@ -45,9 +45,6 @@ class KnowledgeSearchTool extends Tool {
     if (query == null || query.trim().isEmpty) {
       return ToolResult.error('Missing required parameter: query');
     }
-    if (query.length > 500) {
-      return ToolResult.error('Query too long (max 500 characters)');
-    }
 
     final limit = (arguments['limit'] as num?)?.toInt() ?? 10;
 

@@ -136,8 +136,7 @@ class LLMException implements Exception {
   final int? statusCode;
   final String? body;
 
-  LLMException(this.message, {this.statusCode, String? body})
-      : body = body != null && body.length > 500 ? body.substring(0, 500) : body;
+  LLMException(this.message, {this.statusCode, this.body});
 
   @override
   String toString() {

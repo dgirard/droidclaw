@@ -2,21 +2,31 @@ import 'dart:math';
 
 /// Multi-signal score fusion for knowledge graph queries.
 ///
-/// Combines three signals:
+/// Combines four signals:
 ///   - BM25 (FTS5 text search rank)
+///   - Vector similarity (cosine, from embeddings)
 ///   - Spreading activation (graph traversal)
 ///   - Memory decay (Ebbinghaus retention)
 ///
-/// Weights: 0.55 BM25 + 0.30 activation + 0.15 decay
+/// Full mode weights: 0.30 BM25 + 0.30 vector + 0.25 activation + 0.15 decay
+/// Degraded mode (no embeddings): 0.55 BM25 + 0.30 activation + 0.15 decay
 class HybridScorer {
-  static const double _wBm25 = 0.55;
-  static const double _wActivation = 0.30;
-  static const double _wDecay = 0.15;
+  // Full mode weights (with vector similarity)
+  static const double _wBm25Full = 0.30;
+  static const double _wVectorFull = 0.30;
+  static const double _wActivationFull = 0.25;
+  static const double _wDecayFull = 0.15;
+
+  // Degraded mode weights (no vector similarity)
+  static const double _wBm25Degraded = 0.55;
+  static const double _wActivationDegraded = 0.30;
+  static const double _wDecayDegraded = 0.15;
 
   /// Fuse scores for a set of candidate entities.
   ///
   /// [candidates]: entity IDs to score.
   /// [bm25Scores]: entity ID → raw BM25 rank (lower = better in FTS5).
+  /// [vectorScores]: entity ID → cosine similarity (0–1). Null if no embedder.
   /// [activationScores]: entity ID → spreading activation value.
   /// [decayScores]: entity ID → retention score (0–1).
   ///
@@ -24,28 +34,43 @@ class HybridScorer {
   static List<ScoredEntity> fuse({
     required Set<int> candidates,
     required Map<int, double> bm25Scores,
+    Map<int, double>? vectorScores,
     required Map<int, double> activationScores,
     required Map<int, double> decayScores,
   }) {
+    final hasVector = vectorScores != null && vectorScores.isNotEmpty;
+
     // Normalize BM25 scores (invert: BM25 returns negative, more negative = better)
     final normBm25 = _normalizeInverted(bm25Scores, candidates);
+    final normVector =
+        hasVector ? _normalize(vectorScores, candidates) : <int, double>{};
     final normActivation = _normalize(activationScores, candidates);
     final normDecay = _normalize(decayScores, candidates);
 
     final results = <ScoredEntity>[];
     for (final id in candidates) {
       final bm25 = normBm25[id] ?? 0.0;
+      final vector = normVector[id] ?? 0.0;
       final activation = normActivation[id] ?? 0.0;
       final decay = normDecay[id] ?? 0.0;
 
-      final score = _wBm25 * bm25 +
-          _wActivation * activation +
-          _wDecay * decay;
+      final double score;
+      if (hasVector) {
+        score = _wBm25Full * bm25 +
+            _wVectorFull * vector +
+            _wActivationFull * activation +
+            _wDecayFull * decay;
+      } else {
+        score = _wBm25Degraded * bm25 +
+            _wActivationDegraded * activation +
+            _wDecayDegraded * decay;
+      }
 
       results.add(ScoredEntity(
         entityId: id,
         score: score,
         bm25Score: bm25,
+        vectorScore: vector,
         activationScore: activation,
         decayScore: decay,
       ));
@@ -106,6 +131,7 @@ class ScoredEntity {
   final int entityId;
   final double score;
   final double bm25Score;
+  final double vectorScore;
   final double activationScore;
   final double decayScore;
 
@@ -113,6 +139,7 @@ class ScoredEntity {
     required this.entityId,
     required this.score,
     this.bm25Score = 0.0,
+    this.vectorScore = 0.0,
     this.activationScore = 0.0,
     this.decayScore = 0.0,
   });

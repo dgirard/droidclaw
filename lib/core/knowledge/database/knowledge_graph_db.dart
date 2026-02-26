@@ -58,7 +58,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
       await customStatement(
         'UPDATE facts SET expired_at = ?, invalid_at = ? '
         'WHERE entity_id = ? AND fact_key = ? AND expired_at IS NULL',
-        [now, newValidAt, entityId, key],
+        [now, newValidAt ?? now, entityId, key],
       );
       await customStatement(
         'INSERT INTO facts (entity_id, fact_key, fact_value, value_type, valid_at, ingested_at) '
@@ -66,6 +66,15 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
         [entityId, key, newValue, valueType, newValidAt, now],
       );
     });
+  }
+
+  /// Expire a relation bi-temporally.
+  Future<void> expireRelation(int relationId) async {
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    await customStatement(
+      'UPDATE relations SET expired_at = ? WHERE id = ?',
+      [now, relationId],
+    );
   }
 
   /// Update temperature for a batch of entities.
@@ -81,28 +90,15 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   }
 
   /// Deactivate cold entities older than a given epoch.
-  /// Also deactivates their relations. Returns the number of deactivated entities.
+  /// Returns the number of deactivated entities.
   Future<int> purgeColdEntities(int olderThanEpoch) async {
-    return await transaction(() async {
-      await customStatement(
-        'UPDATE entities SET is_active = 0 '
-        'WHERE temperature = \'cold\' AND last_accessed < ? AND is_active = 1',
-        [olderThanEpoch],
-      );
-      final result = await customSelect('SELECT changes() AS cnt').getSingle();
-      final count = result.read<int>('cnt');
-      // Cascade deactivation to relations referencing deactivated entities
-      if (count > 0) {
-        await customStatement(
-          'UPDATE relations SET is_active = 0 '
-          'WHERE is_active = 1 AND ('
-          '  source_id IN (SELECT id FROM entities WHERE is_active = 0) OR '
-          '  target_id IN (SELECT id FROM entities WHERE is_active = 0)'
-          ')',
-        );
-      }
-      return count;
-    });
+    await customStatement(
+      'UPDATE entities SET is_active = 0 '
+      'WHERE temperature = \'cold\' AND last_accessed < ? AND is_active = 1',
+      [olderThanEpoch],
+    );
+    final result = await customSelect('SELECT changes() AS cnt').getSingle();
+    return result.read<int>('cnt');
   }
 
   /// Get database size on disk.
@@ -204,19 +200,12 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     return result.read<int>('cnt');
   }
 
-  /// Soft-delete an entity and its relations (set is_active = 0).
+  /// Soft-delete an entity (set is_active = 0).
   Future<void> deactivateEntity(int entityId) async {
-    await transaction(() async {
-      await customStatement(
-        'UPDATE entities SET is_active = 0 WHERE id = ?',
-        [entityId],
-      );
-      await customStatement(
-        'UPDATE relations SET is_active = 0 '
-        'WHERE (source_id = ? OR target_id = ?) AND is_active = 1',
-        [entityId, entityId],
-      );
-    });
+    await customStatement(
+      'UPDATE entities SET is_active = 0 WHERE id = ?',
+      [entityId],
+    );
   }
 
   /// Delete all data (forget everything).
@@ -225,10 +214,8 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
       await customStatement('DELETE FROM facts');
       await customStatement('DELETE FROM relations');
       await customStatement('DELETE FROM aliases');
+      await customStatement('DELETE FROM summary_nodes');
       await customStatement('DELETE FROM entities');
-      // Rebuild FTS indexes from scratch (empty)
-      await customStatement("INSERT INTO entities_fts(entities_fts) VALUES('rebuild')");
-      await customStatement("INSERT INTO facts_fts(facts_fts) VALUES('rebuild')");
     });
   }
 }

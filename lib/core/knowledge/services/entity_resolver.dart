@@ -42,44 +42,31 @@ class EntityResolver {
         final similarity = jaroWinkler(name.toLowerCase(), c.name.toLowerCase());
         if (similarity >= similarityThreshold) {
           // Create alias for this match so future lookups are instant
-          await _db.into(_db.aliases).insert(
-                AliasesCompanion.insert(
-                  entityId: c.id,
-                  aliasName: name,
-                ),
-                mode: InsertMode.insertOrIgnore,
-              );
+          await _db.into(_db.aliases).insert(AliasesCompanion.insert(
+                entityId: c.id,
+                aliasName: name,
+              ));
           return c.id;
         }
       }
     }
 
-    // 3. Create new entity (or return existing if unique constraint fires)
-    try {
-      final entityId = await _db.into(_db.entities).insert(
-            EntitiesCompanion.insert(
-              name: name,
-              entityType: Value(entityType),
-              summary: Value(summary),
-            ),
-          );
+    // 3. Create new entity
+    final entityId = await _db.into(_db.entities).insert(
+          EntitiesCompanion.insert(
+            name: name,
+            entityType: Value(entityType),
+            summary: Value(summary),
+          ),
+        );
 
-      // Create primary alias
-      await _db.into(_db.aliases).insert(
-            AliasesCompanion.insert(
-              entityId: entityId,
-              aliasName: name,
-            ),
-            mode: InsertMode.insertOrIgnore,
-          );
+    // Create primary alias
+    await _db.into(_db.aliases).insert(AliasesCompanion.insert(
+          entityId: entityId,
+          aliasName: name,
+        ));
 
-      return entityId;
-    } on Exception {
-      // Unique constraint on (name, entity_type) — entity was created concurrently
-      final existing = await _db.resolveAlias(name).getSingleOrNull();
-      if (existing != null) return existing.id;
-      rethrow;
-    }
+    return entityId;
   }
 
   /// Build an FTS5 query from a name.
