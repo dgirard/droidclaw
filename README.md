@@ -87,7 +87,7 @@ User prompt
                     --> Final response to user
 ```
 
-The agent has access to **25 tools** — from web search and file management to GPS location, public transit routing, weather forecasts, calendar access, OCR, and more. Each tool produces a **dual result**: raw data for the AI to reason over, and a clean summary for the user to read.
+The agent has access to **28 tools** — from web search and file management to GPS location, public transit routing, weather forecasts, calendar access, OCR, knowledge graph, radio streaming, and more. Each tool produces a **dual result**: raw data for the AI to reason over, and a clean summary for the user to read.
 
 The app survives Android's aggressive battery management through a **dual-isolate architecture**: the main app handles the UI, while an autonomous foreground service runs scheduled tasks and Telegram bot polling — even when Android kills the main app overnight.
 
@@ -133,6 +133,8 @@ DroidClaw is a personal AI assistant that runs **entirely on an Android phone**,
 - **Multi-provider**: Anthropic (Claude), OpenRouter, OpenAI, Groq, Google Gemini
 - **Dual interface**: built-in Flutter chat **+ Telegram bot**
 - **Multilingual**: English, French, Spanish, German, Italian — switchable from the chat screen (locale switcher in the AppBar)
+- **Knowledge Graph**: persistent memory across conversations — entities, facts, relations, hybrid search (BM25 + vector + graph activation + decay)
+- **Multi-provider embeddings**: Gemini, OpenAI, OpenRouter — vector similarity search for semantic recall
 - **On-device only**: everything runs on the phone — LLM API calls, tool execution, session management
 
 ---
@@ -165,6 +167,10 @@ DroidClaw is a port of [PicoClaw](https://github.com/sipeed/picoclaw), a Go-base
 - **Scheduled Prompts (Cron)**: define recurring prompts that execute automatically (fixed interval or specific times of day, with day-of-week filtering). Each cron can use a fresh session or continue in the same thread. Managed via Settings > Scheduled Prompts.
 - **Autonomous cron execution**: the foreground service isolate initializes its own AgentLoop (`ServiceAgentFactory`) and executes crons at exact scheduled time — even when Android kills the main app overnight. Falls back to a pending trigger queue if the service AgentLoop isn't available.
 - **Reverse Geocoding**: `get_address` tool chains with `get_location` to resolve GPS coordinates into a street address (Nominatim/OpenStreetMap, no API key needed).
+- **Knowledge Graph**: persistent memory across conversations using a local SQLite database with FTS5 full-text search, entity resolution (Jaro-Winkler fuzzy matching), bi-temporal fact versioning, spreading activation over the graph, and Ebbinghaus memory decay. Automatic extraction of entities, relations, and facts from each conversation turn via LLM. Two tools: `knowledge_search` (hybrid retrieval) and `knowledge_store` (explicit persistence).
+- **Multi-provider embeddings**: pluggable embedding API layer supporting Gemini (native REST), OpenAI, and OpenRouter. Entity embeddings are computed during KG ingestion and used for vector similarity search in retrieval. The HybridScorer fuses 4 signals: BM25 (lexical), vector cosine similarity (semantic), spreading activation (graph structure), and memory decay (recency). Degrades gracefully when no embeddings are configured.
+- **Radio France streaming**: `radio` tool plays live Radio France HLS streams (France Inter, France Info, France Culture, France Musique, FIP) via native Android Media3 MediaSessionService with background playback and media notification.
+- **Native speech-to-text**: on-device voice input via Android SpeechRecognizer (replaced cloud-based Groq Whisper). Supports dictation mode with partial results.
 
 ---
 
@@ -207,7 +213,10 @@ graph TB
     AL --> CB
     SAL --> LLM
     LP --> LLM["LLM APIs (Anthropic, OpenRouter, ...)"]
-    TR --> Tools["web_search / web_scrape / web_scrape_js / file / get_location / get_address / geocode / subagent / clipboard / device_info / speak / open_app / set_alarm / notifications / contacts / calendar / ocr / qr_generate / pick_image / volume_control / get_directions / get_transit / weather"]
+    AL --> KG["KnowledgeService\n(hybrid search +\nembedding ingestion)"]
+    KG --> KGDB["SQLite KG DB\n(FTS5 + embedding BLOBs)"]
+    KG --> EP["EmbeddingProvider\n(Gemini / OpenAI)"]
+    TR --> Tools["28 tools: web_search / web_scrape / file / get_location / knowledge_search / knowledge_store / get_directions / get_transit / weather / radio / ..."]
 ```
 
 ### Agent Loop
@@ -277,18 +286,19 @@ lib/
 ├── core/                        # Business logic (no Flutter UI imports)
 │   ├── agent/                   # Agent loop, context builder, memory, ServiceAgentFactory
 │   ├── config/                  # AppConfig, ConfigStorage, CronConfig
-│   ├── providers/               # LLM abstraction (Anthropic, HTTP, factory)
+│   ├── knowledge/               # Knowledge Graph (DB, ingestion, hybrid search, algorithms)
+│   ├── providers/               # LLM + Embedding abstraction (Anthropic, HTTP, Gemini, factory)
 │   ├── services/                # BackgroundTaskHandler (foreground service isolate)
 │   ├── session/                 # Conversation persistence (Hive)
 │   ├── skills/                  # Three-tier loader and installer
-│   └── tools/                   # Tool interface + 25 implementations
+│   └── tools/                   # Tool interface + 28 implementations
 │
 ├── features/                    # Screens and platform features
 │   ├── chat/                    # Main screen, message bubbles, history
 │   ├── onboarding/              # First-launch setup
-│   ├── settings/                # Provider, tools, skills, cron, Telegram
+│   ├── settings/                # Provider, tools, skills, cron, Telegram, embedding, knowledge
 │   ├── telegram/                # Bot API, bot manager, rate limiter
-│   └── voice/                   # Voice input (STT via Groq Whisper)
+│   └── voice/                   # Voice input (native speech-to-text)
 │
 ├── l10n/                        # i18n: ARB files (EN/FR/ES/DE/IT), generated code, tr() helper
 ├── providers/                   # Riverpod: app, chat, background service, Telegram
@@ -296,7 +306,7 @@ lib/
 └── shared/                      # Constants
 ```
 
-**85 Dart files** in total.
+**111 Dart files** in total.
 
 ---
 
@@ -435,6 +445,9 @@ Users define recurring prompts from Settings > Scheduled Prompts. Each cron runs
 | `get_directions` | Yes | Yes — pure HTTP (OpenRouteService API) |
 | `get_transit` | Yes | Yes — pure HTTP (SNCF + PRIM APIs) |
 | `weather` | Yes | Yes — pure HTTP (Open-Meteo) |
+| `knowledge_search` | Yes | Yes — SQLite + optional HTTP (embedding API) |
+| `knowledge_store` | Yes | Yes — SQLite |
+| `radio` | Yes | **No** — MediaSessionService requires Activity FlutterEngine |
 
 The service isolate runs on a separate FlutterEngine with platform channel access (via `GeneratedPluginRegistrant`). It can use `web_search`, `web_scrape`, `file`, `get_location`, `get_address`, `geocode`, `device_info`, `ocr`, `qr_generate`, `get_directions`, `get_transit`, and `weather`. WebView-based tools, UI-dependent tools, permission-requiring tools (contacts, calendar, notifications), and tools with real-world side effects (TTS, app launches, alarms) are excluded. `get_location` requires that the user has granted location permission from the app at least once. When Android kills the app overnight and a cron triggers at 3 AM, the service isolate executes it autonomously. If the service AgentLoop init fails, crons fall back to a persistent pending queue that replays when the app is opened.
 
@@ -442,7 +455,7 @@ The service isolate runs on a separate FlutterEngine with platform channel acces
 
 ## Tools
 
-The agent has access to 25 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
+The agent has access to 28 tools. The LLM decides autonomously when to call each tool based on the conversation context. Each tool returns a `ToolResult.dual()` — full data for the LLM, clean summary for the user.
 
 Users can **enable or disable** individual tools from Settings > Tools > Manage Tools.
 
@@ -473,6 +486,9 @@ Users can **enable or disable** individual tools from Settings > Tools > Manage 
 | **Directions** | `get_directions` | Route calculation between two GPS coordinates via OpenRouteService API v2. Supports car, bike, road bike, mountain bike, walk, hike, and wheelchair profiles. Returns distance, duration, elevation gain/loss, and turn-by-turn instructions. Also supports isochrone calculation (reachable area within a time budget). Requires a free ORS API key. |
 | **Public Transit** | `get_transit` | Find public transit routes in France. Auto-routes between two APIs: **PRIM/IDFM** for Ile-de-France (Metro, RER, Bus, Tram, Transilien) and **SNCF** for national trains (TGV, TER, Intercites). Returns top 3 journey options with departure/arrival times, transfers, CO2 emissions, and section-by-section itinerary. Supports departure/arrival time constraints and wheelchair-accessible routes. Both APIs use Navitia technology with shared response parsing. |
 | **Weather** | `weather` | Weather forecast using Open-Meteo API with Météo-France high-precision models (AROME 1.3km + ARPEGE). Returns daily summary (min/max temperature, precipitation, wind, conditions) and hourly breakdown by period (morning/afternoon/evening). 1-7 day forecast. WMO weather codes interpreted to localized descriptions (EN/FR/ES/DE/IT). No API key required. |
+| **Knowledge Search** | `knowledge_search` | Search the persistent Knowledge Graph for remembered information — people, places, events, concepts from past conversations. Performs hybrid search (FTS5 text matching + vector cosine similarity + graph activation + Ebbinghaus memory decay) and returns ranked entities with their facts and relations. |
+| **Knowledge Store** | `knowledge_store` | Explicitly store a fact in the Knowledge Graph. Used when the user asks to remember something ("remember that my dentist is Dr. Martin"). Persists entity-key-value triplets with fuzzy entity resolution (Jaro-Winkler matching to existing entities). |
+| **Radio** | `radio` | Play live Radio France HLS streams in the background. Stations: France Inter, France Info, France Culture, France Musique, FIP. Operations: play, stop, pause, resume, status. Uses native Android Media3 MediaSessionService with background playback notification. Disabled by default. |
 
 ### Dual Scraping Strategy
 
@@ -481,6 +497,29 @@ The LLM is guided by the tool descriptions to use a two-step approach:
 2. **Fall back to `web_scrape_js`** — only when `web_scrape` returns empty (JS-rendered SPA)
 
 Both tools share a common `htmlToMarkdown()` utility that strips noise elements (`<nav>`, `<footer>`, `<aside>`, `<script>`, `<style>`) and produces clean Markdown with ATX headings and fenced code blocks.
+
+### Knowledge Graph & Embeddings
+
+DroidClaw maintains a persistent **Knowledge Graph** that remembers information across conversations. The system operates in two phases:
+
+**Ingestion** (after each conversation turn):
+1. LLM extracts entities, relations, and facts from the conversation
+2. Entity resolution with fuzzy matching (Jaro-Winkler) avoids duplicates
+3. Facts stored bi-temporally (valid-at / expired-at for history tracking)
+4. Entity embeddings computed via the configured embedding API and stored as Float32 BLOBs
+
+**Retrieval** (before each LLM call):
+1. Query expansion via a fast LLM call to bridge vocabulary gaps
+2. FTS5 BM25 text search on entities and facts
+3. Vector cosine similarity search on entity embeddings (brute-force over all active entities)
+4. 2-hop graph neighbor loading + spreading activation
+5. Ebbinghaus memory decay scoring (hot/warm/cool/cold temperature)
+6. HybridScorer fuses all 4 signals: BM25 (0.30) + vector (0.30) + activation (0.25) + decay (0.15)
+7. Top-K entities injected into the system prompt as context
+
+When no embedding provider is configured, the scorer degrades gracefully: BM25 (0.55) + activation (0.30) + decay (0.15).
+
+Configure the embedding provider in **Settings > Embedding**. Enable the Knowledge Graph in **Settings > Knowledge**.
 
 ### Tool Registration Flow
 
@@ -554,6 +593,18 @@ These keys unlock specific tools. The agent works without them, but the correspo
 | **SNCF** | `get_transit` (national trains) | 5,000 req/day | [Get key](docs/api-keys/sncf.md) |
 | **PRIM / IDFM** | `get_transit` (Ile-de-France) | 1,000 req/day | [Get key](docs/api-keys/prim-idfm.md) |
 
+### Optional (Embeddings)
+
+The Knowledge Graph's vector search uses an embedding API. By default it reuses the LLM provider's API key — a separate key is only needed if you use a different embedding provider.
+
+| Provider | Default Model | Free Tier | Dimensions |
+|----------|--------------|-----------|------------|
+| **Gemini** (recommended) | `gemini-embedding-001` | Generous free tier | 768 (up to 3072) |
+| **OpenAI** | `text-embedding-3-small` | No | 768 (up to 1536) |
+| **OpenRouter** | `openai/text-embedding-3-small` | No | 768 (up to 1536) |
+
+Configure in **Settings > Embedding**. If no embedding provider is configured, the Knowledge Graph falls back to degraded mode (BM25 text search only — still functional, just less semantically precise).
+
 ### Optional (Channels)
 
 | Service | Purpose | Guide |
@@ -562,7 +613,7 @@ These keys unlock specific tools. The agent works without them, but the correspo
 
 ### No Key Required
 
-These tools work out of the box, no configuration needed: `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `geocode`, `get_datetime`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`, `weather`.
+These tools work out of the box, no configuration needed: `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `geocode`, `get_datetime`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`, `weather`, `knowledge_search`, `knowledge_store`, `radio`.
 
 ---
 
@@ -570,11 +621,11 @@ These tools work out of the box, no configuration needed: `web_scrape`, `web_scr
 
 | | |
 |---|---|
-| **Dart files** | 85 |
+| **Dart files** | 111 |
 | **Analysis issues** | 0 |
-| **APK size (arm64)** | 35.6 MB |
+| **APK size (arm64)** | 39.5 MB |
 | **Languages** | English, French, Spanish, German, Italian |
-| **Native code** | Kotlin (AudioChannelPlugin — volume control) |
+| **Native code** | Kotlin (AudioChannelPlugin — volume control, RadioPlaybackService — Media3 streaming) |
 | **minSdkVersion** | 24 (Android 7.0) |
 | **targetSdkVersion** | 34 (Android 14) |
 

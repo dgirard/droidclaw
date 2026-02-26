@@ -32,11 +32,12 @@ lib/
 ├── core/                        # Business logic (NO Flutter UI imports)
 │   ├── agent/                   # AgentLoop, ContextBuilder, MemoryManager, ServiceAgentFactory
 │   ├── config/                  # AppConfig, ConfigStorage, CronConfig
-│   ├── providers/               # LLM abstraction (Anthropic, HTTP, factory)
+│   ├── knowledge/               # Knowledge Graph (DB, ingestion, hybrid search, algorithms)
+│   ├── providers/               # LLM + Embedding abstraction (Anthropic, HTTP, Gemini, factory)
 │   ├── services/                # BackgroundTaskHandler, AudioManagerChannel
 │   ├── session/                 # Session + SessionManager (Hive persistence)
 │   ├── skills/                  # Three-tier loader + installer
-│   └── tools/                   # Tool interface + 21 implementations
+│   └── tools/                   # Tool interface + 28 implementations
 ├── features/                    # Screens and platform features
 │   ├── chat/                    # Chat screen, message bubbles, history
 │   ├── onboarding/              # First-launch setup
@@ -126,6 +127,28 @@ sealed class AgentEvent {}
 
 Both chat UI and Telegram consume the same `Stream<AgentEvent>`.
 
+### Embedding Provider Architecture
+
+Multi-provider embedding abstraction mirroring the LLM provider pattern:
+
+- `EmbeddingProvider` (interface) → `BaseCloudEmbeddingProvider` (shared retry) → `GeminiEmbeddingProvider` / `OpenAIEmbeddingProvider`
+- `EmbeddingProviderFactory.create()` routes by provider name
+- Gemini uses native REST API (`generativelanguage.googleapis.com/v1beta`), NOT the OpenAI-compatible chat endpoint
+- Config in `AppConfig.embedding` (`EmbeddingConfig`: provider, model, dimensions, useOwnApiKey)
+- API key: either reuses LLM provider key (`useOwnApiKey: false`) or separate key in `FlutterSecureStorage`
+- `embeddingProviderProvider` is a `FutureProvider<EmbeddingProvider?>` with `ref.onDispose`
+
+### Knowledge Graph Pipeline
+
+- **Ingestion**: `IngestionPipeline.extractAndStore()` → LLM extraction → entity resolution → bi-temporal storage → embedding computation
+- **Retrieval**: `KnowledgeService.queryRelevant()` → FTS5 BM25 + vector cosine similarity + spreading activation + Ebbinghaus decay → `HybridScorer.fuse()`
+- `KnowledgeService` receives `EmbeddingProvider?` — when non-null, embeds query and does brute-force cosine similarity over all active entity embeddings
+- `hasEmbedder` is a getter (`embeddingProvider != null`), not a constructor parameter
+- Embeddings stored as Float32 little-endian BLOBs in `entities.embedding` column
+- Serialization: `Float32List.fromList(doubles).buffer.asUint8List()` → BLOB
+- Deserialization: `Float32List.view(Uint8List.fromList(blob).buffer)`
+- Cosine similarity reuses `MemoryClusterer.cosineSimilarity()` (no code duplication)
+
 ## Adding a New Tool
 
 1. Create `lib/core/tools/my_tool.dart` extending `Tool` (name, description, parameters JSON Schema, `execute()`)
@@ -188,4 +211,4 @@ For tools needing an API key that must work in both isolates:
 - `AppConstants` in `lib/shared/constants.dart` for all magic values
 - `print('[AgentLoop] ...')` for debug logging (visible via `adb logcat`)
 - Config persisted in `SharedPreferences`, secrets in `FlutterSecureStorage`, sessions in Hive
-- All tool names are snake_case: `web_search`, `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`, `get_directions`
+- All tool names are snake_case: `web_search`, `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`, `get_directions`, `geocode`, `get_transit`, `weather`, `get_datetime`, `knowledge_search`, `knowledge_store`, `radio`
