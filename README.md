@@ -507,7 +507,7 @@ DroidClaw maintains a persistent **Knowledge Graph** (KG) — a local SQLite dat
 Chat history is linear and ephemeral — it gets summarized and truncated. The Knowledge Graph solves this by extracting **structured knowledge** from every conversation and storing it permanently:
 
 - "My dentist is Dr. Martin" → Entity `Dr. Martin` (PERSON), fact `profession: dentist`, relation `User SEES Dr. Martin`
-- "I live at 9 rue la Paix" → Entity `User` (PERSON), fact `address: 9 rue la Paix`
+- "I live at 9 rue de la Paix" → Entity `User` (PERSON), fact `address: 9 rue de la Paix`
 - "My meeting with Alice is Tuesday at 3pm" → Entity `Alice` (PERSON), relation `User MEETS Alice`, fact `meeting: Tuesday 3pm`
 
 Later, when the user asks "Who is my dentist?" or "Where do I live?", the KG retrieves the relevant entities and injects them into the system prompt — even if the original conversation was weeks ago and long since summarized.
@@ -617,7 +617,7 @@ User query: "Where do I live?"
 └──────────────────────────────┘
 ```
 
-This hybrid approach means the KG can find relevant information even when the user's query uses different vocabulary than the stored data. For example, "Where do I live?" matches the fact `address: 9 rue la Paix` through three complementary paths:
+This hybrid approach means the KG can find relevant information even when the user's query uses different vocabulary than the stored data. For example, "Where do I live?" matches the fact `address: 9 rue de la Paix` through three complementary paths:
 - **Query expansion** generates keywords like "address", "home", "domicile"
 - **Vector similarity** bridges the semantic gap between "live" and "address"
 - **Graph activation** boosts the User entity and its connected facts
