@@ -322,6 +322,36 @@ final contextBuilderProvider = FutureProvider<ContextBuilder>((ref) async {
   );
 });
 
+/// Ingestion pipeline — shared between agent loop (auto-extract) and KB rebuild.
+/// Returns null when KG is disabled or LLM provider is not configured.
+final ingestionPipelineProvider =
+    FutureProvider<IngestionPipeline?>((ref) async {
+  final config = ref.watch(appConfigProvider);
+  if (!config.knowledge.enabled) return null;
+
+  final kgDb = await ref.watch(knowledgeGraphDbProvider.future);
+  if (kgDb == null) return null;
+
+  final provider = await ref.watch(llmProviderProvider.future);
+  if (provider == null) return null;
+
+  final embeddingProvider = await ref.watch(embeddingProviderProvider.future);
+
+  return IngestionPipeline(
+    extractor: EntityExtractor(
+      provider: provider,
+      model: config.agent.model,
+      kbLanguage: config.knowledge.kbLanguage,
+    ),
+    resolver: EntityResolver(kgDb),
+    db: kgDb,
+    embeddingProvider: embeddingProvider,
+    embeddingModel: config.embedding.model,
+    embeddingDimensions: config.embedding.dimensions,
+    kbLanguage: config.knowledge.kbLanguage,
+  );
+});
+
 /// Agent loop — the main agent, depends on LLM provider.
 final agentLoopProvider = FutureProvider<AgentLoop?>((ref) async {
   final provider = await ref.watch(llmProviderProvider.future);
@@ -334,24 +364,9 @@ final agentLoopProvider = FutureProvider<AgentLoop?>((ref) async {
 
   // Wire Knowledge Graph (optional)
   final kgService2 = await ref.watch(knowledgeServiceProvider.future);
-  final kgDb2 = await ref.watch(knowledgeGraphDbProvider.future);
-  final embeddingProvider = await ref.watch(embeddingProviderProvider.future);
-  IngestionPipeline? ingestionPipeline;
-  if (kgService2 != null && kgDb2 != null && config.knowledge.autoExtract) {
-    ingestionPipeline = IngestionPipeline(
-      extractor: EntityExtractor(
-        provider: provider,
-        model: config.agent.model,
-        kbLanguage: config.knowledge.kbLanguage,
-      ),
-      resolver: EntityResolver(kgDb2),
-      db: kgDb2,
-      embeddingProvider: embeddingProvider,
-      embeddingModel: config.embedding.model,
-      embeddingDimensions: config.embedding.dimensions,
-      kbLanguage: config.knowledge.kbLanguage,
-    );
-  }
+  final ingestionPipeline = config.knowledge.autoExtract
+      ? await ref.watch(ingestionPipelineProvider.future)
+      : null;
 
   final agentLoop = AgentLoop(
     provider: provider,

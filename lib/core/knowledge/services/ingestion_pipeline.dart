@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 
 import '../../config/log_entry.dart';
 import '../../providers/embedding_provider.dart';
+import '../../providers/llm_response.dart';
 import '../../services/app_logger.dart';
 import '../database/knowledge_graph_db.dart';
 import 'entity_extractor.dart';
@@ -175,5 +176,27 @@ class IngestionPipeline {
         'KG embedding failed (ingestion continues): $e',
       );
     }
+  }
+
+  /// Extract (userMessage, assistantResponse) pairs from session messages.
+  /// Skips tool/system messages and assistant messages with only tool calls.
+  /// Matches the pairing logic used by [AgentLoop._extractAsync].
+  static List<(String, String)> extractPairs(List<Message> messages) {
+    final pairs = <(String, String)>[];
+    for (var i = 0; i < messages.length; i++) {
+      if (messages[i].role != 'user' || messages[i].content.isEmpty) continue;
+      final userMsg = messages[i].content;
+      // Find next assistant message with actual content (not just tool calls)
+      for (var j = i + 1; j < messages.length; j++) {
+        if (messages[j].role == 'user') break; // next user turn, no match
+        if (messages[j].role == 'assistant' &&
+            messages[j].content.isNotEmpty &&
+            (messages[j].toolCalls == null || messages[j].toolCalls!.isEmpty)) {
+          pairs.add((userMsg, messages[j].content));
+          break;
+        }
+      }
+    }
+    return pairs;
   }
 }

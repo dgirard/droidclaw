@@ -1418,6 +1418,40 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get knowledgeRebuild => 'Reconstruire depuis les conversations';
+
+  @override
+  String get knowledgeRebuildDesc =>
+      'Retraiter tout l\'historique des conversations dans la base de connaissances';
+
+  @override
+  String get knowledgeRebuildConfirmTitle =>
+      'Reconstruire la base de connaissances ?';
+
+  @override
+  String knowledgeRebuildConfirmBody(int count, int sessions) {
+    return 'Ceci va traiter $count tours de conversation dans $sessions sessions. Chaque tour nécessite un appel API LLM. Cela peut prendre plusieurs minutes.';
+  }
+
+  @override
+  String knowledgeRebuildProgress(int current, int total) {
+    return 'Traitement $current sur $total...';
+  }
+
+  @override
+  String knowledgeRebuildComplete(int processed, int failed) {
+    return 'Reconstruction terminée : $processed tours traités, $failed échoués';
+  }
+
+  @override
+  String knowledgeRebuildCancelled(int processed) {
+    return 'Reconstruction annulée après $processed tours';
+  }
+
+  @override
+  String get knowledgeRebuildEmpty => 'Aucune conversation à traiter';
+
+  @override
   String get kgBrowserTitle => 'Explorateur de connaissances';
 
   @override

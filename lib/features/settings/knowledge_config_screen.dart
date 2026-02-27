@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/config/app_config.dart';
+import '../../core/knowledge/services/ingestion_pipeline.dart';
+import '../../core/session/session.dart';
+import '../../core/session/session_manager.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 import '../../shared/constants.dart';
@@ -25,6 +28,10 @@ class _KnowledgeConfigScreenState
   int? _relationCount;
   int? _dbSizeBytes;
   bool _loadingStats = false;
+  bool _rebuildInProgress = false;
+  bool _rebuildCancelled = false;
+  int _rebuildCurrent = 0;
+  int _rebuildTotal = 0;
 
   @override
   void initState() {
@@ -150,6 +157,38 @@ class _KnowledgeConfigScreenState
 
             const Divider(),
 
+            // Rebuild from conversations
+            ListTile(
+              leading: Icon(_rebuildInProgress ? Icons.sync : Icons.replay),
+              title: Text(l.knowledgeRebuild),
+              subtitle: _rebuildInProgress
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 8),
+                        LinearProgressIndicator(
+                          value: _rebuildTotal > 0
+                              ? _rebuildCurrent / _rebuildTotal
+                              : null,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(l.knowledgeRebuildProgress(
+                            _rebuildCurrent, _rebuildTotal)),
+                      ],
+                    )
+                  : Text(l.knowledgeRebuildDesc),
+              trailing: _rebuildInProgress
+                  ? IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () =>
+                          setState(() => _rebuildCancelled = true),
+                    )
+                  : null,
+              onTap: _rebuildInProgress ? null : () => _confirmRebuild(context),
+            ),
+
+            const Divider(),
+
             // Forget everything
             ListTile(
               leading: Icon(Icons.delete_forever_outlined,
@@ -245,6 +284,128 @@ class _KnowledgeConfigScreenState
         }
       } catch (_) {}
     }
+  }
+
+  Future<void> _confirmRebuild(BuildContext context) async {
+    final l = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final sessionManagerAsync = ref.read(sessionManagerProvider);
+    final SessionManager sessionManager;
+    switch (sessionManagerAsync) {
+      case AsyncData(:final value):
+        sessionManager = value;
+      default:
+        return; // Not loaded yet
+    }
+    final allSessions = sessionManager.getAllSessions();
+
+    // Count pairs across all sessions
+    int totalPairs = 0;
+    int sessionCount = 0;
+    for (final session in allSessions) {
+      final pairs = IngestionPipeline.extractPairs(session.messages);
+      final hasSummary =
+          session.summary != null && session.summary!.isNotEmpty;
+      final count = pairs.length + (hasSummary ? 1 : 0);
+      if (count > 0) sessionCount++;
+      totalPairs += count;
+    }
+
+    if (totalPairs == 0) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l.knowledgeRebuildEmpty)),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l.knowledgeRebuildConfirmTitle),
+        content:
+            Text(l.knowledgeRebuildConfirmBody(totalPairs, sessionCount)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(MaterialLocalizations.of(ctx).cancelButtonLabel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l.knowledgeRebuild),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await _runRebuild(allSessions, totalPairs);
+    }
+  }
+
+  Future<void> _runRebuild(
+      List<Session> sessions, int totalPairs) async {
+    final l = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final pipeline = await ref.read(ingestionPipelineProvider.future);
+    if (pipeline == null) return;
+
+    setState(() {
+      _rebuildInProgress = true;
+      _rebuildCancelled = false;
+      _rebuildCurrent = 0;
+      _rebuildTotal = totalPairs;
+    });
+
+    int processed = 0;
+    int failed = 0;
+
+    for (final session in sessions) {
+      if (_rebuildCancelled) break;
+
+      // Process summary if present
+      if (session.summary != null && session.summary!.isNotEmpty) {
+        try {
+          await pipeline.extractAndStore(
+            userMessage: session.summary!,
+            assistantResponse: '',
+          );
+          processed++;
+        } catch (_) {
+          failed++;
+        }
+        if (mounted) setState(() => _rebuildCurrent++);
+        await Future.delayed(const Duration(seconds: 2));
+      }
+
+      // Process message pairs
+      final pairs = IngestionPipeline.extractPairs(session.messages);
+      for (final (userMsg, assistantMsg) in pairs) {
+        if (_rebuildCancelled) break;
+        try {
+          await pipeline.extractAndStore(
+            userMessage: userMsg,
+            assistantResponse: assistantMsg,
+          );
+          processed++;
+        } catch (_) {
+          failed++;
+        }
+        if (mounted) setState(() => _rebuildCurrent++);
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    }
+
+    if (mounted) {
+      setState(() => _rebuildInProgress = false);
+      _loadStats();
+    }
+
+    messenger.showSnackBar(SnackBar(
+      content: Text(_rebuildCancelled
+          ? l.knowledgeRebuildCancelled(processed)
+          : l.knowledgeRebuildComplete(processed, failed)),
+    ));
   }
 
   String _formatSize(int bytes) {

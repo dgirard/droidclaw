@@ -1417,6 +1417,39 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get knowledgeRebuild => 'Aus Gesprächen neu aufbauen';
+
+  @override
+  String get knowledgeRebuildDesc =>
+      'Gesamten Gesprächsverlauf in die Wissensdatenbank verarbeiten';
+
+  @override
+  String get knowledgeRebuildConfirmTitle => 'Wissensdatenbank neu aufbauen?';
+
+  @override
+  String knowledgeRebuildConfirmBody(int count, int sessions) {
+    return 'Es werden $count Gesprächsrunden aus $sessions Sitzungen verarbeitet. Jede Runde erfordert einen LLM-API-Aufruf. Dies kann mehrere Minuten dauern.';
+  }
+
+  @override
+  String knowledgeRebuildProgress(int current, int total) {
+    return 'Verarbeite $current von $total...';
+  }
+
+  @override
+  String knowledgeRebuildComplete(int processed, int failed) {
+    return 'Aufbau abgeschlossen: $processed Runden verarbeitet, $failed fehlgeschlagen';
+  }
+
+  @override
+  String knowledgeRebuildCancelled(int processed) {
+    return 'Aufbau nach $processed Runden abgebrochen';
+  }
+
+  @override
+  String get knowledgeRebuildEmpty => 'Keine Gespräche zu verarbeiten';
+
+  @override
   String get kgBrowserTitle => 'Wissensbrowser';
 
   @override

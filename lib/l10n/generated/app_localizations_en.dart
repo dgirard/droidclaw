@@ -1395,6 +1395,39 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get knowledgeRebuild => 'Rebuild from conversations';
+
+  @override
+  String get knowledgeRebuildDesc =>
+      'Re-process all conversation history into the knowledge base';
+
+  @override
+  String get knowledgeRebuildConfirmTitle => 'Rebuild Knowledge Base?';
+
+  @override
+  String knowledgeRebuildConfirmBody(int count, int sessions) {
+    return 'This will process $count conversation turns across $sessions sessions. Each turn requires one LLM API call. This may take several minutes.';
+  }
+
+  @override
+  String knowledgeRebuildProgress(int current, int total) {
+    return 'Processing $current of $total...';
+  }
+
+  @override
+  String knowledgeRebuildComplete(int processed, int failed) {
+    return 'Rebuild complete: $processed turns processed, $failed failed';
+  }
+
+  @override
+  String knowledgeRebuildCancelled(int processed) {
+    return 'Rebuild cancelled after $processed turns';
+  }
+
+  @override
+  String get knowledgeRebuildEmpty => 'No conversations to process';
+
+  @override
   String get kgBrowserTitle => 'Knowledge Browser';
 
   @override

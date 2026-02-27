@@ -2582,6 +2582,54 @@ abstract class AppLocalizations {
   /// **'All knowledge is stored in {language}. Change via Forget All.'**
   String knowledgeLanguageLocked(String language);
 
+  /// No description provided for @knowledgeRebuild.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuild from conversations'**
+  String get knowledgeRebuild;
+
+  /// No description provided for @knowledgeRebuildDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-process all conversation history into the knowledge base'**
+  String get knowledgeRebuildDesc;
+
+  /// No description provided for @knowledgeRebuildConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuild Knowledge Base?'**
+  String get knowledgeRebuildConfirmTitle;
+
+  /// No description provided for @knowledgeRebuildConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This will process {count} conversation turns across {sessions} sessions. Each turn requires one LLM API call. This may take several minutes.'**
+  String knowledgeRebuildConfirmBody(int count, int sessions);
+
+  /// No description provided for @knowledgeRebuildProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing {current} of {total}...'**
+  String knowledgeRebuildProgress(int current, int total);
+
+  /// No description provided for @knowledgeRebuildComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuild complete: {processed} turns processed, {failed} failed'**
+  String knowledgeRebuildComplete(int processed, int failed);
+
+  /// No description provided for @knowledgeRebuildCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuild cancelled after {processed} turns'**
+  String knowledgeRebuildCancelled(int processed);
+
+  /// No description provided for @knowledgeRebuildEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No conversations to process'**
+  String get knowledgeRebuildEmpty;
+
   /// No description provided for @kgBrowserTitle.
   ///
   /// In en, this message translates to:
