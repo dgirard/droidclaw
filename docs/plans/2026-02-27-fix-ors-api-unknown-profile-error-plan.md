@@ -76,15 +76,15 @@ And KB-aware tool description: `'Coordinates: geocode a known address (from know
 
 ## Acceptance Criteria
 
-- [ ] All 19 uncommitted files committed to `fix/agent-language-and-tool-aggression`
-- [ ] `flutter gen-l10n` succeeds
-- [ ] `flutter analyze` — 0 issues
-- [ ] Build release APK: `flutter build apk --release --split-per-abi`
-- [ ] Deploy to device: `adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`
-- [ ] Test: ask for directions with unspecified mode → no ORS error, defaults to car
-- [ ] Test: ask "directions à pied" → walks mode works correctly
-- [ ] Test: agent responds in French (language fix still works)
-- [ ] Test: "où est-ce que j'habite?" → answers from KB, no GPS call
+- [x] All 19 uncommitted files committed to `fix/agent-language-and-tool-aggression` (ec0455c)
+- [x] `flutter gen-l10n` succeeds
+- [x] `flutter analyze` — 0 issues
+- [x] Build release APK: `flutter build apk --release --split-per-abi`
+- [x] Deploy to device: `adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`
+- [x] Test: directions by car → 29.1 km, 31 min, no ORS error, tool chain geocode → get_directions works
+- [ ] Test: ask "directions à pied" → walks mode works correctly (not tested — agent passivity with Gemini Flash)
+- [x] Test: agent responds in French (language fix works — full response + turn-by-turn in French)
+- [ ] Test: "où est-ce que j'habite?" → answers from KB, no GPS call (KB query not returning home entity)
 
 ## Files Modified (19 total)
 

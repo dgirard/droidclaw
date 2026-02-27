@@ -23,6 +23,16 @@ class DirectionsTool extends Tool {
     'wheelchair': 'wheelchair',
   };
 
+  /// Fallback profiles when the primary is unavailable (ORS maintenance).
+  static List<String> _fallbacks(String profile) => switch (profile) {
+        'foot-walking' => ['foot-hiking', 'driving-car'],
+        'foot-hiking' => ['foot-walking', 'driving-car'],
+        'cycling-regular' || 'cycling-road' || 'cycling-mountain' =>
+          ['driving-car'],
+        'wheelchair' => ['foot-walking', 'driving-car'],
+        _ => ['driving-car'],
+      };
+
   @override
   String get name => 'get_directions';
 
@@ -135,21 +145,16 @@ class DirectionsTool extends Tool {
       'elevation': true,
     });
 
-    final response = await http.post(
-      Uri.parse('$_baseUrl/directions/$profile'),
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Authorization': apiKey!,
-      },
-      body: body,
-    );
+    // Try primary profile, then fallbacks if ORS returns 400 (maintenance)
+    final (response, usedProfile) =
+        await _postWithFallback('directions', profile, body);
 
     if (response.statusCode == 429) {
       return ToolResult.error('Rate limit exceeded. Try again in a minute.');
     }
 
     if (response.statusCode != 200) {
-      return _parseError(response);
+      return _parseError(response, requestedProfile: profile);
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -189,15 +194,25 @@ class DirectionsTool extends Tool {
         ? ', elevation +${ascent.round()}m / -${descent.round()}m'
         : '';
 
+    // Detect fallback: usedProfile differs from requested profile
+    final fallbackNote = usedProfile != profile
+        ? ' (NOTE: $mode profile temporarily unavailable — using ${_modeForProfile(usedProfile)} instead)'
+        : '';
+
+    final usedMode = usedProfile != profile
+        ? _modeForProfile(usedProfile)
+        : mode;
+
     final forLLM = StringBuffer()
-      ..writeln('Route ($mode): ${distance.toStringAsFixed(1)} km, '
-          '$durationStr$elevationStr')
+      ..writeln('Route ($usedMode): ${distance.toStringAsFixed(1)} km, '
+          '$durationStr$elevationStr$fallbackNote')
       ..writeln()
       ..writeln('Turn-by-turn instructions:')
       ..writeln(steps.join('\n'));
 
-    final forUser =
-        '${distance.toStringAsFixed(1)} km, $durationStr ($mode)$elevationStr';
+    final forUser = usedProfile != profile
+        ? '${distance.toStringAsFixed(1)} km, $durationStr ($usedMode — $mode indisponible)$elevationStr'
+        : '${distance.toStringAsFixed(1)} km, $durationStr ($mode)$elevationStr';
 
     return ToolResult.dual(forLLM: forLLM.toString(), forUser: forUser);
   }
@@ -226,21 +241,16 @@ class DirectionsTool extends Tool {
       'area_units': 'km',
     });
 
-    final response = await http.post(
-      Uri.parse('$_baseUrl/isochrones/$profile'),
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Authorization': apiKey!,
-      },
-      body: body,
-    );
+    // Try primary profile, then fallbacks if ORS returns 400 (maintenance)
+    final (response, usedProfile) =
+        await _postWithFallback('isochrones', profile, body);
 
     if (response.statusCode == 429) {
       return ToolResult.error('Rate limit exceeded. Try again in a minute.');
     }
 
     if (response.statusCode != 200) {
-      return _parseError(response);
+      return _parseError(response, requestedProfile: profile);
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -257,18 +267,82 @@ class DirectionsTool extends Tool {
         ? '${areaSqKm.toStringAsFixed(1)} km²'
         : 'unknown area';
 
+    final usedMode = usedProfile != profile
+        ? _modeForProfile(usedProfile)
+        : mode;
+    final fallbackNote = usedProfile != profile
+        ? ' (NOTE: $mode profile temporarily unavailable — using $usedMode instead)'
+        : '';
+
     return ToolResult.dual(
-      forLLM: 'Isochrone ($mode, $rangeMinutes min): reachable area = $areaStr '
-          'from ($lat, $lon).',
-      forUser: '$rangeMinutes min by $mode: $areaStr reachable',
+      forLLM: 'Isochrone ($usedMode, $rangeMinutes min): reachable area = $areaStr '
+          'from ($lat, $lon).$fallbackNote',
+      forUser: usedProfile != profile
+          ? '$rangeMinutes min by $usedMode: $areaStr reachable ($mode indisponible)'
+          : '$rangeMinutes min by $mode: $areaStr reachable',
     );
   }
 
-  ToolResult _parseError(http.Response response) {
+  /// POST to ORS, retrying with fallback profiles on 400 (maintenance).
+  /// Returns the successful response and the profile that was actually used.
+  Future<(http.Response, String)> _postWithFallback(
+      String endpoint, String profile, String body) async {
+    final headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Authorization': apiKey!,
+    };
+
+    final response = await http.post(
+      Uri.parse('$_baseUrl/$endpoint/$profile'),
+      headers: headers,
+      body: body,
+    );
+
+    // If primary succeeds or is not a 400 (maintenance), return as-is.
+    if (response.statusCode != 400) {
+      return (response, profile);
+    }
+
+    // 400 likely means profile is down. Try fallbacks in order.
+    for (final fallback in _fallbacks(profile)) {
+      final retryResponse = await http.post(
+        Uri.parse('$_baseUrl/$endpoint/$fallback'),
+        headers: headers,
+        body: body,
+      );
+      if (retryResponse.statusCode != 400) {
+        return (retryResponse, fallback);
+      }
+    }
+
+    // All fallbacks also failed — return the original error.
+    return (response, profile);
+  }
+
+  /// Reverse-lookup: ORS profile identifier → user-facing mode name.
+  static String _modeForProfile(String profile) {
+    for (final entry in _profiles.entries) {
+      if (entry.value == profile) return entry.key;
+    }
+    return profile; // fallback: return raw profile name
+  }
+
+  ToolResult _parseError(http.Response response, {String? requestedProfile}) {
     try {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final error = data['error'] as Map<String, dynamic>?;
       final message = error?['message'] as String? ?? response.body;
+
+      // Detect ORS maintenance: profile reported as 'unknown'
+      if (message.contains("incorrect value of 'unknown'") &&
+          requestedProfile != null) {
+        final mode = _modeForProfile(requestedProfile);
+        return ToolResult.error(
+            'The $mode routing profile is currently unavailable on '
+            'OpenRouteService (server maintenance). '
+            'Try "car" mode, or wait and retry later.');
+      }
+
       return ToolResult.error('ORS API error (${response.statusCode}): $message');
     } catch (_) {
       return ToolResult.error('ORS API error (${response.statusCode}): ${response.body}');
