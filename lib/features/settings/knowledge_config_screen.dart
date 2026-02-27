@@ -120,7 +120,7 @@ class _KnowledgeConfigScreenState
                 padding: EdgeInsets.all(16),
                 child: Center(child: CircularProgressIndicator()),
               )
-            else if (_entityCount != null) ...[
+            else if (_entityCount != null && _entityCount! > 0) ...[
               ListTile(
                 leading: const Icon(Icons.hub_outlined),
                 title: Text(l.knowledgeStatsEntities(_entityCount!)),
