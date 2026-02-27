@@ -282,7 +282,14 @@ class _KnowledgeConfigScreenState
           );
           _loadStats();
         }
-      } catch (_) {}
+      } catch (e) {
+        print('[KG] deleteAll error: $e');
+        if (mounted) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('Error: $e')),
+          );
+        }
+      }
     }
   }
 

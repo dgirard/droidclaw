@@ -11,7 +11,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
       : super(_openConnection(dbPath));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   static QueryExecutor _openConnection(String dbPath) {
     return driftDatabase(
@@ -25,33 +25,19 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (m, from, to) async {
-          if (from < 2) {
-            // Recreate FTS5 triggers to skip re-insert on deactivation/expiry
+          if (from < 3) {
+            // v1→3 or v2→3: drop all FTS5 triggers and tables, recreate cleanly.
+            // Fixes: v1 triggers lacked is_active/expired_at awareness,
+            //        v2 'rebuild' command corrupted FTS5 indexes.
+            await customStatement('DROP TRIGGER IF EXISTS entities_ai');
+            await customStatement('DROP TRIGGER IF EXISTS entities_ad');
             await customStatement('DROP TRIGGER IF EXISTS entities_au');
+            await customStatement('DROP TRIGGER IF EXISTS facts_ai');
+            await customStatement('DROP TRIGGER IF EXISTS facts_ad');
             await customStatement('DROP TRIGGER IF EXISTS facts_au');
-            await customStatement('''
-              CREATE TRIGGER entities_au AFTER UPDATE ON entities BEGIN
-                INSERT INTO entities_fts(entities_fts, rowid, name, summary, entity_type)
-                VALUES('delete', old.id, old.name, old.summary, old.entity_type);
-                INSERT INTO entities_fts(rowid, name, summary, entity_type)
-                SELECT new.id, new.name, new.summary, new.entity_type
-                WHERE new.is_active = 1;
-              END
-            ''');
-            await customStatement('''
-              CREATE TRIGGER facts_au AFTER UPDATE ON facts BEGIN
-                INSERT INTO facts_fts(facts_fts, rowid, fact_key, fact_value)
-                VALUES('delete', old.id, old.fact_key, old.fact_value);
-                INSERT INTO facts_fts(rowid, fact_key, fact_value)
-                SELECT new.id, new.fact_key, new.fact_value
-                WHERE new.expired_at IS NULL;
-              END
-            ''');
-            // Rebuild FTS5 indexes to purge stale entries from past deactivations
-            await customStatement(
-                "INSERT INTO entities_fts(entities_fts) VALUES('rebuild')");
-            await customStatement(
-                "INSERT INTO facts_fts(facts_fts) VALUES('rebuild')");
+            await customStatement('DROP TABLE IF EXISTS entities_fts');
+            await customStatement('DROP TABLE IF EXISTS facts_fts');
+            await _createFts5Tables();
           }
         },
         beforeOpen: (details) async {
@@ -60,6 +46,77 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
           await customStatement('PRAGMA busy_timeout = 5000');
         },
       );
+
+  /// Create FTS5 virtual tables and sync triggers.
+  Future<void> _createFts5Tables() async {
+    await customStatement('''
+      CREATE VIRTUAL TABLE entities_fts USING fts5(
+        name, summary, entity_type,
+        content=entities, content_rowid=id,
+        prefix='2 3', tokenize='unicode61'
+      )
+    ''');
+    await customStatement('''
+      CREATE VIRTUAL TABLE facts_fts USING fts5(
+        fact_key, fact_value,
+        content=facts, content_rowid=id,
+        prefix='2 3', tokenize='unicode61'
+      )
+    ''');
+    // Triggers for entities
+    await customStatement('''
+      CREATE TRIGGER entities_ai AFTER INSERT ON entities BEGIN
+        INSERT INTO entities_fts(rowid, name, summary, entity_type)
+        VALUES (new.id, new.name, new.summary, new.entity_type);
+      END
+    ''');
+    await customStatement('''
+      CREATE TRIGGER entities_ad AFTER DELETE ON entities BEGIN
+        INSERT INTO entities_fts(entities_fts, rowid, name, summary, entity_type)
+        VALUES('delete', old.id, old.name, old.summary, old.entity_type);
+      END
+    ''');
+    await customStatement('''
+      CREATE TRIGGER entities_au AFTER UPDATE ON entities BEGIN
+        INSERT INTO entities_fts(entities_fts, rowid, name, summary, entity_type)
+        VALUES('delete', old.id, old.name, old.summary, old.entity_type);
+        INSERT INTO entities_fts(rowid, name, summary, entity_type)
+        SELECT new.id, new.name, new.summary, new.entity_type
+        WHERE new.is_active = 1;
+      END
+    ''');
+    // Triggers for facts
+    await customStatement('''
+      CREATE TRIGGER facts_ai AFTER INSERT ON facts BEGIN
+        INSERT INTO facts_fts(rowid, fact_key, fact_value)
+        VALUES (new.id, new.fact_key, new.fact_value);
+      END
+    ''');
+    await customStatement('''
+      CREATE TRIGGER facts_ad AFTER DELETE ON facts BEGIN
+        INSERT INTO facts_fts(facts_fts, rowid, fact_key, fact_value)
+        VALUES('delete', old.id, old.fact_key, old.fact_value);
+      END
+    ''');
+    await customStatement('''
+      CREATE TRIGGER facts_au AFTER UPDATE ON facts BEGIN
+        INSERT INTO facts_fts(facts_fts, rowid, fact_key, fact_value)
+        VALUES('delete', old.id, old.fact_key, old.fact_value);
+        INSERT INTO facts_fts(rowid, fact_key, fact_value)
+        SELECT new.id, new.fact_key, new.fact_value
+        WHERE new.expired_at IS NULL;
+      END
+    ''');
+    // Populate FTS5 from existing active data
+    await customStatement('''
+      INSERT INTO entities_fts(rowid, name, summary, entity_type)
+      SELECT id, name, summary, entity_type FROM entities WHERE is_active = 1
+    ''');
+    await customStatement('''
+      INSERT INTO facts_fts(rowid, fact_key, fact_value)
+      SELECT id, fact_key, fact_value FROM facts WHERE expired_at IS NULL
+    ''');
+  }
 
   /// Touch entities: update last_accessed and increment access_count.
   Future<void> touchEntities(List<int> ids) async {
@@ -326,18 +383,30 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   }
 
   /// Delete all data (forget everything).
+  ///
+  /// Drops FTS5 triggers before deleting to avoid corruption when
+  /// DELETE triggers try to remove entries that were never indexed
+  /// (expired facts, inactive entities).
   Future<void> deleteAllData() async {
+    // 1. Drop triggers to prevent FTS5 sync errors during mass DELETE
+    await customStatement('DROP TRIGGER IF EXISTS entities_ai');
+    await customStatement('DROP TRIGGER IF EXISTS entities_ad');
+    await customStatement('DROP TRIGGER IF EXISTS entities_au');
+    await customStatement('DROP TRIGGER IF EXISTS facts_ai');
+    await customStatement('DROP TRIGGER IF EXISTS facts_ad');
+    await customStatement('DROP TRIGGER IF EXISTS facts_au');
+    // 2. Drop FTS5 virtual tables
+    await customStatement('DROP TABLE IF EXISTS entities_fts');
+    await customStatement('DROP TABLE IF EXISTS facts_fts');
+    // 3. Delete all content rows
     await transaction(() async {
       await customStatement('DELETE FROM facts');
       await customStatement('DELETE FROM relations');
       await customStatement('DELETE FROM aliases');
       await customStatement('DELETE FROM summary_nodes');
       await customStatement('DELETE FROM entities');
-      // Safety net: ensure FTS5 indexes are definitively empty
-      await customStatement(
-          "INSERT INTO entities_fts(entities_fts) VALUES('delete-all')");
-      await customStatement(
-          "INSERT INTO facts_fts(facts_fts) VALUES('delete-all')");
     });
+    // 4. Recreate empty FTS5 tables + triggers
+    await _createFts5Tables();
   }
 }
