@@ -31,8 +31,8 @@ class DirectionsTool extends Tool {
       'Calculate a route between two points by car, bike, or on foot. '
       'Returns distance, duration, elevation, and turn-by-turn instructions. '
       'Can also compute isochrones (reachable area in N minutes). '
-      'Coordinates: use get_location for current position, or provide lat/lon. '
-      'Chain with geocode to resolve place names to coordinates. '
+      'Coordinates: geocode a known address (from knowledge context or user), '
+      'or get_location for current position. Chain with geocode to resolve place names. '
       'Requires an OpenRouteService API key (free at openrouteservice.org).';
 
   @override
@@ -73,7 +73,7 @@ class DirectionsTool extends Tool {
               'hike',
               'wheelchair'
             ],
-            'description': 'Transport mode (default: car)',
+            'description': 'Transport mode: car (default), bike, walk, hike, wheelchair',
           },
           'range_minutes': {
             'type': 'integer',
@@ -122,11 +122,7 @@ class DirectionsTool extends Tool {
     }
 
     final mode = (args['mode'] as String?) ?? 'car';
-    final profile = _profiles[mode];
-    if (profile == null) {
-      return ToolResult.error(
-          'Unknown mode: $mode. Use: ${_profiles.keys.join(', ')}');
-    }
+    final profile = _profiles[mode] ?? _profiles['car']!;
 
     final body = jsonEncode({
       'coordinates': [
@@ -215,11 +211,7 @@ class DirectionsTool extends Tool {
     }
 
     final mode = (args['mode'] as String?) ?? 'car';
-    final profile = _profiles[mode];
-    if (profile == null) {
-      return ToolResult.error(
-          'Unknown mode: $mode. Use: ${_profiles.keys.join(', ')}');
-    }
+    final profile = _profiles[mode] ?? _profiles['car']!;
 
     final rangeMinutes = (args['range_minutes'] as int?) ?? 15;
     final rangeSec = rangeMinutes * 60;

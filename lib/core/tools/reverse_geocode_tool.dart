@@ -12,9 +12,9 @@ class ReverseGeocodeTool extends Tool {
 
   @override
   String get description =>
-      'Convert GPS coordinates (latitude, longitude) into a human-readable '
-      'street address using reverse geocoding. '
-      'Use after get_location to know the actual address of the device.';
+      'Convert GPS coordinates into a street address (reverse geocoding). '
+      'Use ONLY after get_location when you need the current position as a street address. '
+      'Not needed if the knowledge context already has the address.';
 
   @override
   Map<String, dynamic> get parameters => {

@@ -121,12 +121,29 @@ class AgentLoop {
 
     // Agent loop: iterate up to maxToolIterations
     final maxIter = config.agent.maxToolIterations;
+    final resolvedLocale = config.resolvedLocale;
     for (var iteration = 0; iteration < maxIter; iteration++) {
       // Build messages list for LLM
       final messages = [
         Message(role: 'system', content: systemPrompt),
         ...session.getMessages(),
       ];
+
+      // For non-English locales, tag the last user message with a language hint
+      // in the target language. This improves compliance with weaker models
+      // (e.g. Gemini Flash) that tend to follow conversation patterns over
+      // system instructions. The tag is on the copy, not the stored session.
+      if (resolvedLocale != 'en') {
+        final hint = _languageHint(resolvedLocale);
+        for (var i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role == 'user') {
+            messages[i] = messages[i].copyWith(
+              content: '${messages[i].content}\n\n[$hint]',
+            );
+            break;
+          }
+        }
+      }
 
       final totalChars =
           messages.fold<int>(0, (sum, m) => sum + m.content.length);
@@ -319,6 +336,16 @@ class AgentLoop {
       }
     });
   }
+
+  /// Brief language hint in the target language.
+  /// Appended to the last user message to nudge weaker models.
+  static String _languageHint(String locale) => switch (locale) {
+        'fr' => 'Réponds en français',
+        'es' => 'Responde en español',
+        'de' => 'Antworte auf Deutsch',
+        'it' => 'Rispondi in italiano',
+        _ => 'Reply in English',
+      };
 
   /// Build compact trace messages from a message list.
   List<LlmTraceMessage> _buildTraceMessages(List<Message> messages) {

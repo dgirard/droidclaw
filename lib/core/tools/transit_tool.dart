@@ -45,8 +45,8 @@ class TransitTool extends Tool {
       'Find public transit routes in France (metro, RER, bus, tram, train). '
       'Covers Ile-de-France (RATP, Transilien) and national trains (TGV, TER). '
       'Auto-selects the best API based on trip location. '
-      'Coordinates: use get_location for current position, or provide lat/lon. '
-      'Chain with geocode to resolve place names to coordinates.';
+      'Coordinates: geocode a known address (from knowledge context or user), '
+      'or get_location for current position.';
 
   @override
   Map<String, dynamic> get parameters => {

@@ -21,8 +21,8 @@ class WeatherTool extends Tool {
   String get description =>
       'Get weather forecast for a location (temperature, rain, wind, conditions). '
       'Uses Météo-France high-precision models (AROME 1.3km). No API key needed. '
-      'Provide coordinates from get_location or geocode. '
-      'Returns daily summary and hourly breakdown (morning/afternoon/evening).';
+      'Coordinates: use geocode with a known address (from knowledge context or user), '
+      'or get_location for current position only.';
 
   @override
   Map<String, dynamic> get parameters => {

@@ -1058,15 +1058,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get localeItalian => 'Italiano';
 
   @override
-  String get agentLanguageDirective => 'DEBES responder siempre en español.';
+  String get agentLanguageDirective =>
+      'RESPONSE LANGUAGE: SPANISH. You MUST always respond in Spanish. DEBES responder siempre en español.';
 
   @override
   String get agentKeyBehaviors =>
-      'Comportamientos clave:\n- Cuando el usuario hace una pregunta que requiere información, llama a la(s) herramienta(s) apropiada(s) inmediatamente sin pedir permiso.\n- Encadena herramientas cuando sea necesario: por ejemplo, si una herramienta necesita coordenadas pero el usuario da un nombre de lugar, llama primero a geocode para obtener coordenadas y luego pásalas a la siguiente herramienta.\n- Cuando necesites información actual, usa la herramienta web_search.\n- Cuando el usuario comparte información personal (dirección, preferencias, etc.), reconócela y recuérdala. NO llames a herramientas de ubicación o geocodificación para información que el usuario te está dando.\n- Solo llama a herramientas cuando el usuario haga una pregunta o solicitud que requiera información externa.\n- Sé conciso y útil. Usa formato markdown en tus respuestas.';
+      'Key behaviors:\n- BEFORE calling any tool, check the <knowledge_context> and memory above. If they already contain the answer (address, preference, contact, etc.), respond directly — do NOT call tools for information you already have.\n- Use knowledge data as tool input when chaining: if you know the user\'s home address from the knowledge context, pass it to geocode instead of calling get_location.\n- get_location returns the device CURRENT physical position only. Use it for \"where am I now\", \"nearest X\", \"from my current position\" — never for stored addresses or known places.\n- When you need information NOT in the knowledge context, call the appropriate tool(s) immediately without asking permission.\n- Chain tools when needed: if a tool requires coordinates but you have an address (from knowledge or the user), call geocode first.\n- When the user tells you personal information to remember (e.g. \"I live at...\", \"my dentist is...\"), just acknowledge and store it via knowledge_store. Do NOT call other tools or suggest actions in response.\n- Be concise and helpful. Use markdown formatting.';
 
   @override
   String get agentRespondInstructions =>
-      'Responde siempre en español, independientemente del idioma usado en los mensajes anteriores.';
+      'You MUST respond in Spanish. All your output text must be in Spanish. Responde siempre en español.';
 
   @override
   String get batteryCharging => 'cargando';
@@ -1224,7 +1225,7 @@ class AppLocalizationsEs extends AppLocalizations {
       'Reconocimiento de voz no disponible en este dispositivo';
 
   @override
-  String get agentSummarizeInstructions => 'Escribe el resumen en español.';
+  String get agentSummarizeInstructions => 'Write the summary in Spanish.';
 
   @override
   String get settingsExportConversations => 'Exportar conversaciones';

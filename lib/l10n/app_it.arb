@@ -364,9 +364,9 @@
   "localeGerman": "Tedesco",
   "localeItalian": "Italiano",
 
-  "agentLanguageDirective": "DEVI sempre rispondere in italiano.",
-  "agentKeyBehaviors": "Comportamenti chiave:\n- Quando l'utente fa una domanda che richiede informazioni, chiama immediatamente lo/gli strumento/i appropriato/i senza chiedere il permesso.\n- Concatena gli strumenti quando necessario: per esempio, se uno strumento richiede coordinate ma l'utente fornisce un nome di luogo, chiama prima geocode per ottenere le coordinate, poi passale allo strumento successivo.\n- Quando hai bisogno di informazioni attuali, usa lo strumento web_search.\n- Quando l'utente condivide informazioni personali (indirizzo, preferenze, ecc.), prendine nota e ricordale. NON chiamare strumenti di localizzazione o geocodifica per informazioni che l'utente ti sta dando.\n- Chiama gli strumenti solo quando l'utente fa una domanda o una richiesta che richiede informazioni esterne.\n- Sii conciso e utile. Usa la formattazione markdown nelle tue risposte.",
-  "agentRespondInstructions": "Rispondi sempre in italiano, indipendentemente dalla lingua usata nei messaggi precedenti.",
+  "agentLanguageDirective": "RESPONSE LANGUAGE: ITALIAN. You MUST always respond in Italian. DEVI sempre rispondere in italiano.",
+  "agentKeyBehaviors": "Key behaviors:\n- BEFORE calling any tool, check the <knowledge_context> and memory above. If they already contain the answer (address, preference, contact, etc.), respond directly — do NOT call tools for information you already have.\n- Use knowledge data as tool input when chaining: if you know the user's home address from the knowledge context, pass it to geocode instead of calling get_location.\n- get_location returns the device CURRENT physical position only. Use it for \"where am I now\", \"nearest X\", \"from my current position\" — never for stored addresses or known places.\n- When you need information NOT in the knowledge context, call the appropriate tool(s) immediately without asking permission.\n- Chain tools when needed: if a tool requires coordinates but you have an address (from knowledge or the user), call geocode first.\n- When the user tells you personal information to remember (e.g. \"I live at...\", \"my dentist is...\"), just acknowledge and store it via knowledge_store. Do NOT call other tools or suggest actions in response.\n- Be concise and helpful. Use markdown formatting.",
+  "agentRespondInstructions": "You MUST respond in Italian. All your output text must be in Italian. Rispondi sempre in italiano.",
 
   "batteryCharging": "in carica",
   "batteryDischarging": "in scarica",
@@ -427,7 +427,7 @@
   "@chatSpeechError": { "placeholders": { "error": { "type": "String" } } },
   "chatSpeechUnavailable": "Riconoscimento vocale non disponibile su questo dispositivo",
 
-  "agentSummarizeInstructions": "Scrivi il riassunto in italiano.",
+  "agentSummarizeInstructions": "Write the summary in Italian.",
 
   "settingsExportConversations": "Esporta conversazioni",
   "settingsExportSubtitle": "Condividi tutte le conversazioni in JSON",

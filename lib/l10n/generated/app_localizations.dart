@@ -1973,19 +1973,19 @@ abstract class AppLocalizations {
   /// No description provided for @agentLanguageDirective.
   ///
   /// In en, this message translates to:
-  /// **'You MUST respond in English at all times.'**
+  /// **'RESPONSE LANGUAGE: ENGLISH. You MUST always respond in English.'**
   String get agentLanguageDirective;
 
   /// No description provided for @agentKeyBehaviors.
   ///
   /// In en, this message translates to:
-  /// **'Key behaviors:\n- When the user asks a question that requires information, call the appropriate tool(s) immediately without asking for permission.\n- Chain tools when needed: for example, if a tool requires coordinates but the user gives a place name, call geocode first to get coordinates, then pass them to the next tool.\n- When you need current information, use the web_search tool.\n- When the user shares personal information (address, preferences, etc.), acknowledge and remember it. Do NOT call location or geocoding tools for information the user is giving you.\n- Only call tools when the user asks a question or makes a request that requires external information.\n- Be concise and helpful. Use markdown formatting in your responses.'**
+  /// **'Key behaviors:\n- BEFORE calling any tool, check the <knowledge_context> and memory above. If they already contain the answer (address, preference, contact, etc.), respond directly — do NOT call tools for information you already have.\n- Use knowledge data as tool input when chaining: if you know the user\'s home address from the knowledge context, pass it to geocode instead of calling get_location.\n- get_location returns the device CURRENT physical position only. Use it for \"where am I now\", \"nearest X\", \"from my current position\" — never for stored addresses or known places.\n- When you need information NOT in the knowledge context, call the appropriate tool(s) immediately without asking permission.\n- Chain tools when needed: if a tool requires coordinates but you have an address (from knowledge or the user), call geocode first.\n- When the user tells you personal information to remember (e.g. \"I live at...\", \"my dentist is...\"), just acknowledge and store it via knowledge_store. Do NOT call other tools or suggest actions in response.\n- Be concise and helpful. Use markdown formatting.'**
   String get agentKeyBehaviors;
 
   /// No description provided for @agentRespondInstructions.
   ///
   /// In en, this message translates to:
-  /// **'Always respond in English, regardless of the language used in previous messages.'**
+  /// **'You MUST respond in English. All your output text must be in English.'**
   String get agentRespondInstructions;
 
   /// No description provided for @batteryCharging.

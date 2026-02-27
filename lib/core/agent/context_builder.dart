@@ -66,9 +66,10 @@ class ContextBuilder {
           ? ' The knowledge data below is stored in ${KnowledgeConfig.languageName(kbLanguage!)}.'
           : '';
       buffer.writeln(
-          'The following structured knowledge was automatically extracted from previous conversations. '
-          'Use it to provide context-aware responses. The memory notes above are user-curated, '
-          'while this knowledge graph is auto-extracted — both are complementary.$langNote');
+          'KNOWLEDGE BASE — facts from previous conversations. '
+          'Answer directly from this data when it contains the requested information. '
+          'Only call tools when the knowledge base does NOT have what you need, '
+          'or when you need to perform an action (set alarm, create event, get directions, etc.).$langNote');
       buffer.writeln('<knowledge_context data-only="true">');
       buffer.writeln(knowledgeContext);
       buffer.writeln('</knowledge_context>');
@@ -83,7 +84,10 @@ class ContextBuilder {
     }
 
     // 7. Language instruction — positioned last for maximum LLM influence
-    buffer.writeln('IMPORTANT: ${tr(locale).agentRespondInstructions}');
+    // Use triple reinforcement: the directive in the identity, tool result language note,
+    // and this final instruction all work together
+    buffer.writeln('=== LANGUAGE REQUIREMENT ===');
+    buffer.writeln(tr(locale).agentRespondInstructions);
 
     return buffer.toString().trimRight();
   }
