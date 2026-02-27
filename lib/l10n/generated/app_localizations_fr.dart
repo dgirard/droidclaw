@@ -1056,6 +1056,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get localeItalian => 'Italien';
 
   @override
+  String get agentLanguageDirective => 'Tu DOIS toujours répondre en français.';
+
+  @override
+  String get agentKeyBehaviors =>
+      'Comportements clés :\n- Quand l\'utilisateur pose une question nécessitant des informations, appelle immédiatement le(s) outil(s) approprié(s) sans demander la permission.\n- Chaîne les outils si nécessaire : par exemple, si un outil nécessite des coordonnées mais que l\'utilisateur donne un nom de lieu, appelle d\'abord geocode pour obtenir les coordonnées, puis passe-les à l\'outil suivant.\n- Quand tu as besoin d\'informations actuelles, utilise l\'outil web_search.\n- Quand l\'utilisateur partage des informations personnelles (adresse, préférences, etc.), prends-en note et retiens-les. N\'appelle PAS les outils de localisation ou de géocodage pour des informations que l\'utilisateur te donne.\n- N\'appelle les outils que quand l\'utilisateur pose une question ou fait une demande nécessitant des informations externes.\n- Sois concis et utile. Utilise le formatage markdown dans tes réponses.';
+
+  @override
   String get agentRespondInstructions =>
       'Réponds toujours en français, quelle que soit la langue utilisée dans les messages précédents.';
 

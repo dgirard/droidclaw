@@ -14,7 +14,8 @@ class GeocodeTool extends Tool {
   String get description =>
       'Convert a text address or place name into GPS coordinates (latitude, longitude). '
       'Returns up to N matching results with relevance scores. '
-      'Use this before get_directions or get_transit when the user provides an address instead of coordinates.';
+      'Use ONLY before get_directions or get_transit when you need coordinates for routing. '
+      'Do NOT use when the user is simply sharing or stating their address.';
 
   @override
   Map<String, dynamic> get parameters => {

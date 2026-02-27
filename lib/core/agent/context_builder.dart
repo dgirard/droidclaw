@@ -89,19 +89,17 @@ class ContextBuilder {
   }
 
   String _buildIdentity() {
+    final l = tr(locale);
     final now = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
     return '''You are ${AppConstants.appName}, a personal AI assistant running on Android.
+${l.agentLanguageDirective}
 Current time: $now
 Platform: ${Platform.operatingSystem}
 Version: ${AppConstants.appVersion}
 
-You have access to tools listed below. Use them proactively to answer the user's request — do NOT ask for permission before calling a tool.
+You have access to tools listed below.
 
-Key behaviors:
-- When the user asks a question that requires information, call the appropriate tool(s) immediately.
-- Chain tools when needed: for example, if a tool requires coordinates but the user gives a place name, call geocode first to get coordinates, then pass them to the next tool.
-- When you need current information, use the web_search tool.
-- Be concise and helpful. Use markdown formatting in your responses.''';
+${l.agentKeyBehaviors}''';
   }
 
   Future<String> _loadBootstrapFiles() async {

@@ -1058,6 +1058,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get localeItalian => 'Italiano';
 
   @override
+  String get agentLanguageDirective => 'DEBES responder siempre en español.';
+
+  @override
+  String get agentKeyBehaviors =>
+      'Comportamientos clave:\n- Cuando el usuario hace una pregunta que requiere información, llama a la(s) herramienta(s) apropiada(s) inmediatamente sin pedir permiso.\n- Encadena herramientas cuando sea necesario: por ejemplo, si una herramienta necesita coordenadas pero el usuario da un nombre de lugar, llama primero a geocode para obtener coordenadas y luego pásalas a la siguiente herramienta.\n- Cuando necesites información actual, usa la herramienta web_search.\n- Cuando el usuario comparte información personal (dirección, preferencias, etc.), reconócela y recuérdala. NO llames a herramientas de ubicación o geocodificación para información que el usuario te está dando.\n- Solo llama a herramientas cuando el usuario haga una pregunta o solicitud que requiera información externa.\n- Sé conciso y útil. Usa formato markdown en tus respuestas.';
+
+  @override
   String get agentRespondInstructions =>
       'Responde siempre en español, independientemente del idioma usado en los mensajes anteriores.';
 

@@ -16,7 +16,9 @@ class LocationTool extends Tool {
   @override
   String get description =>
       'Get the device current GPS location (latitude, longitude, accuracy). '
-      'Use when the user asks about their location or needs nearby information.';
+      'Use ONLY when you need the device real-time GPS coordinates '
+      '(e.g., nearby places, weather, directions from current position). '
+      'Do NOT use when the user tells you their address — they already know where they live.';
 
   @override
   Map<String, dynamic> get parameters => {
