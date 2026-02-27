@@ -11,7 +11,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
       : super(_openConnection(dbPath));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   static QueryExecutor _openConnection(String dbPath) {
     return driftDatabase(
@@ -24,6 +24,36 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            // Recreate FTS5 triggers to skip re-insert on deactivation/expiry
+            await customStatement('DROP TRIGGER IF EXISTS entities_au');
+            await customStatement('DROP TRIGGER IF EXISTS facts_au');
+            await customStatement('''
+              CREATE TRIGGER entities_au AFTER UPDATE ON entities BEGIN
+                INSERT INTO entities_fts(entities_fts, rowid, name, summary, entity_type)
+                VALUES('delete', old.id, old.name, old.summary, old.entity_type);
+                INSERT INTO entities_fts(rowid, name, summary, entity_type)
+                SELECT new.id, new.name, new.summary, new.entity_type
+                WHERE new.is_active = 1;
+              END
+            ''');
+            await customStatement('''
+              CREATE TRIGGER facts_au AFTER UPDATE ON facts BEGIN
+                INSERT INTO facts_fts(facts_fts, rowid, fact_key, fact_value)
+                VALUES('delete', old.id, old.fact_key, old.fact_value);
+                INSERT INTO facts_fts(rowid, fact_key, fact_value)
+                SELECT new.id, new.fact_key, new.fact_value
+                WHERE new.expired_at IS NULL;
+              END
+            ''');
+            // Rebuild FTS5 indexes to purge stale entries from past deactivations
+            await customStatement(
+                "INSERT INTO entities_fts(entities_fts) VALUES('rebuild')");
+            await customStatement(
+                "INSERT INTO facts_fts(facts_fts) VALUES('rebuild')");
+          }
+        },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
           await customStatement('PRAGMA journal_mode = WAL');
@@ -90,26 +120,53 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   }
 
   /// Deactivate cold entities older than a given epoch.
+  /// Full cleanup: expire facts, clear embeddings, delete aliases, deactivate relations.
   /// Returns the number of deactivated entities.
   Future<int> purgeColdEntities(int olderThanEpoch) async {
     return await transaction(() async {
-      await customStatement(
-        'UPDATE entities SET is_active = 0 '
+      // Identify candidates
+      final rows = await customSelect(
+        'SELECT id FROM entities '
         'WHERE temperature = \'cold\' AND last_accessed < ? AND is_active = 1',
-        [olderThanEpoch],
-      );
-      final result = await customSelect('SELECT changes() AS cnt').getSingle();
-      final count = result.read<int>('cnt');
-      // Also deactivate orphaned relations
-      if (count > 0) {
+        variables: [Variable.withInt(olderThanEpoch)],
+      ).get();
+
+      if (rows.isEmpty) return 0;
+
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      for (final row in rows) {
+        final id = row.read<int>('id');
+        // Expire facts (facts_au trigger cleans facts_fts)
         await customStatement(
-          'UPDATE relations SET is_active = 0 '
-          'WHERE is_active = 1 AND ('
-          '  source_id IN (SELECT id FROM entities WHERE is_active = 0) OR '
-          '  target_id IN (SELECT id FROM entities WHERE is_active = 0))',
+          'UPDATE facts SET expired_at = ? WHERE entity_id = ? AND expired_at IS NULL',
+          [now, id],
+        );
+        // Deactivate + clear embedding (entities_au trigger cleans entities_fts)
+        await customStatement(
+          'UPDATE entities SET is_active = 0, embedding = NULL WHERE id = ?',
+          [id],
+        );
+        // Deactivate relations
+        await customStatement(
+          'UPDATE relations SET is_active = 0 WHERE source_id = ? OR target_id = ?',
+          [id, id],
+        );
+        // Delete aliases
+        await customStatement(
+          'DELETE FROM aliases WHERE entity_id = ?',
+          [id],
         );
       }
-      return count;
+
+      // Deactivate any remaining orphaned relations
+      await customStatement(
+        'UPDATE relations SET is_active = 0 '
+        'WHERE is_active = 1 AND ('
+        '  source_id NOT IN (SELECT id FROM entities WHERE is_active = 1) OR'
+        '  target_id NOT IN (SELECT id FROM entities WHERE is_active = 1))',
+      );
+
+      return rows.length;
     });
   }
 
@@ -212,16 +269,30 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     return result.read<int>('cnt');
   }
 
-  /// Soft-delete an entity and its relations (set is_active = 0).
+  /// Soft-delete an entity: deactivate, expire facts, clear embedding,
+  /// delete aliases, deactivate relations. FTS5 triggers handle index cleanup.
   Future<void> deactivateEntity(int entityId) async {
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     await transaction(() async {
+      // Expire all active facts (facts_au trigger removes from facts_fts)
       await customStatement(
-        'UPDATE entities SET is_active = 0 WHERE id = ?',
+        'UPDATE facts SET expired_at = ? WHERE entity_id = ? AND expired_at IS NULL',
+        [now, entityId],
+      );
+      // Deactivate entity + clear embedding (entities_au trigger removes from entities_fts)
+      await customStatement(
+        'UPDATE entities SET is_active = 0, embedding = NULL WHERE id = ?',
         [entityId],
       );
+      // Deactivate relations
       await customStatement(
         'UPDATE relations SET is_active = 0 WHERE source_id = ? OR target_id = ?',
         [entityId, entityId],
+      );
+      // Delete orphaned aliases
+      await customStatement(
+        'DELETE FROM aliases WHERE entity_id = ?',
+        [entityId],
       );
     });
   }
@@ -262,6 +333,11 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
       await customStatement('DELETE FROM aliases');
       await customStatement('DELETE FROM summary_nodes');
       await customStatement('DELETE FROM entities');
+      // Safety net: ensure FTS5 indexes are definitively empty
+      await customStatement(
+          "INSERT INTO entities_fts(entities_fts) VALUES('delete-all')");
+      await customStatement(
+          "INSERT INTO facts_fts(facts_fts) VALUES('delete-all')");
     });
   }
 }

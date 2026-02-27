@@ -4003,6 +4003,10 @@ abstract class _$KnowledgeGraphDB extends GeneratedDatabase {
     'CREATE UNIQUE INDEX idx_facts_active ON facts (entity_id, fact_key) WHERE expired_at IS NULL',
   );
   late final Aliases aliases = Aliases(this);
+  late final Index idxAliasesUnique = Index(
+    'idx_aliases_unique',
+    'CREATE UNIQUE INDEX idx_aliases_unique ON aliases (alias_name, entity_id)',
+  );
   late final Index idxAliasesName = Index(
     'idx_aliases_name',
     'CREATE INDEX idx_aliases_name ON aliases (alias_name COLLATE NOCASE)',
@@ -4030,7 +4034,7 @@ abstract class _$KnowledgeGraphDB extends GeneratedDatabase {
     'entities_ad',
   );
   late final Trigger entitiesAu = Trigger(
-    'CREATE TRIGGER entities_au AFTER UPDATE ON entities BEGIN INSERT INTO entities_fts (entities_fts, "rowid", name, summary, entity_type) VALUES (\'delete\', old.id, old.name, old.summary, old.entity_type);INSERT INTO entities_fts ("rowid", name, summary, entity_type) VALUES (new.id, new.name, new.summary, new.entity_type);END',
+    'CREATE TRIGGER entities_au AFTER UPDATE ON entities BEGIN INSERT INTO entities_fts (entities_fts, "rowid", name, summary, entity_type) VALUES (\'delete\', old.id, old.name, old.summary, old.entity_type);INSERT INTO entities_fts ("rowid", name, summary, entity_type) SELECT new.id, new.name, new.summary, new.entity_type WHERE new.is_active = 1;END',
     'entities_au',
   );
   late final Trigger factsAi = Trigger(
@@ -4042,7 +4046,7 @@ abstract class _$KnowledgeGraphDB extends GeneratedDatabase {
     'facts_ad',
   );
   late final Trigger factsAu = Trigger(
-    'CREATE TRIGGER facts_au AFTER UPDATE ON facts BEGIN INSERT INTO facts_fts (facts_fts, "rowid", fact_key, fact_value) VALUES (\'delete\', old.id, old.fact_key, old.fact_value);INSERT INTO facts_fts ("rowid", fact_key, fact_value) VALUES (new.id, new.fact_key, new.fact_value);END',
+    'CREATE TRIGGER facts_au AFTER UPDATE ON facts BEGIN INSERT INTO facts_fts (facts_fts, "rowid", fact_key, fact_value) VALUES (\'delete\', old.id, old.fact_key, old.fact_value);INSERT INTO facts_fts ("rowid", fact_key, fact_value) SELECT new.id, new.fact_key, new.fact_value WHERE new.expired_at IS NULL;END',
     'facts_au',
   );
   Selectable<SearchEntitiesResult> searchEntities(String query, int lim) {
@@ -4076,9 +4080,9 @@ abstract class _$KnowledgeGraphDB extends GeneratedDatabase {
 
   Selectable<SearchFactsResult> searchFacts(String query, int lim) {
     return customSelect(
-      'SELECT f.*, bm25(facts_fts, 2.0, 5.0) AS rank FROM facts_fts JOIN facts AS f ON f.id = facts_fts."rowid" WHERE facts_fts MATCH ?1 AND f.expired_at IS NULL ORDER BY rank LIMIT ?2',
+      'SELECT f.*, bm25(facts_fts, 2.0, 5.0) AS rank FROM facts_fts JOIN facts AS f ON f.id = facts_fts."rowid" JOIN entities AS e ON e.id = f.entity_id WHERE facts_fts MATCH ?1 AND f.expired_at IS NULL AND e.is_active = 1 ORDER BY rank LIMIT ?2',
       variables: [Variable<String>(query), Variable<int>(lim)],
-      readsFrom: {factsFts, facts},
+      readsFrom: {factsFts, facts, entities},
     ).map(
       (QueryRow row) => SearchFactsResult(
         id: row.read<int>('id'),
@@ -4099,7 +4103,7 @@ abstract class _$KnowledgeGraphDB extends GeneratedDatabase {
 
   Selectable<FindNeighborsResult> findNeighbors(int entityId) {
     return customSelect(
-      'SELECT e.*, r.predicate, r.weight, r.confidence AS rel_confidence FROM relations AS r JOIN entities AS e ON((r.target_id = e.id AND r.source_id = ?1)OR(r.source_id = e.id AND r.target_id = ?1))WHERE r.is_active = 1 AND r.expired_at IS NULL ORDER BY r.weight DESC',
+      'SELECT e.*, r.predicate, r.weight, r.confidence AS rel_confidence FROM relations AS r JOIN entities AS e ON((r.target_id = e.id AND r.source_id = ?1)OR(r.source_id = e.id AND r.target_id = ?1))WHERE r.is_active = 1 AND r.expired_at IS NULL AND e.is_active = 1 ORDER BY r.weight DESC',
       variables: [Variable<int>(entityId)],
       readsFrom: {relations, entities},
     ).map(
@@ -4203,6 +4207,7 @@ abstract class _$KnowledgeGraphDB extends GeneratedDatabase {
     facts,
     idxFactsActive,
     aliases,
+    idxAliasesUnique,
     idxAliasesName,
     idxAliasesEntity,
     idxSummaryParent,

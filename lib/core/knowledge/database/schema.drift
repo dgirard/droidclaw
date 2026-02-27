@@ -150,7 +150,8 @@ CREATE TRIGGER entities_au AFTER UPDATE ON entities BEGIN
   INSERT INTO entities_fts(entities_fts, rowid, name, summary, entity_type)
   VALUES('delete', old.id, old.name, old.summary, old.entity_type);
   INSERT INTO entities_fts(rowid, name, summary, entity_type)
-  VALUES (new.id, new.name, new.summary, new.entity_type);
+  SELECT new.id, new.name, new.summary, new.entity_type
+  WHERE new.is_active = 1;
 END;
 
 -- FTS5 sync triggers for facts
@@ -168,7 +169,8 @@ CREATE TRIGGER facts_au AFTER UPDATE ON facts BEGIN
   INSERT INTO facts_fts(facts_fts, rowid, fact_key, fact_value)
   VALUES('delete', old.id, old.fact_key, old.fact_value);
   INSERT INTO facts_fts(rowid, fact_key, fact_value)
-  VALUES (new.id, new.fact_key, new.fact_value);
+  SELECT new.id, new.fact_key, new.fact_value
+  WHERE new.expired_at IS NULL;
 END;
 
 -- ══════════════════════════════════════════════
@@ -186,7 +188,8 @@ searchFacts:
   SELECT f.*, bm25(facts_fts, 2.0, 5.0) AS rank
   FROM facts_fts
   JOIN facts f ON f.id = facts_fts.rowid
-  WHERE facts_fts MATCH :query AND f.expired_at IS NULL
+  JOIN entities e ON e.id = f.entity_id
+  WHERE facts_fts MATCH :query AND f.expired_at IS NULL AND e.is_active = 1
   ORDER BY rank LIMIT :lim;
 
 findNeighbors:
@@ -196,7 +199,7 @@ findNeighbors:
     (r.target_id = e.id AND r.source_id = :entityId) OR
     (r.source_id = e.id AND r.target_id = :entityId)
   )
-  WHERE r.is_active = 1 AND r.expired_at IS NULL
+  WHERE r.is_active = 1 AND r.expired_at IS NULL AND e.is_active = 1
   ORDER BY r.weight DESC;
 
 resolveAlias:

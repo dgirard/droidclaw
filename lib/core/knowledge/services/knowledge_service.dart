@@ -198,9 +198,9 @@ class KnowledgeService {
     final results = <RankedEntity>[];
 
     for (final s in topK) {
-      // Load entity
+      // Load entity (skip deactivated as defense-in-depth)
       final entity = await db.getEntityById(s.entityId).getSingleOrNull();
-      if (entity == null) continue;
+      if (entity == null || entity.isActive == 0) continue;
 
       // Load active facts
       final facts = await db.getEntityFacts(s.entityId).get();
