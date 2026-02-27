@@ -275,19 +275,19 @@ Then regenerate l10n: `flutter gen-l10n`
 
 ## Acceptance Criteria
 
-- [ ] "Rebuild from conversations" button appears in KB settings when KB is enabled
-- [ ] Confirmation dialog shows session count and turn count before starting
-- [ ] Determinate progress indicator with "Processing X of Y..." text
-- [ ] Cancel button stops processing (already-processed data is retained)
-- [ ] Button is disabled during rebuild (no double-tap)
-- [ ] 2s delay between API calls (rate limit protection)
-- [ ] Message pairing skips tool/system messages and empty assistant messages
-- [ ] Session summaries are processed as standalone extraction turns
-- [ ] Stats refresh after rebuild completes
-- [ ] Completion snackbar shows processed/failed counts
-- [ ] All strings localized in 5 languages (EN/FR/ES/DE/IT)
-- [ ] `flutter analyze` — 0 issues
-- [ ] `agentLoopProvider` refactored to use `ingestionPipelineProvider` (no duplication)
+- [x] "Rebuild from conversations" button appears in KB settings when KB is enabled
+- [x] Confirmation dialog shows session count and turn count before starting
+- [x] Determinate progress indicator with "Processing X of Y..." text
+- [x] Cancel button stops processing (already-processed data is retained)
+- [x] Button is disabled during rebuild (no double-tap)
+- [x] 2s delay between API calls (rate limit protection)
+- [x] Message pairing skips tool/system messages and empty assistant messages
+- [x] Session summaries are processed as standalone extraction turns
+- [x] Stats refresh after rebuild completes
+- [x] Completion snackbar shows processed/failed counts
+- [x] All strings localized in 5 languages (EN/FR/ES/DE/IT)
+- [x] `flutter analyze` — 0 issues
+- [x] `agentLoopProvider` refactored to use `ingestionPipelineProvider` (no duplication)
 
 ## Edge Cases
 
