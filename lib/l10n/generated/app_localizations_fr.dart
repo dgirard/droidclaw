@@ -1402,6 +1402,14 @@ class AppLocalizationsFr extends AppLocalizations {
   String get knowledgeBrowseSubtitle => 'Inspecter les connaissances stockées';
 
   @override
+  String get knowledgeLanguageLabel => 'Langue de la base de connaissances';
+
+  @override
+  String knowledgeLanguageLocked(String language) {
+    return 'Toutes les connaissances sont stockées en $language. Modifier via Tout oublier.';
+  }
+
+  @override
   String get kgBrowserTitle => 'Explorateur de connaissances';
 
   @override

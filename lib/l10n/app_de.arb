@@ -487,6 +487,9 @@
 
   "knowledgeBrowse": "Entitäten durchsuchen",
   "knowledgeBrowseSubtitle": "Gespeichertes Wissen inspizieren",
+  "knowledgeLanguageLabel": "Sprache der Wissensdatenbank",
+  "knowledgeLanguageLocked": "Alles Wissen wird auf {language} gespeichert. Ändern über Alles vergessen.",
+  "@knowledgeLanguageLocked": { "placeholders": { "language": { "type": "String" } } },
   "kgBrowserTitle": "Wissensbrowser",
   "kgBrowserSearch": "Entitäten suchen...",
   "kgBrowserEmpty": "Keine Entitäten gefunden",

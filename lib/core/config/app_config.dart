@@ -295,10 +295,15 @@ class KnowledgeConfig {
   final int decayHalfLifeDays;
   final bool autoExtract;
 
+  /// Language for all KG data. Set to the user's resolved locale on first KG
+  /// enable, immutable afterwards (until "Forget All" resets it to null).
+  final String? kbLanguage;
+
   const KnowledgeConfig({
     this.enabled = false,
     this.decayHalfLifeDays = AppConstants.knowledgeDecayHalfLifeDays,
     this.autoExtract = true,
+    this.kbLanguage,
   });
 
   factory KnowledgeConfig.fromJson(Map<String, dynamic> json) =>
@@ -307,22 +312,36 @@ class KnowledgeConfig {
         decayHalfLifeDays: json['decay_half_life_days'] as int? ??
             AppConstants.knowledgeDecayHalfLifeDays,
         autoExtract: json['auto_extract'] as bool? ?? true,
+        kbLanguage: json['kb_language'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
         'enabled': enabled,
         'decay_half_life_days': decayHalfLifeDays,
         'auto_extract': autoExtract,
+        if (kbLanguage != null) 'kb_language': kbLanguage,
       };
 
   KnowledgeConfig copyWith({
     bool? enabled,
     int? decayHalfLifeDays,
     bool? autoExtract,
+    String? kbLanguage,
+    bool clearKbLanguage = false,
   }) =>
       KnowledgeConfig(
         enabled: enabled ?? this.enabled,
         decayHalfLifeDays: decayHalfLifeDays ?? this.decayHalfLifeDays,
         autoExtract: autoExtract ?? this.autoExtract,
+        kbLanguage: clearKbLanguage ? null : (kbLanguage ?? this.kbLanguage),
       );
+
+  /// Map locale code to full language name for LLM prompts.
+  static String languageName(String code) => switch (code) {
+        'fr' => 'French',
+        'es' => 'Spanish',
+        'de' => 'German',
+        'it' => 'Italian',
+        _ => 'English',
+      };
 }

@@ -1,3 +1,4 @@
+import '../config/app_config.dart';
 import '../knowledge/database/knowledge_graph_db.dart';
 import '../knowledge/services/entity_resolver.dart';
 import 'tool.dart';
@@ -9,17 +10,29 @@ import 'tool.dart';
 class KnowledgeStoreTool extends Tool {
   final KnowledgeGraphDB db;
   final EntityResolver resolver;
+  final String? kbLanguage;
 
-  KnowledgeStoreTool({required this.db, required this.resolver});
+  KnowledgeStoreTool({
+    required this.db,
+    required this.resolver,
+    this.kbLanguage,
+  });
 
   @override
   String get name => 'knowledge_store';
 
   @override
-  String get description =>
-      'Store a fact in the knowledge graph to remember it across conversations. '
-      'Use when the user explicitly asks you to remember something, or when '
-      'important information should be persisted.';
+  String get description {
+    final base =
+        'Store a fact in the knowledge graph to remember it across conversations. '
+        'Use when the user explicitly asks you to remember something, or when '
+        'important information should be persisted.';
+    if (kbLanguage == null) return base;
+    final langName = KnowledgeConfig.languageName(kbLanguage!);
+    return '$base '
+        'IMPORTANT: All entity names, keys, and values MUST be in $langName. '
+        'Translate if the conversation is in a different language.';
+  }
 
   @override
   Map<String, dynamic> get parameters => {

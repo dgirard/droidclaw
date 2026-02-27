@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../l10n/l10n.dart';
 import '../../shared/constants.dart';
+import '../config/app_config.dart';
 import '../skills/skill_loader.dart';
 import '../tools/tool.dart';
 import 'memory_manager.dart';
@@ -16,6 +17,7 @@ class ContextBuilder {
   final ToolRegistry toolRegistry;
   final String workspacePath;
   final String locale;
+  final String? kbLanguage;
 
   ContextBuilder({
     required this.memoryManager,
@@ -23,6 +25,7 @@ class ContextBuilder {
     required this.toolRegistry,
     required this.workspacePath,
     this.locale = 'en',
+    this.kbLanguage,
   });
 
   /// Build the complete system prompt.
@@ -59,10 +62,13 @@ class ContextBuilder {
 
     // 5. Knowledge Graph context (auto-extracted structured knowledge)
     if (knowledgeContext != null && knowledgeContext.isNotEmpty) {
+      final langNote = kbLanguage != null
+          ? ' The knowledge data below is stored in ${KnowledgeConfig.languageName(kbLanguage!)}.'
+          : '';
       buffer.writeln(
           'The following structured knowledge was automatically extracted from previous conversations. '
           'Use it to provide context-aware responses. The memory notes above are user-curated, '
-          'while this knowledge graph is auto-extracted — both are complementary.');
+          'while this knowledge graph is auto-extracted — both are complementary.$langNote');
       buffer.writeln('<knowledge_context data-only="true">');
       buffer.writeln(knowledgeContext);
       buffer.writeln('</knowledge_context>');

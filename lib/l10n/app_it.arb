@@ -487,6 +487,9 @@
 
   "knowledgeBrowse": "Esplora entità",
   "knowledgeBrowseSubtitle": "Ispeziona le conoscenze archiviate",
+  "knowledgeLanguageLabel": "Lingua della base di conoscenza",
+  "knowledgeLanguageLocked": "Tutta la conoscenza è archiviata in {language}. Modifica tramite Dimentica tutto.",
+  "@knowledgeLanguageLocked": { "placeholders": { "language": { "type": "String" } } },
   "kgBrowserTitle": "Browser conoscenze",
   "kgBrowserSearch": "Cerca entità...",
   "kgBrowserEmpty": "Nessuna entità trovata",

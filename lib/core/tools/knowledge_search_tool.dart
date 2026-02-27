@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../config/app_config.dart';
 import '../knowledge/services/knowledge_service.dart';
 import 'tool.dart';
 
@@ -9,18 +10,28 @@ import 'tool.dart';
 /// and returns ranked entities with their facts and relations.
 class KnowledgeSearchTool extends Tool {
   final KnowledgeService knowledgeService;
+  final String? kbLanguage;
 
-  KnowledgeSearchTool({required this.knowledgeService});
+  KnowledgeSearchTool({
+    required this.knowledgeService,
+    this.kbLanguage,
+  });
 
   @override
   String get name => 'knowledge_search';
 
   @override
-  String get description =>
-      'Search the knowledge graph for remembered information about people, '
-      'places, events, or concepts from past conversations. '
-      'Use this to recall facts, relationships, and context the user has '
-      'previously shared.';
+  String get description {
+    final base =
+        'Search the knowledge graph for remembered information about people, '
+        'places, events, or concepts from past conversations. '
+        'Use this to recall facts, relationships, and context the user has '
+        'previously shared.';
+    if (kbLanguage == null) return base;
+    final langName = KnowledgeConfig.languageName(kbLanguage!);
+    return '$base '
+        'Formulate your search query in $langName for best results.';
+  }
 
   @override
   Map<String, dynamic> get parameters => {

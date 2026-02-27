@@ -253,20 +253,35 @@ class AgentLoop {
   ///
   /// Uses a fast LLM call (max_tokens: 50) to bridge the semantic gap between
   /// natural language questions and stored entity/fact tokens.
-  /// Example: "Où est-ce que j'habite?" → "address home residence habite domicile lieu habitation"
+  /// When the KG has a fixed language, translates keywords to that language.
   Future<String> _expandQueryForKG(String userMessage) async {
     try {
+      final kbLang = config.knowledge.kbLanguage;
+      final String systemContent;
+      if (kbLang != null) {
+        final langName = KnowledgeConfig.languageName(kbLang);
+        systemContent =
+            'You are a keyword extractor for a knowledge graph search. '
+            'The knowledge base stores all data in $langName. '
+            'Given a user message, translate it to $langName if needed, '
+            'then output ONLY search keywords (single words) in $langName '
+            'that would match stored entities, facts, or relations. '
+            'Include: key terms, synonyms, and related concepts. '
+            'Output one line of space-separated keywords. '
+            'No punctuation, no explanations.';
+      } else {
+        systemContent =
+            'You are a keyword extractor for a knowledge graph search. '
+            'Given a user message, output ONLY search keywords (single words) '
+            'that would match stored entities, facts, or relations. '
+            'Include: the original key terms, synonyms, translations (FR/EN/DE/ES/IT), '
+            'and related concepts. Output one line of space-separated keywords. '
+            'No punctuation, no explanations.';
+      }
+
       final response = await provider.chat(
         messages: [
-          const Message(
-            role: 'system',
-            content: 'You are a keyword extractor for a knowledge graph search. '
-                'Given a user message, output ONLY search keywords (single words) '
-                'that would match stored entities, facts, or relations. '
-                'Include: the original key terms, synonyms, translations (FR/EN/DE/ES/IT), '
-                'and related concepts. Output one line of space-separated keywords. '
-                'No punctuation, no explanations.',
-          ),
+          Message(role: 'system', content: systemContent),
           Message(role: 'user', content: userMessage),
         ],
         model: config.agent.model,

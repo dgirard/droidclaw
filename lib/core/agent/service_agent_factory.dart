@@ -62,6 +62,7 @@ class ServiceAgentFactory {
     String? sncfApiKey,
     String? primApiKey,
     String locale = 'en',
+    String? kbLanguage,
     String? embeddingApiKey,
     String embeddingProvider = '',
     String embeddingModel = '',
@@ -189,21 +190,33 @@ class ServiceAgentFactory {
         if (config.knowledge.autoExtract) {
           final resolver = EntityResolver(kgDb);
           ingestionPipeline = IngestionPipeline(
-            extractor: EntityExtractor(provider: provider, model: config.agent.model),
+            extractor: EntityExtractor(
+              provider: provider,
+              model: config.agent.model,
+              kbLanguage: kbLanguage,
+            ),
             resolver: resolver,
             db: kgDb,
             embeddingProvider: embeddingProviderInstance,
             embeddingModel: embeddingModel,
             embeddingDimensions: embeddingDimensions,
+            kbLanguage: kbLanguage,
           );
         }
 
         if (!disabled.contains('knowledge_search')) {
-          registry.register(KnowledgeSearchTool(knowledgeService: knowledgeService));
+          registry.register(KnowledgeSearchTool(
+            knowledgeService: knowledgeService,
+            kbLanguage: kbLanguage,
+          ));
         }
         if (!disabled.contains('knowledge_store')) {
           final resolver = EntityResolver(kgDb);
-          registry.register(KnowledgeStoreTool(db: kgDb, resolver: resolver));
+          registry.register(KnowledgeStoreTool(
+            db: kgDb,
+            resolver: resolver,
+            kbLanguage: kbLanguage,
+          ));
         }
       } catch (_) {
         // KG init failed in service isolate — continue without it
@@ -225,6 +238,7 @@ class ServiceAgentFactory {
       toolRegistry: registry,
       workspacePath: workspacePath,
       locale: locale,
+      kbLanguage: kbLanguage,
     );
 
     // 7. Build AgentLoop

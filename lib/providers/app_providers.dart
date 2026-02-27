@@ -237,11 +237,18 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   final kgService = await ref.watch(knowledgeServiceProvider.future);
   if (kgDb != null && kgService != null) {
     if (!disabled.contains('knowledge_search')) {
-      registry.register(KnowledgeSearchTool(knowledgeService: kgService));
+      registry.register(KnowledgeSearchTool(
+        knowledgeService: kgService,
+        kbLanguage: config.knowledge.kbLanguage,
+      ));
     }
     if (!disabled.contains('knowledge_store')) {
       final resolver = EntityResolver(kgDb);
-      registry.register(KnowledgeStoreTool(db: kgDb, resolver: resolver));
+      registry.register(KnowledgeStoreTool(
+        db: kgDb,
+        resolver: resolver,
+        kbLanguage: config.knowledge.kbLanguage,
+      ));
     }
   }
 
@@ -311,6 +318,7 @@ final contextBuilderProvider = FutureProvider<ContextBuilder>((ref) async {
     toolRegistry: toolRegistry,
     workspacePath: workspacePath,
     locale: config.resolvedLocale,
+    kbLanguage: config.knowledge.kbLanguage,
   );
 });
 
@@ -331,12 +339,17 @@ final agentLoopProvider = FutureProvider<AgentLoop?>((ref) async {
   IngestionPipeline? ingestionPipeline;
   if (kgService2 != null && kgDb2 != null && config.knowledge.autoExtract) {
     ingestionPipeline = IngestionPipeline(
-      extractor: EntityExtractor(provider: provider, model: config.agent.model),
+      extractor: EntityExtractor(
+        provider: provider,
+        model: config.agent.model,
+        kbLanguage: config.knowledge.kbLanguage,
+      ),
       resolver: EntityResolver(kgDb2),
       db: kgDb2,
       embeddingProvider: embeddingProvider,
       embeddingModel: config.embedding.model,
       embeddingDimensions: config.embedding.dimensions,
+      kbLanguage: config.knowledge.kbLanguage,
     );
   }
 

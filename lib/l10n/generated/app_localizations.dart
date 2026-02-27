@@ -2558,6 +2558,18 @@ abstract class AppLocalizations {
   /// **'Inspect stored knowledge'**
   String get knowledgeBrowseSubtitle;
 
+  /// No description provided for @knowledgeLanguageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge language'**
+  String get knowledgeLanguageLabel;
+
+  /// No description provided for @knowledgeLanguageLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'All knowledge is stored in {language}. Change via Forget All.'**
+  String knowledgeLanguageLocked(String language);
+
   /// No description provided for @kgBrowserTitle.
   ///
   /// In en, this message translates to:

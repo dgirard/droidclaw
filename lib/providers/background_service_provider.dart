@@ -196,9 +196,15 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
       // Cache resolved locale
       await prefs.setString(AppConstants.cachedLocaleKey, config.resolvedLocale);
 
-      // Cache Knowledge Graph enabled flag
+      // Cache Knowledge Graph enabled flag + language
       await prefs.setBool(
           AppConstants.cachedKnowledgeEnabledKey, config.knowledge.enabled);
+      final kbLang = config.knowledge.kbLanguage;
+      if (kbLang != null) {
+        await prefs.setString(AppConstants.cachedKbLanguageKey, kbLang);
+      } else {
+        await prefs.remove(AppConstants.cachedKbLanguageKey);
+      }
 
       // Cache embedding provider config
       final embeddingKey = await configStorage.getEmbeddingApiKey();

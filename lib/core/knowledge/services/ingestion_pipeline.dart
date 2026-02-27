@@ -25,6 +25,9 @@ class IngestionPipeline {
   /// Output dimensions for embeddings.
   final int embeddingDimensions;
 
+  /// The language all KG data is stored in (passed through to EntityExtractor).
+  final String? kbLanguage;
+
   IngestionPipeline({
     required this.extractor,
     required this.resolver,
@@ -32,6 +35,7 @@ class IngestionPipeline {
     this.embeddingProvider,
     this.embeddingModel = '',
     this.embeddingDimensions = 768,
+    this.kbLanguage,
   });
 
   /// Extract and store knowledge from a conversation turn.

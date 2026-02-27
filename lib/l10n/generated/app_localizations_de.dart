@@ -1402,6 +1402,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get knowledgeBrowseSubtitle => 'Gespeichertes Wissen inspizieren';
 
   @override
+  String get knowledgeLanguageLabel => 'Sprache der Wissensdatenbank';
+
+  @override
+  String knowledgeLanguageLocked(String language) {
+    return 'Alles Wissen wird auf $language gespeichert. Ändern über Alles vergessen.';
+  }
+
+  @override
   String get kgBrowserTitle => 'Wissensbrowser';
 
   @override

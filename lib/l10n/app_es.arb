@@ -487,6 +487,9 @@
 
   "knowledgeBrowse": "Explorar entidades",
   "knowledgeBrowseSubtitle": "Inspeccionar el conocimiento almacenado",
+  "knowledgeLanguageLabel": "Idioma de la base de conocimiento",
+  "knowledgeLanguageLocked": "Todo el conocimiento se almacena en {language}. Cambiar mediante Olvidar todo.",
+  "@knowledgeLanguageLocked": { "placeholders": { "language": { "type": "String" } } },
   "kgBrowserTitle": "Explorador de conocimiento",
   "kgBrowserSearch": "Buscar entidades...",
   "kgBrowserEmpty": "No se encontraron entidades",

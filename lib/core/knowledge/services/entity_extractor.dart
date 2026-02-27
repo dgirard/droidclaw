@@ -72,9 +72,20 @@ class EntityExtractor {
   final LLMProvider provider;
   final String model;
 
-  EntityExtractor({required this.provider, required this.model});
+  /// The language all extracted data must be stored in (e.g. 'en', 'fr').
+  /// When null, extraction defaults to English.
+  final String? kbLanguage;
 
-  static const _systemPrompt = '''You are an entity extraction system. Extract entities, relations, and facts from the conversation below.
+  EntityExtractor({
+    required this.provider,
+    required this.model,
+    this.kbLanguage,
+  });
+
+  /// Build the extraction system prompt, including a language directive
+  /// at the end (recency bias) when a KB language is set.
+  String get _systemPrompt {
+    final base = '''You are an entity extraction system. Extract entities, relations, and facts from the conversation below.
 
 Return ONLY valid JSON with this exact structure:
 {
@@ -90,6 +101,23 @@ Rules:
 - Facts capture attributes: appointments, preferences, addresses, phone numbers, dates, etc.
 - If nothing meaningful to extract, return {"entities": [], "relations": [], "facts": []}.
 - Return raw JSON only, no markdown fences, no explanation.''';
+
+    if (kbLanguage == null) return base;
+
+    final langName = _languageName(kbLanguage!);
+    return '$base\n\n'
+        'IMPORTANT: All entity names, fact keys, fact values, relation predicates, '
+        'and entity summaries MUST be in $langName. If the conversation is in a '
+        'different language, translate all extracted data to $langName.';
+  }
+
+  static String _languageName(String code) => switch (code) {
+        'fr' => 'French',
+        'es' => 'Spanish',
+        'de' => 'German',
+        'it' => 'Italian',
+        _ => 'English',
+      };
 
   /// Extract entities, relations, and facts from a conversation turn.
   Future<ExtractionResult> extract({

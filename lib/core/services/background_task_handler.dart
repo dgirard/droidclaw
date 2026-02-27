@@ -391,6 +391,7 @@ class BackgroundTaskHandler extends TaskHandler {
         sncfApiKey: prefs.getString(AppConstants.cachedSncfApiKeyKey),
         primApiKey: prefs.getString(AppConstants.cachedPrimApiKeyKey),
         locale: prefs.getString(AppConstants.cachedLocaleKey) ?? 'en',
+        kbLanguage: prefs.getString(AppConstants.cachedKbLanguageKey),
         embeddingApiKey:
             prefs.getString(AppConstants.cachedEmbeddingApiKeyKey),
         embeddingProvider:

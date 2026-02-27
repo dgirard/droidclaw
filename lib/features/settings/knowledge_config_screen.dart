@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import '../../core/config/app_config.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 import '../../shared/constants.dart';
@@ -93,6 +94,17 @@ class _KnowledgeConfigScreenState
               onChanged: (value) => _toggleAutoExtract(value),
             ),
 
+            // KB language display (read-only)
+            if (config.knowledge.kbLanguage != null) ...[
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.language),
+                title: Text(l.knowledgeLanguageLabel),
+                subtitle: Text(l.knowledgeLanguageLocked(
+                    KnowledgeConfig.languageName(config.knowledge.kbLanguage!))),
+              ),
+            ],
+
             const Divider(),
 
             // Stats section
@@ -156,9 +168,14 @@ class _KnowledgeConfigScreenState
 
   void _toggleEnabled(bool value) {
     final config = ref.read(appConfigProvider);
-    final newConfig = config.copyWith(
-      knowledge: config.knowledge.copyWith(enabled: value),
-    );
+    var kgConfig = config.knowledge.copyWith(enabled: value);
+
+    // Set kbLanguage on first enable (when null)
+    if (value && kgConfig.kbLanguage == null) {
+      kgConfig = kgConfig.copyWith(kbLanguage: config.resolvedLocale);
+    }
+
+    final newConfig = config.copyWith(knowledge: kgConfig);
     ref.read(configStorageProvider).save(newConfig);
     ref.read(appConfigProvider.notifier).update(newConfig);
 
@@ -211,6 +228,15 @@ class _KnowledgeConfigScreenState
       try {
         final kgService = await ref.read(knowledgeServiceProvider.future);
         await kgService?.deleteAll();
+
+        // Reset kbLanguage so next enable sets a fresh language
+        final config = ref.read(appConfigProvider);
+        final newConfig = config.copyWith(
+          knowledge: config.knowledge.copyWith(clearKbLanguage: true),
+        );
+        ref.read(configStorageProvider).save(newConfig);
+        ref.read(appConfigProvider.notifier).update(newConfig);
+
         if (mounted) {
           messenger.showSnackBar(
             SnackBar(content: Text(l.knowledgeForgotten)),

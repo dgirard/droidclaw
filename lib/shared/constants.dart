@@ -67,6 +67,7 @@ class AppConstants {
   static const int knowledgeDecayHalfLifeDays = 30;
   static const int knowledgeMaxContextChars = 2000;
   static const String cachedKnowledgeEnabledKey = 'cached_knowledge_enabled';
+  static const String cachedKbLanguageKey = 'cached_kb_language';
 
   // Cached secrets for service isolate (SharedPreferences mirror of SecureStorage)
   static const String cachedApiKeyKey = 'cached_api_key';
