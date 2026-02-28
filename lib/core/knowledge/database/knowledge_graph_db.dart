@@ -29,14 +29,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
             // v1→3 or v2→3: drop all FTS5 triggers and tables, recreate cleanly.
             // Fixes: v1 triggers lacked is_active/expired_at awareness,
             //        v2 'rebuild' command corrupted FTS5 indexes.
-            await customStatement('DROP TRIGGER IF EXISTS entities_ai');
-            await customStatement('DROP TRIGGER IF EXISTS entities_ad');
-            await customStatement('DROP TRIGGER IF EXISTS entities_au');
-            await customStatement('DROP TRIGGER IF EXISTS facts_ai');
-            await customStatement('DROP TRIGGER IF EXISTS facts_ad');
-            await customStatement('DROP TRIGGER IF EXISTS facts_au');
-            await customStatement('DROP TABLE IF EXISTS entities_fts');
-            await customStatement('DROP TABLE IF EXISTS facts_fts');
+            await _dropFts5TablesAndTriggers();
             await _createFts5Tables();
           }
         },
@@ -47,7 +40,20 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
         },
       );
 
+  /// Drop FTS5 triggers and virtual tables (inverse of [_createFts5Tables]).
+  Future<void> _dropFts5TablesAndTriggers() async {
+    await customStatement('DROP TRIGGER IF EXISTS entities_ai');
+    await customStatement('DROP TRIGGER IF EXISTS entities_ad');
+    await customStatement('DROP TRIGGER IF EXISTS entities_au');
+    await customStatement('DROP TRIGGER IF EXISTS facts_ai');
+    await customStatement('DROP TRIGGER IF EXISTS facts_ad');
+    await customStatement('DROP TRIGGER IF EXISTS facts_au');
+    await customStatement('DROP TABLE IF EXISTS entities_fts');
+    await customStatement('DROP TABLE IF EXISTS facts_fts');
+  }
+
   /// Create FTS5 virtual tables and sync triggers.
+  /// Must stay in sync with schema.drift FTS5 definitions.
   Future<void> _createFts5Tables() async {
     await customStatement('''
       CREATE VIRTUAL TABLE entities_fts USING fts5(
@@ -192,27 +198,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
 
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       for (final row in rows) {
-        final id = row.read<int>('id');
-        // Expire facts (facts_au trigger cleans facts_fts)
-        await customStatement(
-          'UPDATE facts SET expired_at = ? WHERE entity_id = ? AND expired_at IS NULL',
-          [now, id],
-        );
-        // Deactivate + clear embedding (entities_au trigger cleans entities_fts)
-        await customStatement(
-          'UPDATE entities SET is_active = 0, embedding = NULL WHERE id = ?',
-          [id],
-        );
-        // Deactivate relations
-        await customStatement(
-          'UPDATE relations SET is_active = 0 WHERE source_id = ? OR target_id = ?',
-          [id, id],
-        );
-        // Delete aliases
-        await customStatement(
-          'DELETE FROM aliases WHERE entity_id = ?',
-          [id],
-        );
+        await _deactivateSingleEntity(row.read<int>('id'), now);
       }
 
       // Deactivate any remaining orphaned relations
@@ -331,27 +317,30 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   Future<void> deactivateEntity(int entityId) async {
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     await transaction(() async {
-      // Expire all active facts (facts_au trigger removes from facts_fts)
-      await customStatement(
-        'UPDATE facts SET expired_at = ? WHERE entity_id = ? AND expired_at IS NULL',
-        [now, entityId],
-      );
-      // Deactivate entity + clear embedding (entities_au trigger removes from entities_fts)
-      await customStatement(
-        'UPDATE entities SET is_active = 0, embedding = NULL WHERE id = ?',
-        [entityId],
-      );
-      // Deactivate relations
-      await customStatement(
-        'UPDATE relations SET is_active = 0 WHERE source_id = ? OR target_id = ?',
-        [entityId, entityId],
-      );
-      // Delete orphaned aliases
-      await customStatement(
-        'DELETE FROM aliases WHERE entity_id = ?',
-        [entityId],
-      );
+      await _deactivateSingleEntity(entityId, now);
     });
+  }
+
+  /// Shared cleanup for a single entity. Must be called inside a transaction.
+  /// Expires facts, deactivates entity + clears embedding, deactivates
+  /// relations, and deletes aliases. FTS5 triggers handle index cleanup.
+  Future<void> _deactivateSingleEntity(int entityId, int nowEpoch) async {
+    await customStatement(
+      'UPDATE facts SET expired_at = ? WHERE entity_id = ? AND expired_at IS NULL',
+      [nowEpoch, entityId],
+    );
+    await customStatement(
+      'UPDATE entities SET is_active = 0, embedding = NULL WHERE id = ?',
+      [entityId],
+    );
+    await customStatement(
+      'UPDATE relations SET is_active = 0 WHERE source_id = ? OR target_id = ?',
+      [entityId, entityId],
+    );
+    await customStatement(
+      'DELETE FROM aliases WHERE entity_id = ?',
+      [entityId],
+    );
   }
 
   /// Update embedding BLOB for an entity.
@@ -388,17 +377,9 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   /// DELETE triggers try to remove entries that were never indexed
   /// (expired facts, inactive entities).
   Future<void> deleteAllData() async {
-    // 1. Drop triggers to prevent FTS5 sync errors during mass DELETE
-    await customStatement('DROP TRIGGER IF EXISTS entities_ai');
-    await customStatement('DROP TRIGGER IF EXISTS entities_ad');
-    await customStatement('DROP TRIGGER IF EXISTS entities_au');
-    await customStatement('DROP TRIGGER IF EXISTS facts_ai');
-    await customStatement('DROP TRIGGER IF EXISTS facts_ad');
-    await customStatement('DROP TRIGGER IF EXISTS facts_au');
-    // 2. Drop FTS5 virtual tables
-    await customStatement('DROP TABLE IF EXISTS entities_fts');
-    await customStatement('DROP TABLE IF EXISTS facts_fts');
-    // 3. Delete all content rows
+    // 1. Drop FTS5 triggers + tables to prevent sync errors during mass DELETE
+    await _dropFts5TablesAndTriggers();
+    // 2. Delete all content rows
     await transaction(() async {
       await customStatement('DELETE FROM facts');
       await customStatement('DELETE FROM relations');

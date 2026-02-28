@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../../config/app_config.dart';
 import '../../config/llm_trace.dart';
 import '../../providers/llm_provider.dart';
 import '../../providers/llm_response.dart';
@@ -104,20 +105,12 @@ Rules:
 
     if (kbLanguage == null) return base;
 
-    final langName = _languageName(kbLanguage!);
+    final langName = KnowledgeConfig.languageName(kbLanguage!);
     return '$base\n\n'
         'IMPORTANT: All entity names, fact keys, fact values, relation predicates, '
         'and entity summaries MUST be in $langName. If the conversation is in a '
         'different language, translate all extracted data to $langName.';
   }
-
-  static String _languageName(String code) => switch (code) {
-        'fr' => 'French',
-        'es' => 'Spanish',
-        'de' => 'German',
-        'it' => 'Italian',
-        _ => 'English',
-      };
 
   /// Extract entities, relations, and facts from a conversation turn.
   Future<ExtractionResult> extract({
@@ -127,8 +120,9 @@ Rules:
     final conversationText =
         'User: $userMessage\nAssistant: $assistantResponse';
 
+    final prompt = _systemPrompt;
     final extractMessages = [
-      Message(role: 'system', content: _systemPrompt),
+      Message(role: 'system', content: prompt),
       Message(role: 'user', content: conversationText),
     ];
     final sw = Stopwatch()..start();
@@ -145,9 +139,9 @@ Rules:
         model: model,
         callType: 'extract',
         messageCount: extractMessages.length,
-        systemPromptChars: _systemPrompt.length,
+        systemPromptChars: prompt.length,
         systemPromptPreview:
-            _systemPrompt.substring(0, min(500, _systemPrompt.length)),
+            prompt.substring(0, min(500, prompt.length)),
         messages: extractMessages
             .map((m) => LlmTraceMessage(
                   role: m.role,
@@ -174,9 +168,9 @@ Rules:
         model: model,
         callType: 'extract',
         messageCount: extractMessages.length,
-        systemPromptChars: _systemPrompt.length,
+        systemPromptChars: prompt.length,
         systemPromptPreview:
-            _systemPrompt.substring(0, min(500, _systemPrompt.length)),
+            prompt.substring(0, min(500, prompt.length)),
         messages: extractMessages
             .map((m) => LlmTraceMessage(
                   role: m.role,

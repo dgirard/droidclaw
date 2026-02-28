@@ -200,7 +200,6 @@ class ServiceAgentFactory {
             embeddingProvider: embeddingProviderInstance,
             embeddingModel: embeddingModel,
             embeddingDimensions: embeddingDimensions,
-            kbLanguage: kbLanguage,
           );
         }
 

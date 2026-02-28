@@ -348,7 +348,6 @@ final ingestionPipelineProvider =
     embeddingProvider: embeddingProvider,
     embeddingModel: config.embedding.model,
     embeddingDimensions: config.embedding.dimensions,
-    kbLanguage: config.knowledge.kbLanguage,
   );
 });
 

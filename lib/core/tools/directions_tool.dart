@@ -195,13 +195,11 @@ class DirectionsTool extends Tool {
         : '';
 
     // Detect fallback: usedProfile differs from requested profile
-    final fallbackNote = usedProfile != profile
-        ? ' (NOTE: $mode profile temporarily unavailable — using ${_modeForProfile(usedProfile)} instead)'
+    final isFallback = usedProfile != profile;
+    final usedMode = isFallback ? _modeForProfile(usedProfile) : mode;
+    final fallbackNote = isFallback
+        ? ' (NOTE: $mode profile temporarily unavailable — using $usedMode instead)'
         : '';
-
-    final usedMode = usedProfile != profile
-        ? _modeForProfile(usedProfile)
-        : mode;
 
     final forLLM = StringBuffer()
       ..writeln('Route ($usedMode): ${distance.toStringAsFixed(1)} km, '
@@ -210,8 +208,8 @@ class DirectionsTool extends Tool {
       ..writeln('Turn-by-turn instructions:')
       ..writeln(steps.join('\n'));
 
-    final forUser = usedProfile != profile
-        ? '${distance.toStringAsFixed(1)} km, $durationStr ($usedMode — $mode indisponible)$elevationStr'
+    final forUser = isFallback
+        ? '${distance.toStringAsFixed(1)} km, $durationStr ($usedMode — $mode unavailable)$elevationStr'
         : '${distance.toStringAsFixed(1)} km, $durationStr ($mode)$elevationStr';
 
     return ToolResult.dual(forLLM: forLLM.toString(), forUser: forUser);
@@ -267,18 +265,17 @@ class DirectionsTool extends Tool {
         ? '${areaSqKm.toStringAsFixed(1)} km²'
         : 'unknown area';
 
-    final usedMode = usedProfile != profile
-        ? _modeForProfile(usedProfile)
-        : mode;
-    final fallbackNote = usedProfile != profile
+    final isFallback = usedProfile != profile;
+    final usedMode = isFallback ? _modeForProfile(usedProfile) : mode;
+    final fallbackNote = isFallback
         ? ' (NOTE: $mode profile temporarily unavailable — using $usedMode instead)'
         : '';
 
     return ToolResult.dual(
       forLLM: 'Isochrone ($usedMode, $rangeMinutes min): reachable area = $areaStr '
           'from ($lat, $lon).$fallbackNote',
-      forUser: usedProfile != profile
-          ? '$rangeMinutes min by $usedMode: $areaStr reachable ($mode indisponible)'
+      forUser: isFallback
+          ? '$rangeMinutes min by $usedMode: $areaStr reachable ($mode unavailable)'
           : '$rangeMinutes min by $mode: $areaStr reachable',
     );
   }
@@ -298,25 +295,37 @@ class DirectionsTool extends Tool {
       body: body,
     );
 
-    // If primary succeeds or is not a 400 (maintenance), return as-is.
-    if (response.statusCode != 400) {
+    // Only retry on 400 with known maintenance signature.
+    if (response.statusCode != 400 || !_isMaintenanceError(response)) {
       return (response, profile);
     }
 
-    // 400 likely means profile is down. Try fallbacks in order.
+    // Profile is down (maintenance). Try fallbacks in order.
     for (final fallback in _fallbacks(profile)) {
       final retryResponse = await http.post(
         Uri.parse('$_baseUrl/$endpoint/$fallback'),
         headers: headers,
         body: body,
       );
-      if (retryResponse.statusCode != 400) {
+      if (retryResponse.statusCode != 400 || !_isMaintenanceError(retryResponse)) {
         return (retryResponse, fallback);
       }
     }
 
     // All fallbacks also failed — return the original error.
     return (response, profile);
+  }
+
+  /// Check if a 400 response is an ORS maintenance error (profile reported as 'unknown').
+  static bool _isMaintenanceError(http.Response response) {
+    try {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final error = data['error'] as Map<String, dynamic>?;
+      final message = error?['message'] as String? ?? '';
+      return message.contains("incorrect value of 'unknown'");
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Reverse-lookup: ORS profile identifier → user-facing mode name.
