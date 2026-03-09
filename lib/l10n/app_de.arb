@@ -28,9 +28,11 @@
 
   "historyTitle": "Unterhaltungen",
   "historySectionChat": "Chat",
-  "historySectionCron": "Geplante Eingabeaufforderungen",
   "historySectionTelegram": "Telegram",
+  "historyTabConversations": "Unterhaltungen",
+  "historyTabScheduled": "Geplante Aufgaben",
   "historyEmpty": "Noch keine Unterhaltungen",
+  "historyEmptyScheduled": "Keine geplanten Aufgaben",
   "historyExecutions": "{count} Ausführungen - Letzte: {date}",
   "@historyExecutions": { "placeholders": { "count": { "type": "int" }, "date": { "type": "String" } } },
   "historyMessages": "{count} Nachrichten",
@@ -173,6 +175,7 @@
   "cronDeleteContent": "\"{name}\" löschen? Dies kann nicht rückgängig gemacht werden.",
   "@cronDeleteContent": { "placeholders": { "name": { "type": "String" } } },
   "cronViewExecutions": "Ausführungen anzeigen",
+  "cronRunNow": "Jetzt ausführen",
 
   "cronEditTitle": "Neue Eingabeaufforderung",
   "cronEditTitleEdit": "Eingabeaufforderung bearbeiten",

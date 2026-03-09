@@ -24,9 +24,11 @@
 
   "historyTitle": "Conversations",
   "historySectionChat": "Chat",
-  "historySectionCron": "Tâches planifiées",
   "historySectionTelegram": "Telegram",
+  "historyTabConversations": "Conversations",
+  "historyTabScheduled": "Tâches planifiées",
   "historyEmpty": "Aucune conversation",
+  "historyEmptyScheduled": "Aucune tâche planifiée",
   "historyExecutions": "{count} exécutions - Dernière : {date}",
   "historyMessages": "{count} messages",
   "historyNewConversation": "Nouvelle conversation",
@@ -158,6 +160,7 @@
   "cronDeleteTitle": "Supprimer la tâche planifiée ?",
   "cronDeleteContent": "Supprimer « {name} » ? Cette action est irréversible.",
   "cronViewExecutions": "Voir les exécutions",
+  "cronRunNow": "Lancer maintenant",
 
   "cronEditTitle": "Nouvelle tâche",
   "cronEditTitleEdit": "Modifier la tâche",

@@ -28,9 +28,11 @@
 
   "historyTitle": "Conversazioni",
   "historySectionChat": "Chat",
-  "historySectionCron": "Prompt Programmati",
   "historySectionTelegram": "Telegram",
+  "historyTabConversations": "Conversazioni",
+  "historyTabScheduled": "Attività pianificate",
   "historyEmpty": "Nessuna conversazione ancora",
+  "historyEmptyScheduled": "Nessuna attività pianificata",
   "historyExecutions": "{count} esecuzioni - Ultima: {date}",
   "@historyExecutions": { "placeholders": { "count": { "type": "int" }, "date": { "type": "String" } } },
   "historyMessages": "{count} messaggi",
@@ -173,6 +175,7 @@
   "cronDeleteContent": "Eliminare \"{name}\"? Questa azione non può essere annullata.",
   "@cronDeleteContent": { "placeholders": { "name": { "type": "String" } } },
   "cronViewExecutions": "Visualizza esecuzioni",
+  "cronRunNow": "Esegui ora",
 
   "cronEditTitle": "Nuovo Prompt",
   "cronEditTitleEdit": "Modifica Prompt",

@@ -304,11 +304,7 @@ class BackgroundTaskHandler extends TaskHandler {
 
   @override
   Future<void> onNotificationButtonPressed(String id) async {
-    if (id == 'btn_stop') {
-      FlutterForegroundTask.sendDataToMain({
-        'type': 'stop_requested',
-      });
-    }
+    // No buttons — service is managed from the app UI
   }
 
   @override

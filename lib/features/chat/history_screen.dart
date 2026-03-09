@@ -9,7 +9,7 @@ import '../../providers/background_service_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../shared/constants.dart';
 
-/// Screen showing all past conversations.
+/// Screen showing all past conversations, split into tabs.
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
 
@@ -19,115 +19,186 @@ class HistoryScreen extends ConsumerWidget {
     final currentSessionKey = ref.watch(chatProvider).sessionKey;
     // Rebuild when cron executions complete (sessions updated by service isolate)
     ref.watch(backgroundServiceProvider.select((s) => s.cronCompletionCount));
+    final l = AppLocalizations.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(AppLocalizations.of(context).historyTitle)),
-      body: sessionManagerAsync.when(
-        data: (sm) {
-          final allSessions = sm.getAllSessions();
-          final chatSessions = allSessions
-              .where((s) =>
-                  !s.key.startsWith(AppConstants.telegramSessionPrefix) &&
-                  !s.key.startsWith(AppConstants.cronSessionPrefix))
-              .toList();
-          final cronSessions = allSessions
-              .where(
-                  (s) => s.key.startsWith(AppConstants.cronSessionPrefix))
-              .toList();
-          final telegramSessions = allSessions
-              .where(
-                  (s) => s.key.startsWith(AppConstants.telegramSessionPrefix))
-              .toList();
-
-          // Group cron sessions by cron ID
-          final cronGroups = _groupCronSessions(cronSessions, ref);
-
-          if (chatSessions.isEmpty &&
-              cronGroups.isEmpty &&
-              telegramSessions.isEmpty) {
-            return _buildEmptyState(context);
-          }
-
-          return ListView(
-            children: [
-              if (chatSessions.isNotEmpty) ...[
-                _SectionHeader(title: AppLocalizations.of(context).historySectionChat),
-                ...chatSessions.map((s) => _SessionTile(
-                      session: s,
-                      isCurrent: s.key == currentSessionKey,
-                      onTap: () => _loadSession(context, ref, s.key),
-                      onDelete: () => _confirmDelete(context, ref, s),
-                    )),
-              ],
-              if (cronGroups.isNotEmpty) ...[
-                _SectionHeader(title: AppLocalizations.of(context).historySectionCron),
-                ...cronGroups.entries.map((entry) {
-                  final cronName = entry.value.name;
-                  final sessions = entry.value.sessions;
-                  final lastSession = sessions.first;
-                  return ListTile(
-                    leading: Icon(Icons.schedule,
-                        color: Theme.of(context).colorScheme.primary),
-                    title: Text(cronName, maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                    subtitle: Text(
-                      AppLocalizations.of(context).historyExecutions(sessions.length, _formatDate(context, lastSession.updated)),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 20),
-                          onPressed: () => _confirmDeleteCronGroup(
-                              context, ref, cronName, sessions),
-                        ),
-                        const Icon(Icons.chevron_right),
-                      ],
-                    ),
-                    onTap: () {
-                      if (sessions.length == 1) {
-                        _loadSession(context, ref, sessions.first.key);
-                      } else {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CronExecutionsScreen(
-                              cronName: cronName,
-                              sessions: sessions,
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                  );
-                }),
-              ],
-              if (telegramSessions.isNotEmpty) ...[
-                _SectionHeader(title: AppLocalizations.of(context).historySectionTelegram),
-                ...telegramSessions.map((s) => _SessionTile(
-                      session: s,
-                      isCurrent: s.key == currentSessionKey,
-                      isTelegram: true,
-                      onTap: () => _loadSession(context, ref, s.key),
-                      onDelete: () => _confirmDelete(context, ref, s),
-                    )),
-              ],
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l.historyTitle),
+          bottom: TabBar(
+            tabs: [
+              Tab(text: l.historyTabConversations),
+              Tab(text: l.historyTabScheduled),
             ],
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(AppLocalizations.of(context).historyError(e.toString()))),
+          ),
+        ),
+        body: sessionManagerAsync.when(
+          data: (sm) {
+            final allSessions = sm.getAllSessions();
+            final chatSessions = allSessions
+                .where((s) =>
+                    !s.key.startsWith(AppConstants.telegramSessionPrefix) &&
+                    !s.key.startsWith(AppConstants.cronSessionPrefix))
+                .toList();
+            final cronSessions = allSessions
+                .where(
+                    (s) => s.key.startsWith(AppConstants.cronSessionPrefix))
+                .toList();
+            final telegramSessions = allSessions
+                .where(
+                    (s) => s.key.startsWith(AppConstants.telegramSessionPrefix))
+                .toList();
+
+            final cronGroups = _groupCronSessions(cronSessions, ref);
+
+            return TabBarView(
+              children: [
+                // Tab 0: Conversations (chat + telegram)
+                _buildConversationsTab(
+                  context, ref, l,
+                  chatSessions, telegramSessions, currentSessionKey,
+                ),
+                // Tab 1: Scheduled Tasks (cron)
+                _buildScheduledTab(context, ref, l, cronGroups),
+              ],
+            );
+          },
+          loading: () => TabBarView(
+            children: [
+              const Center(child: CircularProgressIndicator()),
+              const Center(child: CircularProgressIndicator()),
+            ],
+          ),
+          error: (e, _) => TabBarView(
+            children: [
+              Center(child: Text(l.historyError(e.toString()))),
+              Center(child: Text(l.historyError(e.toString()))),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  /// Group cron sessions by cron ID, with name from config.
+  Widget _buildConversationsTab(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l,
+    List<Session> chatSessions,
+    List<Session> telegramSessions,
+    String currentSessionKey,
+  ) {
+    if (chatSessions.isEmpty && telegramSessions.isEmpty) {
+      return _buildEmptyState(
+        context,
+        icon: Icons.chat_bubble_outline,
+        message: l.historyEmpty,
+      );
+    }
+
+    return ListView(
+      children: [
+        if (chatSessions.isNotEmpty) ...[
+          _SectionHeader(title: l.historySectionChat),
+          ...chatSessions.map((s) => _SessionTile(
+                session: s,
+                isCurrent: s.key == currentSessionKey,
+                onTap: () => _loadSession(context, ref, s.key),
+                onDelete: () => _confirmDelete(context, ref, s),
+              )),
+        ],
+        if (telegramSessions.isNotEmpty) ...[
+          _SectionHeader(title: l.historySectionTelegram),
+          ...telegramSessions.map((s) => _SessionTile(
+                session: s,
+                isCurrent: s.key == currentSessionKey,
+                isTelegram: true,
+                onTap: () => _loadSession(context, ref, s.key),
+                onDelete: () => _confirmDelete(context, ref, s),
+              )),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildScheduledTab(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l,
+    Map<String, _CronGroup> cronGroups,
+  ) {
+    if (cronGroups.isEmpty) {
+      return _buildEmptyState(
+        context,
+        icon: Icons.schedule,
+        message: l.historyEmptyScheduled,
+      );
+    }
+
+    return ListView(
+      children: cronGroups.entries.map((entry) {
+        final group = entry.value;
+        final cronName = group.name;
+        final sessions = group.sessions;
+        final lastSession = sessions.first;
+        final prompt = group.prompt;
+        return ListTile(
+          leading: Icon(Icons.schedule,
+              color: Theme.of(context).colorScheme.primary),
+          title:
+              Text(cronName, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text(
+            l.historyExecutions(
+                sessions.length, _formatDate(context, lastSession.updated)),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (prompt != null)
+                IconButton(
+                  icon: Icon(Icons.play_arrow,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.primary),
+                  tooltip: l.cronRunNow,
+                  onPressed: () => runCronNow(context, ref, prompt),
+                ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 20),
+                onPressed: () => _confirmDeleteCronGroup(
+                    context, ref, cronName, sessions),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+          onTap: () {
+            if (sessions.length == 1) {
+              _loadSession(context, ref, sessions.first.key);
+            } else {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CronExecutionsScreen(
+                    cronName: cronName,
+                    sessions: sessions,
+                  ),
+                ),
+              );
+            }
+          },
+        );
+      }).toList(),
+    );
+  }
+
+  /// Group cron sessions by cron ID, with name and prompt from config.
   Map<String, _CronGroup> _groupCronSessions(
       List<Session> sessions, WidgetRef ref) {
     final configStorage = ref.read(configStorageProvider);
     final cronDefs = configStorage.getCronDefinitions();
     final cronNameMap = {for (final c in cronDefs) c.id: c.name};
+    final cronPromptMap = {for (final c in cronDefs) c.id: c.prompt};
 
     final groups = <String, _CronGroup>{};
     for (final session in sessions) {
@@ -153,7 +224,10 @@ class HistoryScreen extends ConsumerWidget {
       }
 
       final name = cronNameMap[cronId] ?? cronId;
-      groups.putIfAbsent(cronId, () => _CronGroup(name: name, sessions: []));
+      groups.putIfAbsent(
+          cronId,
+          () => _CronGroup(
+              name: name, prompt: cronPromptMap[cronId], sessions: []));
       groups[cronId]!.sessions.add(session);
     }
 
@@ -214,17 +288,18 @@ class HistoryScreen extends ConsumerWidget {
     }
   }
 
-  Widget _buildEmptyState(BuildContext context) {
+  Widget _buildEmptyState(BuildContext context,
+      {required IconData icon, required String message}) {
     final theme = Theme.of(context);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.chat_bubble_outline,
+          Icon(icon,
               size: 64,
               color: theme.colorScheme.primary.withValues(alpha: 0.5)),
           const SizedBox(height: 16),
-          Text(AppLocalizations.of(context).historyEmpty,
+          Text(message,
               style: theme.textTheme.bodyLarge
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         ],
@@ -235,8 +310,9 @@ class HistoryScreen extends ConsumerWidget {
 
 class _CronGroup {
   final String name;
+  final String? prompt;
   final List<Session> sessions;
-  _CronGroup({required this.name, required this.sessions});
+  _CronGroup({required this.name, this.prompt, required this.sessions});
 }
 
 /// Sub-screen showing individual executions of a cron.
@@ -396,6 +472,17 @@ class _SessionTile extends StatelessWidget {
       onTap: onTap,
     );
   }
+}
+
+/// Start a new chat session with the given prompt and navigate to chat.
+/// Shared by CronConfigScreen and HistoryScreen "Run Now" buttons.
+Future<void> runCronNow(
+    BuildContext context, WidgetRef ref, String prompt) async {
+  final navigator = Navigator.of(context);
+  final chatNotifier = ref.read(chatProvider.notifier);
+  await chatNotifier.newSession();
+  chatNotifier.sendMessage(prompt);
+  navigator.pushNamedAndRemoveUntil('/chat', (route) => false);
 }
 
 String _sessionTitle(Session session) {

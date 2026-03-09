@@ -128,6 +128,13 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
+                          icon: Icon(Icons.play_arrow,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.primary),
+                          tooltip: l.cronRunNow,
+                          onPressed: () => runCronNow(context, ref, cron.prompt),
+                        ),
+                        IconButton(
                           icon: const Icon(Icons.history, size: 20),
                           tooltip: l.cronViewExecutions,
                           onPressed: () => _viewExecutions(cron),

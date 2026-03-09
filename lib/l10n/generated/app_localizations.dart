@@ -224,23 +224,35 @@ abstract class AppLocalizations {
   /// **'Chat'**
   String get historySectionChat;
 
-  /// No description provided for @historySectionCron.
-  ///
-  /// In en, this message translates to:
-  /// **'Scheduled Prompts'**
-  String get historySectionCron;
-
   /// No description provided for @historySectionTelegram.
   ///
   /// In en, this message translates to:
   /// **'Telegram'**
   String get historySectionTelegram;
 
+  /// No description provided for @historyTabConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversations'**
+  String get historyTabConversations;
+
+  /// No description provided for @historyTabScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled Tasks'**
+  String get historyTabScheduled;
+
   /// No description provided for @historyEmpty.
   ///
   /// In en, this message translates to:
   /// **'No conversations yet'**
   String get historyEmpty;
+
+  /// No description provided for @historyEmptyScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'No scheduled tasks yet'**
+  String get historyEmptyScheduled;
 
   /// No description provided for @historyExecutions.
   ///
@@ -979,6 +991,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'View executions'**
   String get cronViewExecutions;
+
+  /// No description provided for @cronRunNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Run now'**
+  String get cronRunNow;
 
   /// No description provided for @cronEditTitle.
   ///
