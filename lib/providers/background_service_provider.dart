@@ -116,9 +116,7 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
       ],
       notificationTitle: l.notifServiceActive,
       notificationText: l.notifServiceRunning,
-      notificationButtons: [
-        const NotificationButton(id: 'btn_stop', text: 'Stop'),
-      ],
+      notificationButtons: [],
       callback: backgroundServiceCallback,
     );
 
@@ -258,14 +256,7 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
         // bump counter so CronConfigScreen can react via ref.watch().
         _reloadAfterCronCompletion();
 
-      case 'stop_requested':
-        _stopAll();
     }
-  }
-
-  Future<void> _stopAll() async {
-    await FlutterForegroundTask.stopService();
-    state = state.copyWith(isRunning: false);
   }
 
   /// Reload SharedPreferences after the service isolate updated lastRun,

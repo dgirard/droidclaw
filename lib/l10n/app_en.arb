@@ -28,9 +28,11 @@
 
   "historyTitle": "Conversations",
   "historySectionChat": "Chat",
-  "historySectionCron": "Scheduled Prompts",
   "historySectionTelegram": "Telegram",
+  "historyTabConversations": "Conversations",
+  "historyTabScheduled": "Scheduled Tasks",
   "historyEmpty": "No conversations yet",
+  "historyEmptyScheduled": "No scheduled tasks yet",
   "historyExecutions": "{count} executions - Last: {date}",
   "@historyExecutions": { "placeholders": { "count": { "type": "int" }, "date": { "type": "String" } } },
   "historyMessages": "{count} messages",
@@ -173,6 +175,7 @@
   "cronDeleteContent": "Delete \"{name}\"? This cannot be undone.",
   "@cronDeleteContent": { "placeholders": { "name": { "type": "String" } } },
   "cronViewExecutions": "View executions",
+  "cronRunNow": "Run now",
 
   "cronEditTitle": "New Prompt",
   "cronEditTitleEdit": "Edit Prompt",

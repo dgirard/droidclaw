@@ -78,13 +78,19 @@ class AppLocalizationsFr extends AppLocalizations {
   String get historySectionChat => 'Chat';
 
   @override
-  String get historySectionCron => 'Tâches planifiées';
-
-  @override
   String get historySectionTelegram => 'Telegram';
 
   @override
+  String get historyTabConversations => 'Conversations';
+
+  @override
+  String get historyTabScheduled => 'Tâches planifiées';
+
+  @override
   String get historyEmpty => 'Aucune conversation';
+
+  @override
+  String get historyEmptyScheduled => 'Aucune tâche planifiée';
 
   @override
   String historyExecutions(int count, String date) {
@@ -494,6 +500,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get cronViewExecutions => 'Voir les exécutions';
+
+  @override
+  String get cronRunNow => 'Lancer maintenant';
 
   @override
   String get cronEditTitle => 'Nouvelle tâche';

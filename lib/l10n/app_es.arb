@@ -28,9 +28,11 @@
 
   "historyTitle": "Conversaciones",
   "historySectionChat": "Chat",
-  "historySectionCron": "Tareas Programadas",
   "historySectionTelegram": "Telegram",
+  "historyTabConversations": "Conversaciones",
+  "historyTabScheduled": "Tareas programadas",
   "historyEmpty": "Aún no hay conversaciones",
+  "historyEmptyScheduled": "Sin tareas programadas",
   "historyExecutions": "{count} ejecuciones - Última: {date}",
   "@historyExecutions": { "placeholders": { "count": { "type": "int" }, "date": { "type": "String" } } },
   "historyMessages": "{count} mensajes",
@@ -173,6 +175,7 @@
   "cronDeleteContent": "¿Eliminar \"{name}\"? Esta acción no se puede deshacer.",
   "@cronDeleteContent": { "placeholders": { "name": { "type": "String" } } },
   "cronViewExecutions": "Ver ejecuciones",
+  "cronRunNow": "Ejecutar ahora",
 
   "cronEditTitle": "Nueva Tarea",
   "cronEditTitleEdit": "Editar Tarea",
