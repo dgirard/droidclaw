@@ -85,7 +85,7 @@ class AgentLoop {
     // Check if summarization is needed before processing
     if (_needsSummarization(session)) {
       yield const SummarizingEvent();
-      await _summarize(session);
+      await _summarize(session, sessionKey);
     }
 
     // Pre-query: inject Knowledge Graph context if available
@@ -325,6 +325,7 @@ class AgentLoop {
         final count = await ingestionPipeline!.extractAndStore(
           userMessage: userMessage,
           assistantResponse: assistantResponse,
+          sessionKey: sessionKey,
         );
         if (count > 0) {
           AppLogger.instance.debug(LogSource.agent,
@@ -376,7 +377,7 @@ class AgentLoop {
   }
 
   /// Summarize the conversation history.
-  Future<void> _summarize(Session session) async {
+  Future<void> _summarize(Session session, String sessionKey) async {
     final messagesToSummarize =
         session.truncateHistory(AppConstants.keepLastMessages);
     if (messagesToSummarize.isEmpty) return;
@@ -406,6 +407,7 @@ class AgentLoop {
         provider: provider.providerName,
         model: config.agent.model,
         callType: 'summarize',
+        sessionKey: sessionKey,
         messageCount: summarizeMessages.length,
         systemPromptChars: summarizeSystemPrompt.length,
         systemPromptPreview: summarizeSystemPrompt.substring(

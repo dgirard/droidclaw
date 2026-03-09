@@ -41,11 +41,13 @@ class IngestionPipeline {
   Future<int> extractAndStore({
     required String userMessage,
     required String assistantResponse,
+    String? sessionKey,
   }) async {
     // 1. Extract entities, relations, facts via LLM
     final result = await extractor.extract(
       userMessage: userMessage,
       assistantResponse: assistantResponse,
+      sessionKey: sessionKey,
     );
 
     if (result.isEmpty) return 0;

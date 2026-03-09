@@ -1,10 +1,40 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/config/llm_trace.dart';
 import '../../core/services/llm_trace_logger.dart';
 import '../../l10n/l10n.dart';
+import '../../shared/constants.dart';
+import 'llm_session_timeline_screen.dart';
 
-/// Screen displaying LLM call traces with stats header and filters.
+/// Session group for display.
+class _SessionGroup {
+  final String? sessionKey;
+  final String sessionType;
+  final String userPrompt;
+  final List<LlmTrace> traces;
+  final DateTime firstCall;
+  final int totalPromptTokens;
+  final int totalCompletionTokens;
+  final int totalLatencyMs;
+  final Set<String> allTools;
+  final bool hasError;
+
+  _SessionGroup({
+    required this.sessionKey,
+    required this.sessionType,
+    required this.userPrompt,
+    required this.traces,
+    required this.firstCall,
+    required this.totalPromptTokens,
+    required this.totalCompletionTokens,
+    required this.totalLatencyMs,
+    required this.allTools,
+    required this.hasError,
+  });
+}
+
+/// Screen displaying LLM call traces grouped by session.
 class LlmTracesScreen extends StatefulWidget {
   const LlmTracesScreen({super.key});
 
@@ -14,12 +44,12 @@ class LlmTracesScreen extends StatefulWidget {
 
 class _LlmTracesScreenState extends State<LlmTracesScreen> {
   List<LlmTrace> _traces = [];
-  List<LlmTrace> _filtered = [];
+  List<_SessionGroup> _groups = [];
   LlmTraceStats _stats = const LlmTraceStats();
   bool _loading = true;
 
-  String? _callTypeFilter; // null = all, 'chat', 'summarize', 'extract'
-  String? _providerFilter; // null = all, else provider name
+  String? _callTypeFilter;
+  String? _providerFilter;
 
   @override
   void initState() {
@@ -36,7 +66,7 @@ class _LlmTracesScreenState extends State<LlmTracesScreen> {
         setState(() {
           _traces = traces;
           _stats = stats;
-          _applyFilters();
+          _buildGroups();
           _loading = false;
         });
       }
@@ -45,15 +75,85 @@ class _LlmTracesScreenState extends State<LlmTracesScreen> {
     }
   }
 
-  void _applyFilters() {
-    var result = _traces;
+  void _buildGroups() {
+    // Apply filters first
+    var filtered = _traces.toList();
     if (_callTypeFilter != null) {
-      result = result.where((t) => t.callType == _callTypeFilter).toList();
+      filtered = filtered.where((t) => t.callType == _callTypeFilter).toList();
     }
     if (_providerFilter != null) {
-      result = result.where((t) => t.provider == _providerFilter).toList();
+      filtered = filtered.where((t) => t.provider == _providerFilter).toList();
     }
-    _filtered = result;
+
+    // Group by sessionKey
+    final grouped = <String, List<LlmTrace>>{};
+    for (final trace in filtered) {
+      final key = trace.sessionKey ?? '';
+      grouped.putIfAbsent(key, () => []).add(trace);
+    }
+
+    // Build session groups
+    final groups = <_SessionGroup>[];
+    for (final entry in grouped.entries) {
+      final sessionKey = entry.key.isEmpty ? null : entry.key;
+      final traces = entry.value
+        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+      int totalPrompt = 0;
+      int totalCompletion = 0;
+      int totalLatency = 0;
+      final allTools = <String>{};
+      bool hasError = false;
+
+      for (final t in traces) {
+        totalPrompt += t.promptTokens ?? 0;
+        totalCompletion += t.completionTokens ?? 0;
+        totalLatency += t.latencyMs;
+        allTools.addAll(t.toolCalls);
+        if (t.isError) hasError = true;
+      }
+
+      groups.add(_SessionGroup(
+        sessionKey: sessionKey,
+        sessionType: _detectSessionType(sessionKey, traces),
+        userPrompt: _extractUserPrompt(traces),
+        traces: traces,
+        firstCall: traces.first.timestamp,
+        totalPromptTokens: totalPrompt,
+        totalCompletionTokens: totalCompletion,
+        totalLatencyMs: totalLatency,
+        allTools: allTools,
+        hasError: hasError,
+      ));
+    }
+
+    // Sort by first call descending (newest first)
+    groups.sort((a, b) => b.firstCall.compareTo(a.firstCall));
+    _groups = groups;
+  }
+
+  String _detectSessionType(String? sessionKey, List<LlmTrace> traces) {
+    if (sessionKey == null) return 'unknown';
+    if (sessionKey.startsWith(AppConstants.cronSessionPrefix)) return 'cron';
+    if (traces.every((t) => t.callType == 'extract')) return 'extract';
+    return 'chat';
+  }
+
+  String _extractUserPrompt(List<LlmTrace> traces) {
+    final firstChat = traces.cast<LlmTrace?>().firstWhere(
+          (t) => t!.callType == 'chat',
+          orElse: () => null,
+        );
+    final target = firstChat ?? traces.first;
+
+    // Find last user message (the triggering prompt)
+    final userMsg = target.messages.cast<LlmTraceMessage?>().lastWhere(
+          (m) => m!.role == 'user',
+          orElse: () => null,
+        );
+    if (userMsg != null) return userMsg.preview;
+    if (target.messages.isNotEmpty) return target.messages.first.preview;
+    return target.sessionKey ?? target.callType;
   }
 
   Set<String> get _availableProviders =>
@@ -64,18 +164,6 @@ class _LlmTracesScreenState extends State<LlmTracesScreen> {
     if (tokens < 1000000) return '${(tokens / 1000).toStringAsFixed(1)}K';
     return '${(tokens / 1000000).toStringAsFixed(1)}M';
   }
-
-  String _absoluteTime(DateTime ts) =>
-      '${ts.hour.toString().padLeft(2, '0')}:'
-      '${ts.minute.toString().padLeft(2, '0')}:'
-      '${ts.second.toString().padLeft(2, '0')}';
-
-  String _callTypeLabel(String type, AppLocalizations l) => switch (type) {
-        'chat' => l.llmTracesFilterChat,
-        'summarize' => l.llmTracesFilterSummarize,
-        'extract' => l.llmTracesFilterExtract,
-        _ => type,
-      };
 
   Future<void> _clearAll() async {
     final l = AppLocalizations.of(context);
@@ -129,16 +217,18 @@ class _LlmTracesScreenState extends State<LlmTracesScreen> {
           if (_stats.totalCalls > 0)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color:
+                  theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     l.llmTracesStatsHeader(
                       _stats.totalCalls,
-                      _formatTokens(
-                          _stats.totalPromptTokens + _stats.totalCompletionTokens),
+                      _formatTokens(_stats.totalPromptTokens +
+                          _stats.totalCompletionTokens),
                       (_stats.avgLatencyMs / 1000).toStringAsFixed(1),
                     ),
                     style: theme.textTheme.titleSmall?.copyWith(
@@ -160,16 +250,16 @@ class _LlmTracesScreenState extends State<LlmTracesScreen> {
           // Filter chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
-                // Call type filters
                 _FilterChip(
                   label: l.llmTracesFilterAll,
                   selected: _callTypeFilter == null,
                   onSelected: (_) => setState(() {
                     _callTypeFilter = null;
-                    _applyFilters();
+                    _buildGroups();
                   }),
                 ),
                 const SizedBox(width: 6),
@@ -179,7 +269,7 @@ class _LlmTracesScreenState extends State<LlmTracesScreen> {
                   onSelected: (_) => setState(() {
                     _callTypeFilter =
                         _callTypeFilter == 'chat' ? null : 'chat';
-                    _applyFilters();
+                    _buildGroups();
                   }),
                 ),
                 const SizedBox(width: 6),
@@ -189,7 +279,7 @@ class _LlmTracesScreenState extends State<LlmTracesScreen> {
                   onSelected: (_) => setState(() {
                     _callTypeFilter =
                         _callTypeFilter == 'summarize' ? null : 'summarize';
-                    _applyFilters();
+                    _buildGroups();
                   }),
                 ),
                 const SizedBox(width: 6),
@@ -199,7 +289,7 @@ class _LlmTracesScreenState extends State<LlmTracesScreen> {
                   onSelected: (_) => setState(() {
                     _callTypeFilter =
                         _callTypeFilter == 'extract' ? null : 'extract';
-                    _applyFilters();
+                    _buildGroups();
                   }),
                 ),
                 if (_availableProviders.length > 1) ...[
@@ -211,7 +301,7 @@ class _LlmTracesScreenState extends State<LlmTracesScreen> {
                       onSelected: (_) => setState(() {
                         _providerFilter =
                             _providerFilter == provider ? null : provider;
-                        _applyFilters();
+                        _buildGroups();
                       }),
                     ),
                     const SizedBox(width: 6),
@@ -221,11 +311,11 @@ class _LlmTracesScreenState extends State<LlmTracesScreen> {
             ),
           ),
 
-          // Trace list
+          // Session groups list
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _filtered.isEmpty
+                : _groups.isEmpty
                     ? Center(
                         child: Text(
                           l.llmTracesEmpty,
@@ -237,20 +327,24 @@ class _LlmTracesScreenState extends State<LlmTracesScreen> {
                     : RefreshIndicator(
                         onRefresh: _loadTraces,
                         child: ListView.separated(
-                          itemCount: _filtered.length,
-                          separatorBuilder: (_, _) => const Divider(height: 1),
+                          itemCount: _groups.length,
+                          separatorBuilder: (_, _) =>
+                              const Divider(height: 1),
                           itemBuilder: (context, index) {
-                            final trace = _filtered[index];
-                            return _TraceTile(
-                              trace: trace,
-                              callTypeLabel:
-                                  _callTypeLabel(trace.callType, l),
-                              timeStr: _absoluteTime(trace.timestamp),
+                            final group = _groups[index];
+                            return _SessionGroupTile(
+                              group: group,
                               formatTokens: _formatTokens,
-                              onTap: () => Navigator.pushNamed(
+                              onTap: () => Navigator.push(
                                 context,
-                                '/settings/llm-trace-detail',
-                                arguments: trace,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      LlmSessionTimelineScreen(
+                                    sessionTitle: group.userPrompt,
+                                    sessionType: group.sessionType,
+                                    traces: group.traces,
+                                  ),
+                                ),
                               ),
                             );
                           },
@@ -285,33 +379,41 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-class _TraceTile extends StatelessWidget {
-  final LlmTrace trace;
-  final String callTypeLabel;
-  final String timeStr;
+class _SessionGroupTile extends StatelessWidget {
+  final _SessionGroup group;
   final String Function(int) formatTokens;
   final VoidCallback onTap;
 
-  const _TraceTile({
-    required this.trace,
-    required this.callTypeLabel,
-    required this.timeStr,
+  const _SessionGroupTile({
+    required this.group,
     required this.formatTokens,
     required this.onTap,
   });
 
   Color _statusColor(BuildContext context) {
-    if (trace.isError) return Colors.red;
-    if (trace.callType == 'summarize' || trace.callType == 'extract') {
-      return Colors.amber;
-    }
+    if (group.hasError) return Colors.red;
+    if (group.sessionType == 'cron') return Colors.amber;
+    if (group.sessionType == 'extract') return Colors.deepPurple;
     return Colors.green;
   }
+
+  String _formatTime(DateTime ts) =>
+      DateFormat('HH:mm').format(ts);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context);
     final statusColor = _statusColor(context);
+    final totalTokens =
+        group.totalPromptTokens + group.totalCompletionTokens;
+
+    final typeLabel = switch (group.sessionType) {
+      'cron' => l.llmTracesSessionCron,
+      'extract' => l.llmTracesSessionExtract,
+      'unknown' => l.llmTracesUngrouped,
+      _ => l.llmTracesSessionChat,
+    };
 
     return InkWell(
       onTap: onTap,
@@ -339,11 +441,11 @@ class _TraceTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Line 1: time + model
+                  // Line 1: time + user prompt
                   Row(
                     children: [
                       Text(
-                        timeStr,
+                        _formatTime(group.firstCall),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w500,
                         ),
@@ -351,83 +453,38 @@ class _TraceTile extends StatelessWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          trace.model,
+                          group.userPrompt,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.primary,
-                          ),
+                          style: theme.textTheme.bodyMedium,
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 2),
 
-                  // Line 2: call type + iteration + latency
-                  Row(
-                    children: [
-                      Text(
-                        callTypeLabel,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      if (trace.callType == 'chat') ...[
-                        Text(
-                          ' · iter ${trace.iteration}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                      Text(
-                        ' · ${(trace.latencyMs / 1000).toStringAsFixed(1)}s',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      if (trace.isError)
-                        Text(
-                          '  ERROR',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: Colors.red,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                    ],
+                  // Line 2: type · calls · tokens · latency
+                  Text(
+                    '$typeLabel · ${l.llmTracesSessionCalls(group.traces.length)} · '
+                    '${formatTokens(totalTokens)} tokens · '
+                    '${(group.totalLatencyMs / 1000).toStringAsFixed(1)}s',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                  const SizedBox(height: 2),
 
-                  // Line 3: tokens in/out
-                  Row(
-                    children: [
-                      Icon(Icons.arrow_upward, size: 12,
-                          color: theme.colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 2),
-                      Text(
-                        formatTokens(trace.promptTokens ?? 0),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
+                  // Line 3: tools (if any)
+                  if (group.allTools.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      l.llmTimelineToolsCalled(group.allTools.join(', ')),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
-                      const SizedBox(width: 8),
-                      Icon(Icons.arrow_downward, size: 12,
-                          color: theme.colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 2),
-                      Text(
-                        formatTokens(trace.completionTokens ?? 0),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'tokens',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ],
               ),
             ),

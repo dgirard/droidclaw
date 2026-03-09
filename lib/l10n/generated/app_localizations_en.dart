@@ -1375,6 +1375,48 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String llmTracesSessionCalls(int count) {
+    return '$count calls';
+  }
+
+  @override
+  String get llmTracesSessionChat => 'Chat';
+
+  @override
+  String get llmTracesSessionCron => 'Cron';
+
+  @override
+  String get llmTracesSessionExtract => 'Extract';
+
+  @override
+  String get llmTracesUngrouped => 'Ungrouped calls';
+
+  @override
+  String get llmTimelineTitle => 'Session Timeline';
+
+  @override
+  String get llmTimelineFinalResponse => 'Final response';
+
+  @override
+  String get llmTimelineSummarize => 'Context summarization';
+
+  @override
+  String get llmTimelineExtract => 'KG extraction';
+
+  @override
+  String llmTimelineToolsCalled(String tools) {
+    return 'Tools: $tools';
+  }
+
+  @override
+  String get llmTimelineUserPrompt => 'Prompt';
+
+  @override
+  String llmTimelineLlmCall(int n) {
+    return 'LLM Call #$n';
+  }
+
+  @override
   String get settingsLlmTraces => 'LLM Traces';
 
   @override

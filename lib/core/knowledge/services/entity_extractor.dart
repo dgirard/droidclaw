@@ -116,6 +116,7 @@ Rules:
   Future<ExtractionResult> extract({
     required String userMessage,
     required String assistantResponse,
+    String? sessionKey,
   }) async {
     final conversationText =
         'User: $userMessage\nAssistant: $assistantResponse';
@@ -138,6 +139,7 @@ Rules:
         provider: provider.providerName,
         model: model,
         callType: 'extract',
+        sessionKey: sessionKey,
         messageCount: extractMessages.length,
         systemPromptChars: prompt.length,
         systemPromptPreview:
@@ -167,6 +169,7 @@ Rules:
         provider: provider.providerName,
         model: model,
         callType: 'extract',
+        sessionKey: sessionKey,
         messageCount: extractMessages.length,
         systemPromptChars: prompt.length,
         systemPromptPreview:

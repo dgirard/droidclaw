@@ -2546,6 +2546,78 @@ abstract class AppLocalizations {
   /// **'iter {n}'**
   String llmTraceIteration(int n);
 
+  /// No description provided for @llmTracesSessionCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} calls'**
+  String llmTracesSessionCalls(int count);
+
+  /// No description provided for @llmTracesSessionChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat'**
+  String get llmTracesSessionChat;
+
+  /// No description provided for @llmTracesSessionCron.
+  ///
+  /// In en, this message translates to:
+  /// **'Cron'**
+  String get llmTracesSessionCron;
+
+  /// No description provided for @llmTracesSessionExtract.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract'**
+  String get llmTracesSessionExtract;
+
+  /// No description provided for @llmTracesUngrouped.
+  ///
+  /// In en, this message translates to:
+  /// **'Ungrouped calls'**
+  String get llmTracesUngrouped;
+
+  /// No description provided for @llmTimelineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Session Timeline'**
+  String get llmTimelineTitle;
+
+  /// No description provided for @llmTimelineFinalResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'Final response'**
+  String get llmTimelineFinalResponse;
+
+  /// No description provided for @llmTimelineSummarize.
+  ///
+  /// In en, this message translates to:
+  /// **'Context summarization'**
+  String get llmTimelineSummarize;
+
+  /// No description provided for @llmTimelineExtract.
+  ///
+  /// In en, this message translates to:
+  /// **'KG extraction'**
+  String get llmTimelineExtract;
+
+  /// No description provided for @llmTimelineToolsCalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Tools: {tools}'**
+  String llmTimelineToolsCalled(String tools);
+
+  /// No description provided for @llmTimelineUserPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Prompt'**
+  String get llmTimelineUserPrompt;
+
+  /// No description provided for @llmTimelineLlmCall.
+  ///
+  /// In en, this message translates to:
+  /// **'LLM Call #{n}'**
+  String llmTimelineLlmCall(int n);
+
   /// No description provided for @settingsLlmTraces.
   ///
   /// In en, this message translates to:
