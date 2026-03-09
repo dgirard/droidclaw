@@ -513,6 +513,14 @@
 
   "knowledgeBrowse": "Browse Entities",
   "knowledgeBrowseSubtitle": "Inspect stored knowledge",
+  "knowledgeExport": "Export Knowledge Base",
+  "knowledgeExportSubtitle": "Export all entities as JSON",
+  "knowledgeExportSuccess": "{count} entities exported",
+  "@knowledgeExportSuccess": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
   "knowledgeLanguageLabel": "Knowledge language",
   "knowledgeLanguageLocked": "All knowledge is stored in {language}. Change via Forget All.",
   "@knowledgeLanguageLocked": { "placeholders": { "language": { "type": "String" } } },

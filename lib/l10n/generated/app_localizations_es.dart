@@ -1464,6 +1464,17 @@ class AppLocalizationsEs extends AppLocalizations {
       'Inspeccionar el conocimiento almacenado';
 
   @override
+  String get knowledgeExport => 'Exportar base de conocimiento';
+
+  @override
+  String get knowledgeExportSubtitle => 'Exportar todas las entidades en JSON';
+
+  @override
+  String knowledgeExportSuccess(int count) {
+    return '$count entidades exportadas';
+  }
+
+  @override
   String get knowledgeLanguageLabel => 'Idioma de la base de conocimiento';
 
   @override

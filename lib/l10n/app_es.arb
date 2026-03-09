@@ -504,6 +504,14 @@
 
   "knowledgeBrowse": "Explorar entidades",
   "knowledgeBrowseSubtitle": "Inspeccionar el conocimiento almacenado",
+  "knowledgeExport": "Exportar base de conocimiento",
+  "knowledgeExportSubtitle": "Exportar todas las entidades en JSON",
+  "knowledgeExportSuccess": "{count} entidades exportadas",
+  "@knowledgeExportSuccess": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
   "knowledgeLanguageLabel": "Idioma de la base de conocimiento",
   "knowledgeLanguageLocked": "Todo el conocimiento se almacena en {language}. Cambiar mediante Olvidar todo.",
   "@knowledgeLanguageLocked": { "placeholders": { "language": { "type": "String" } } },

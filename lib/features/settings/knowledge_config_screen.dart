@@ -1,6 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/knowledge/services/ingestion_pipeline.dart';
@@ -139,7 +144,7 @@ class _KnowledgeConfigScreenState
                 title: Text(l.knowledgeEmpty),
               ),
 
-            // Browse button (only when entities > 0)
+            // Browse + Export buttons (only when entities > 0)
             if (_entityCount != null && _entityCount! > 0) ...[
               const Divider(),
               ListTile(
@@ -152,6 +157,12 @@ class _KnowledgeConfigScreenState
                       context, '/settings/knowledge-browser');
                   _loadStats();
                 },
+              ),
+              ListTile(
+                leading: const Icon(Icons.download_outlined),
+                title: Text(l.knowledgeExport),
+                subtitle: Text(l.knowledgeExportSubtitle),
+                onTap: () => _exportKnowledge(context),
               ),
             ],
 
@@ -413,6 +424,70 @@ class _KnowledgeConfigScreenState
           ? l.knowledgeRebuildCancelled(processed)
           : l.knowledgeRebuildComplete(processed, failed)),
     ));
+  }
+
+  Future<void> _exportKnowledge(BuildContext context) async {
+    final l = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    messenger.showSnackBar(SnackBar(content: Text(l.exportProgress)));
+
+    try {
+      final kgService = await ref.read(knowledgeServiceProvider.future);
+      if (kgService == null) return;
+
+      final total = await kgService.entityCount();
+      final entities = <Map<String, dynamic>>[];
+
+      for (var offset = 0; offset < total; offset += 50) {
+        final page = await kgService.listEntities(limit: 50, offset: offset);
+        for (final (entity, _) in page) {
+          final detail = await kgService.getEntityDetail(entity.id!);
+          if (detail == null) continue;
+          entities.add({
+            ...detail.entity.toJson(),
+            'facts': detail.facts.map((f) => f.toJson()).toList(),
+            'relations': detail.relations
+                .map((r) => {
+                      ...r.relation.toJson(),
+                      'source_name': r.sourceName,
+                      'target_name': r.targetName,
+                    })
+                .toList(),
+            'aliases': detail.aliases.map((a) => a.toJson()).toList(),
+          });
+        }
+      }
+
+      final export = {
+        'app': AppConstants.appName,
+        'version': AppConstants.appVersion,
+        'exportedAt': DateTime.now().toUtc().toIso8601String(),
+        'entityCount': entities.length,
+        'entities': entities,
+      };
+
+      final json = const JsonEncoder.withIndent('  ').convert(export);
+      final dir = await getTemporaryDirectory();
+      final date = DateTime.now().toIso8601String().substring(0, 10);
+      final file = File('${dir.path}/droidclaw_kb_$date.json');
+      await file.writeAsString(json);
+
+      messenger.hideCurrentSnackBar();
+
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)]),
+      );
+
+      messenger.showSnackBar(
+        SnackBar(content: Text(l.knowledgeExportSuccess(entities.length))),
+      );
+    } catch (e) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(content: Text(l.exportFailed(e.toString()))),
+      );
+    }
   }
 
   String _formatSize(int bytes) {

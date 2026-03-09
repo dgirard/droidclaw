@@ -2660,6 +2660,24 @@ abstract class AppLocalizations {
   /// **'Inspect stored knowledge'**
   String get knowledgeBrowseSubtitle;
 
+  /// No description provided for @knowledgeExport.
+  ///
+  /// In en, this message translates to:
+  /// **'Export Knowledge Base'**
+  String get knowledgeExport;
+
+  /// No description provided for @knowledgeExportSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export all entities as JSON'**
+  String get knowledgeExportSubtitle;
+
+  /// No description provided for @knowledgeExportSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} entities exported'**
+  String knowledgeExportSuccess(int count);
+
   /// No description provided for @knowledgeLanguageLabel.
   ///
   /// In en, this message translates to:

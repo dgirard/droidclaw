@@ -1461,6 +1461,17 @@ class AppLocalizationsIt extends AppLocalizations {
   String get knowledgeBrowseSubtitle => 'Ispeziona le conoscenze archiviate';
 
   @override
+  String get knowledgeExport => 'Esporta base di conoscenza';
+
+  @override
+  String get knowledgeExportSubtitle => 'Esporta tutte le entità in JSON';
+
+  @override
+  String knowledgeExportSuccess(int count) {
+    return '$count entità esportate';
+  }
+
+  @override
   String get knowledgeLanguageLabel => 'Lingua della base di conoscenza';
 
   @override

@@ -469,6 +469,14 @@
 
   "knowledgeBrowse": "Parcourir les entités",
   "knowledgeBrowseSubtitle": "Inspecter les connaissances stockées",
+  "knowledgeExport": "Exporter la base de connaissances",
+  "knowledgeExportSubtitle": "Exporter toutes les entités en JSON",
+  "knowledgeExportSuccess": "{count} entités exportées",
+  "@knowledgeExportSuccess": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
   "knowledgeLanguageLabel": "Langue de la base de connaissances",
   "knowledgeLanguageLocked": "Toutes les connaissances sont stockées en {language}. Modifier via Tout oublier.",
   "@knowledgeLanguageLocked": { "placeholders": { "language": { "type": "String" } } },

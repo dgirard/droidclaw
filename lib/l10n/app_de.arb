@@ -504,6 +504,14 @@
 
   "knowledgeBrowse": "Entitäten durchsuchen",
   "knowledgeBrowseSubtitle": "Gespeichertes Wissen inspizieren",
+  "knowledgeExport": "Wissensdatenbank exportieren",
+  "knowledgeExportSubtitle": "Alle Entitäten als JSON exportieren",
+  "knowledgeExportSuccess": "{count} Entitäten exportiert",
+  "@knowledgeExportSuccess": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
   "knowledgeLanguageLabel": "Sprache der Wissensdatenbank",
   "knowledgeLanguageLocked": "Alles Wissen wird auf {language} gespeichert. Ändern über Alles vergessen.",
   "@knowledgeLanguageLocked": { "placeholders": { "language": { "type": "String" } } },

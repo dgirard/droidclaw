@@ -504,6 +504,14 @@
 
   "knowledgeBrowse": "Esplora entità",
   "knowledgeBrowseSubtitle": "Ispeziona le conoscenze archiviate",
+  "knowledgeExport": "Esporta base di conoscenza",
+  "knowledgeExportSubtitle": "Esporta tutte le entità in JSON",
+  "knowledgeExportSuccess": "{count} entità esportate",
+  "@knowledgeExportSuccess": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
   "knowledgeLanguageLabel": "Lingua della base di conoscenza",
   "knowledgeLanguageLocked": "Tutta la conoscenza è archiviata in {language}. Modifica tramite Dimentica tutto.",
   "@knowledgeLanguageLocked": { "placeholders": { "language": { "type": "String" } } },
