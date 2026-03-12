@@ -132,7 +132,10 @@ class CalendarTool extends Tool {
           'Missing or invalid start/end dates. Use ISO 8601 format.');
     }
 
-    final calendarId = arguments['calendar_id'] as String?;
+    final rawCalendarId = arguments['calendar_id'] as String?;
+    final calendarId = rawCalendarId != null
+        ? _extractNumericId(rawCalendarId)
+        : null;
     final events = await plugin.listEvents(
       start,
       end,
@@ -155,16 +158,24 @@ class CalendarTool extends Tool {
     DeviceCalendar plugin,
     Map<String, dynamic> arguments,
   ) async {
-    final calendarId = arguments['calendar_id'] as String?;
+    final rawCalendarId = arguments['calendar_id'] as String?;
     final title = arguments['title'] as String?;
     final start = _parseDateTime(arguments['start'] as String?);
     final end = _parseDateTime(arguments['end'] as String?);
-    if (calendarId == null ||
+    if (rawCalendarId == null ||
         title == null ||
         start == null ||
         end == null) {
       return ToolResult.error(
           'Missing required parameters: calendar_id, title, start, end');
+    }
+
+    // Extract numeric ID if LLM sent something like "calendrier 26"
+    final calendarId = _extractNumericId(rawCalendarId);
+    if (calendarId == null) {
+      return ToolResult.error(
+          'Invalid calendar_id: "$rawCalendarId". '
+          'Use a numeric ID from list_calendars.');
     }
 
     final eventId = await plugin.createEvent(
@@ -181,6 +192,15 @@ class CalendarTool extends Tool {
           'start=$start, end=$end',
       forUser: 'Event "$title" created',
     );
+  }
+
+  /// Extract numeric calendar ID from potentially malformed input.
+  /// Handles cases like "calendrier 26", "calendar 26", or just "26".
+  String? _extractNumericId(String value) {
+    final trimmed = value.trim();
+    if (int.tryParse(trimmed) != null) return trimmed;
+    final match = RegExp(r'\d+').firstMatch(trimmed);
+    return match?.group(0);
   }
 
   DateTime? _parseDateTime(String? value) {

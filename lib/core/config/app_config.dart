@@ -199,6 +199,7 @@ class ToolsConfig {
     'notifications', 'contacts', 'calendar',
     'pick_image', 'radio',
     'knowledge_search', 'knowledge_store',
+    'proof_editor',
   };
 
   const ToolsConfig({

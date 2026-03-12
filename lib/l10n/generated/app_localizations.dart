@@ -1604,6 +1604,36 @@ abstract class AppLocalizations {
   /// **'Play live Radio France streams (France Inter, FIP, etc.)'**
   String get toolRadioDesc;
 
+  /// No description provided for @toolProofEditor.
+  ///
+  /// In en, this message translates to:
+  /// **'ProofEditor'**
+  String get toolProofEditor;
+
+  /// No description provided for @toolProofEditorDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Collaborative document editing via ProofEditor.ai'**
+  String get toolProofEditorDesc;
+
+  /// No description provided for @proofDocCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Document created'**
+  String get proofDocCreated;
+
+  /// No description provided for @proofActionApplied.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes applied'**
+  String get proofActionApplied;
+
+  /// No description provided for @proofDocTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'(Truncated to {max} of {actual} chars)'**
+  String proofDocTruncated(int max, int actual);
+
   /// No description provided for @toolKnowledgeSearch.
   ///
   /// In en, this message translates to:

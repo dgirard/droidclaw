@@ -6,6 +6,7 @@ import '../../l10n/l10n.dart';
 import '../../shared/constants.dart';
 import '../config/app_config.dart';
 import '../skills/skill_loader.dart';
+import '../tools/proof_document_store.dart';
 import '../tools/tool.dart';
 import 'memory_manager.dart';
 
@@ -18,6 +19,7 @@ class ContextBuilder {
   final String workspacePath;
   final String locale;
   final String? kbLanguage;
+  final ProofDocumentStore? proofDocumentStore;
 
   ContextBuilder({
     required this.memoryManager,
@@ -26,6 +28,7 @@ class ContextBuilder {
     required this.workspacePath,
     this.locale = 'en',
     this.kbLanguage,
+    this.proofDocumentStore,
   });
 
   /// Build the complete system prompt.
@@ -76,14 +79,21 @@ class ContextBuilder {
       buffer.writeln();
     }
 
-    // 6. Tools listing
+    // 6. Active ProofEditor documents
+    final proofContext = await _buildProofContext();
+    if (proofContext.isNotEmpty) {
+      buffer.writeln(proofContext);
+      buffer.writeln();
+    }
+
+    // 7. Tools listing
     final toolsListing = _buildToolsListing();
     if (toolsListing.isNotEmpty) {
       buffer.writeln(toolsListing);
       buffer.writeln();
     }
 
-    // 7. Language instruction — positioned last for maximum LLM influence
+    // 8. Language instruction — positioned last for maximum LLM influence
     // Use triple reinforcement: the directive in the identity, tool result language note,
     // and this final instruction all work together
     buffer.writeln('=== LANGUAGE REQUIREMENT ===');
@@ -121,6 +131,19 @@ ${l.agentKeyBehaviors}''';
       buffer.writeln('<bootstrap>');
       buffer.writeln(content);
       buffer.writeln('</bootstrap>');
+    }
+    return buffer.toString().trimRight();
+  }
+
+  Future<String> _buildProofContext() async {
+    if (proofDocumentStore == null) return '';
+    final docs = await proofDocumentStore!.loadAll();
+    if (docs.isEmpty) return '';
+
+    final buffer = StringBuffer();
+    buffer.writeln('Active ProofEditor documents (use proof_editor tool to read/edit):');
+    for (final doc in docs) {
+      buffer.writeln('- "${doc.title}" (slug: ${doc.slug}, url: ${doc.shareUrl})');
     }
     return buffer.toString().trimRight();
   }

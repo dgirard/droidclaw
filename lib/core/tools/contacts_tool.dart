@@ -55,7 +55,7 @@ class ContactsTool extends Tool {
     }
 
     try {
-      final hasPermission = await FlutterContacts.requestPermission();
+      final hasPermission = await FlutterContacts.requestPermission(readonly: true);
       if (!hasPermission) {
         if (!canRequestPermission) {
           return ToolResult.error(
