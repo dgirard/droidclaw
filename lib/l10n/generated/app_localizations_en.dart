@@ -827,6 +827,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'Play live Radio France streams (France Inter, FIP, etc.)';
 
   @override
+  String get toolProofEditor => 'ProofEditor';
+
+  @override
+  String get toolProofEditorDesc =>
+      'Collaborative document editing via ProofEditor.ai';
+
+  @override
+  String get proofDocCreated => 'Document created';
+
+  @override
+  String get proofActionApplied => 'Changes applied';
+
+  @override
+  String proofDocTruncated(int max, int actual) {
+    return '(Truncated to $max of $actual chars)';
+  }
+
+  @override
   String get toolKnowledgeSearch => 'Knowledge Search';
 
   @override

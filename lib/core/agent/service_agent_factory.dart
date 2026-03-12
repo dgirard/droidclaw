@@ -30,6 +30,8 @@ import '../tools/qr_generate_tool.dart';
 import '../tools/reverse_geocode_tool.dart';
 import '../tools/tool.dart';
 import '../tools/transit_tool.dart';
+import '../tools/proof_document_store.dart';
+import '../tools/proof_editor_tool.dart';
 import '../tools/weather_tool.dart';
 import '../tools/web_scrape_tool.dart';
 import '../tools/web_search_tool.dart';
@@ -143,6 +145,13 @@ class ServiceAgentFactory {
     if (!disabled.contains('weather')) {
       registry.register(WeatherTool(locale: locale));
     }
+    if (!disabled.contains('proof_editor')) {
+      final proofStorePath = p.join(hivePath, 'proof_documents.json');
+      registry.register(ProofEditorTool(
+        store: ProofDocumentStore(proofStorePath),
+        locale: locale,
+      ));
+    }
     // Excluded from service isolate:
     // - WebScrapeJsTool (WebView needs Activity)
     // - SubagentTool (self-referential, complex lifecycle)
@@ -231,6 +240,7 @@ class ServiceAgentFactory {
     // 6. Create ContextBuilder
     final memoryManager = MemoryManager(storageService);
     final skillLoader = SkillLoader(storageService);
+    final proofStorePath = p.join(hivePath, 'proof_documents.json');
     final contextBuilder = ContextBuilder(
       memoryManager: memoryManager,
       skillLoader: skillLoader,
@@ -238,6 +248,7 @@ class ServiceAgentFactory {
       workspacePath: workspacePath,
       locale: locale,
       kbLanguage: kbLanguage,
+      proofDocumentStore: ProofDocumentStore(proofStorePath),
     );
 
     // 7. Build AgentLoop

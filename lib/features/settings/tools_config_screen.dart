@@ -171,6 +171,12 @@ List<_ToolInfo> _tools(AppLocalizations l) => [
     icon: Icons.radio_outlined,
   ),
   _ToolInfo(
+    name: 'proof_editor',
+    label: l.toolProofEditor,
+    description: l.toolProofEditorDesc,
+    icon: Icons.edit_document,
+  ),
+  _ToolInfo(
     name: 'knowledge_search',
     label: l.toolKnowledgeSearch,
     description: l.toolKnowledgeSearchDesc,

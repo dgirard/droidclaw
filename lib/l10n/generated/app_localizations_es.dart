@@ -848,6 +848,24 @@ class AppLocalizationsEs extends AppLocalizations {
       'Escuchar emisoras de Radio France en directo (France Inter, FIP, etc.)';
 
   @override
+  String get toolProofEditor => 'ProofEditor';
+
+  @override
+  String get toolProofEditorDesc =>
+      'Edición colaborativa de documentos con ProofEditor.ai';
+
+  @override
+  String get proofDocCreated => 'Documento creado';
+
+  @override
+  String get proofActionApplied => 'Cambios aplicados';
+
+  @override
+  String proofDocTruncated(int max, int actual) {
+    return '(Truncado a $max de $actual caracteres)';
+  }
+
+  @override
   String get toolKnowledgeSearch => 'Búsqueda de conocimiento';
 
   @override

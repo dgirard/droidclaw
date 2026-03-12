@@ -846,6 +846,24 @@ class AppLocalizationsDe extends AppLocalizations {
       'Radio-France-Sender live streamen (France Inter, FIP, usw.)';
 
   @override
+  String get toolProofEditor => 'ProofEditor';
+
+  @override
+  String get toolProofEditorDesc =>
+      'Kollaborative Dokumentbearbeitung über ProofEditor.ai';
+
+  @override
+  String get proofDocCreated => 'Dokument erstellt';
+
+  @override
+  String get proofActionApplied => 'Änderungen angewendet';
+
+  @override
+  String proofDocTruncated(int max, int actual) {
+    return '(Gekürzt auf $max von $actual Zeichen)';
+  }
+
+  @override
   String get toolKnowledgeSearch => 'Wissenssuche';
 
   @override

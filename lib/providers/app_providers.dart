@@ -43,6 +43,8 @@ import '../core/tools/set_alarm_tool.dart';
 import '../core/tools/speak_tool.dart';
 import '../core/tools/subagent_tool.dart';
 import '../core/tools/transit_tool.dart';
+import '../core/tools/proof_document_store.dart';
+import '../core/tools/proof_editor_tool.dart';
 import '../core/tools/radio_tool.dart';
 import '../core/tools/volume_control_tool.dart';
 import '../core/tools/weather_tool.dart';
@@ -231,6 +233,14 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
   if (!disabled.contains('radio')) {
     registry.register(RadioTool());
   }
+  if (!disabled.contains('proof_editor')) {
+    final hivePath = p.dirname(workspacePath);
+    final proofStorePath = p.join(hivePath, 'proof_documents.json');
+    registry.register(ProofEditorTool(
+      store: ProofDocumentStore(proofStorePath),
+      locale: locale,
+    ));
+  }
 
   // Knowledge Graph tools (require KG to be enabled)
   final kgDb = await ref.watch(knowledgeGraphDbProvider.future);
@@ -312,6 +322,9 @@ final contextBuilderProvider = FutureProvider<ContextBuilder>((ref) async {
   final workspacePath = await storage.workspacePath;
   final toolRegistry = await ref.watch(toolRegistryProvider.future);
 
+  final hivePath = p.dirname(workspacePath);
+  final proofStorePath = p.join(hivePath, 'proof_documents.json');
+
   return ContextBuilder(
     memoryManager: ref.watch(memoryManagerProvider),
     skillLoader: ref.watch(skillLoaderProvider),
@@ -319,6 +332,7 @@ final contextBuilderProvider = FutureProvider<ContextBuilder>((ref) async {
     workspacePath: workspacePath,
     locale: config.resolvedLocale,
     kbLanguage: config.knowledge.kbLanguage,
+    proofDocumentStore: ProofDocumentStore(proofStorePath),
   );
 });
 
