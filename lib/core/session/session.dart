@@ -32,11 +32,13 @@ class Session {
 
   /// Get messages for the LLM context.
   /// If a summary exists, prepends it as a system message.
-  /// Repairs tool messages missing `name` and strips orphaned tool results.
+  /// Repairs tool messages missing `name` and strips orphaned tool results
+  /// on a **copy** — the original `_messages` list is never mutated here.
   /// Gemini returns 400 if function_response has empty name or appears first.
   List<Message> getMessages() {
     _repairToolNames();
-    _stripOrphanedLeadingMessages();
+    final copy = List<Message>.of(_messages);
+    _stripOrphanedLeading(copy);
 
     if (summary != null && summary!.isNotEmpty) {
       return [
@@ -44,10 +46,10 @@ class Session {
           role: 'system',
           content: 'Summary of previous conversation:\n$summary',
         ),
-        ..._messages,
+        ...copy,
       ];
     }
-    return List.of(_messages);
+    return copy;
   }
 
   /// Repair tool result messages that are missing or have empty `name`.
@@ -81,29 +83,30 @@ class Session {
     }
   }
 
-  /// Strip orphaned tool results and assistant tool_calls at the start.
+  /// Strip orphaned tool results and assistant tool_calls at the start
+  /// of the given [msgs] list. Operates on the provided list, not `_messages`.
   /// After summarization, the first messages may be tool results whose
   /// parent assistant message was summarized away, or assistant messages
   /// with tool_calls whose tool results were removed. Gemini rejects
   /// these as contents[0] (function_response without context).
-  void _stripOrphanedLeadingMessages() {
-    while (_messages.isNotEmpty) {
-      final first = _messages.first;
+  static void _stripOrphanedLeading(List<Message> msgs) {
+    while (msgs.isNotEmpty) {
+      final first = msgs.first;
       if (first.role == 'tool') {
         // Orphaned tool result — no preceding assistant with tool_calls
-        _messages.removeAt(0);
+        msgs.removeAt(0);
       } else if (first.role == 'assistant' &&
           first.toolCalls != null &&
           first.toolCalls!.isNotEmpty) {
         // Assistant message with tool_calls but tool results may follow.
         // Check if all its tool_calls have matching tool results after it.
         final tcIds = first.toolCalls!.map((tc) => tc.id).toSet();
-        final hasAllResults = tcIds.every((id) => _messages.any(
+        final hasAllResults = tcIds.every((id) => msgs.any(
               (m) => m.role == 'tool' && m.toolCallId == id,
             ));
         if (!hasAllResults) {
           // Orphaned assistant tool_calls — remove it
-          _messages.removeAt(0);
+          msgs.removeAt(0);
         } else {
           break;
         }
@@ -114,11 +117,26 @@ class Session {
   }
 
   /// Truncate history, keeping only the last [keepLast] messages.
+  /// Ensures at least one user or assistant message (without tool_calls)
+  /// survives — prevents summarization from emptying the session.
   /// Returns the messages that were removed (for summarization).
   List<Message> truncateHistory(int keepLast) {
     if (_messages.length <= keepLast) return [];
-    final removed = _messages.sublist(0, _messages.length - keepLast);
-    _messages.removeRange(0, _messages.length - keepLast);
+
+    // Increase keepLast until at least one non-tool message is retained.
+    int effectiveKeep = keepLast;
+    while (effectiveKeep < _messages.length) {
+      final kept = _messages.sublist(_messages.length - effectiveKeep);
+      if (kept.any((m) =>
+          (m.role == 'user' || m.role == 'assistant') &&
+          (m.toolCalls == null || m.toolCalls!.isEmpty))) {
+        break;
+      }
+      effectiveKeep++;
+    }
+
+    final removed = _messages.sublist(0, _messages.length - effectiveKeep);
+    _messages.removeRange(0, _messages.length - effectiveKeep);
     updated = DateTime.now();
     return removed;
   }

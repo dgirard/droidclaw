@@ -84,6 +84,7 @@ class AppConfigNotifier extends Notifier<AppConfig> {
 final sessionManagerProvider = FutureProvider<SessionManager>((ref) async {
   final manager = SessionManager();
   await manager.init();
+  ref.onDispose(() => manager.flush());
   return manager;
 });
 

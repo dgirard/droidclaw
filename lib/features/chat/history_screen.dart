@@ -488,9 +488,16 @@ Future<void> runCronNow(
 String _sessionTitle(Session session) {
   final firstUserMsg =
       session.messages.where((m) => m.role == 'user').firstOrNull;
-  if (firstUserMsg == null) return session.key;
-  final text = firstUserMsg.content.replaceAll('\n', ' ').trim();
-  return text.length > 60 ? '${text.substring(0, 60)}...' : text;
+  if (firstUserMsg != null) {
+    final text = firstUserMsg.content.replaceAll('\n', ' ').trim();
+    return text.length > 60 ? '${text.substring(0, 60)}...' : text;
+  }
+  // Fallback: show truncated summary if available, otherwise session key.
+  if (session.summary != null && session.summary!.isNotEmpty) {
+    final text = session.summary!.replaceAll('\n', ' ').trim();
+    return text.length > 60 ? '${text.substring(0, 60)}...' : text;
+  }
+  return session.key;
 }
 
 String _formatDate(BuildContext context, DateTime date) {

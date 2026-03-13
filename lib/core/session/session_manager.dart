@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:hive/hive.dart';
 
 import '../../shared/constants.dart';
+import '../services/app_logger.dart';
+import '../config/log_entry.dart';
 import 'session.dart';
 
 /// Manages conversation sessions with Hive persistence and in-memory cache.
@@ -15,6 +17,18 @@ class SessionManager {
   Future<void> init() async {
     _box = await Hive.openBox<String>(_boxName);
 
+    // Compact on startup to reclaim space from deleted entries.
+    // Wrapped in try-catch: compact() is unsafe if another isolate runs it
+    // concurrently (Hive advisory locks are per-process, not per-isolate).
+    try {
+      await _box!.compact();
+    } catch (e) {
+      AppLogger.instance.warning(
+        LogSource.app,
+        'Hive compact failed: ${e.runtimeType}',
+      );
+    }
+
     // Load all sessions into cache
     for (final key in _box!.keys) {
       final raw = _box!.get(key);
@@ -22,8 +36,11 @@ class SessionManager {
         try {
           final json = jsonDecode(raw) as Map<String, dynamic>;
           _cache[key as String] = Session.fromJson(json);
-        } catch (_) {
-          // Skip corrupted entries
+        } catch (e) {
+          AppLogger.instance.warning(
+            LogSource.app,
+            'Corrupted session skipped: $key — ${e.runtimeType}',
+          );
         }
       }
     }
@@ -43,7 +60,12 @@ class SessionManager {
         try {
           final json = jsonDecode(raw) as Map<String, dynamic>;
           _cache[key as String] = Session.fromJson(json);
-        } catch (_) {}
+        } catch (e) {
+          AppLogger.instance.warning(
+            LogSource.app,
+            'Corrupted session skipped on reload: $key — ${e.runtimeType}',
+          );
+        }
       }
     }
   }
@@ -56,10 +78,11 @@ class SessionManager {
   /// Get a session by key, returns null if not found.
   Session? get(String key) => _cache[key];
 
-  /// Save a session to Hive.
+  /// Save a session to Hive and force sync to disk.
   Future<void> save(Session session) async {
     _cache[session.key] = session;
     await _box?.put(session.key, jsonEncode(session.toJson()));
+    await _box?.flush();
   }
 
   /// Get all sessions, sorted by last updated.
@@ -69,10 +92,16 @@ class SessionManager {
     return sessions;
   }
 
-  /// Delete a session.
+  /// Delete a session and force sync to disk.
   Future<void> deleteSession(String key) async {
     _cache.remove(key);
     await _box?.delete(key);
+    await _box?.flush();
+  }
+
+  /// Force sync all pending Hive writes to disk.
+  Future<void> flush() async {
+    await _box?.flush();
   }
 
   /// Create a new session with a unique key.
