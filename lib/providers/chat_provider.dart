@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/agent/agent_loop.dart';
+import '../features/chat/message_bubble.dart';
 import '../l10n/l10n.dart';
 import '../shared/constants.dart';
 import 'app_providers.dart';
@@ -13,6 +14,9 @@ class ChatMessage {
   final String? toolName;
   final bool isToolResult;
   final bool isError;
+
+  /// Pre-computed linkified content for MarkdownBody rendering.
+  late final String linkifiedContent = MessageBubble.linkifyUrls(content);
 
   ChatMessage({
     required this.role,

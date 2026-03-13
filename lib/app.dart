@@ -26,11 +26,40 @@ import 'l10n/l10n.dart';
 import 'providers/app_providers.dart';
 
 /// Root MaterialApp with Material 3 theme and routing.
-class DroidClawApp extends ConsumerWidget {
+class DroidClawApp extends ConsumerStatefulWidget {
   const DroidClawApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DroidClawApp> createState() => _DroidClawAppState();
+}
+
+class _DroidClawAppState extends ConsumerState<DroidClawApp> {
+  late final AppLifecycleListener _lifecycleListener;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycleListener = AppLifecycleListener(
+      onStateChange: _onLifecycleChange,
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener.dispose();
+    super.dispose();
+  }
+
+  void _onLifecycleChange(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      // Best-effort flush before Android can kill the process.
+      ref.read(sessionManagerProvider.future).then((sm) => sm.flush());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final config = ref.watch(appConfigProvider);
     final configStorage = ref.read(configStorageProvider);
     final initialRoute =

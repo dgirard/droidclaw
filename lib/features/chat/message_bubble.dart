@@ -11,6 +11,14 @@ import '../../providers/chat_provider.dart';
 class MessageBubble extends StatelessWidget {
   final ChatMessage message;
 
+  /// Max characters for tool result display (roughly 3 lines).
+  static const _toolResultMaxChars = 300;
+
+  /// Regex matching bare URLs not already inside markdown link syntax.
+  static final _bareUrlPattern = RegExp(
+    r'(?<!\]\()https?://[^\s\)<>\]]+',
+  );
+
   const MessageBubble({super.key, required this.message});
 
   @override
@@ -57,11 +65,9 @@ class MessageBubble extends StatelessWidget {
                     ),
                   )
                 : MarkdownBody(
-                    data: message.content,
+                    data: message.linkifiedContent,
                     selectable: true,
-                    onTapLink: (text, href, title) {
-                      if (href != null) launchUrl(Uri.parse(href));
-                    },
+                    onTapLink: _onTapLink,
                     styleSheet:
                         MarkdownStyleSheet.fromTheme(theme).copyWith(
                       p: theme.textTheme.bodyLarge?.copyWith(
@@ -119,6 +125,25 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  /// Only launch http/https URLs to prevent intent:// and other scheme abuse.
+  static void _onTapLink(String text, String? href, String title) {
+    if (href == null) return;
+    final uri = Uri.tryParse(href);
+    if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+      launchUrl(uri);
+    }
+  }
+
+  /// Wrap bare URLs in markdown link syntax so MarkdownBody makes them tappable.
+  static String linkifyUrls(String text) {
+    return text.replaceAllMapped(_bareUrlPattern, (m) {
+      final url = m.group(0)!;
+      // Skip if preceded by '(' — already inside a markdown link or parenthesized.
+      if (m.start > 0 && text[m.start - 1] == '(') return url;
+      return '[$url]($url)';
+    });
+  }
+
   Widget _buildToolMessage(BuildContext context, ThemeData theme) {
     final icon = message.isToolResult
         ? (message.isError ? Icons.error_outline : Icons.check_circle_outline)
@@ -126,6 +151,11 @@ class MessageBubble extends StatelessWidget {
     final color = message.isError
         ? theme.colorScheme.error
         : theme.colorScheme.tertiary;
+
+    // Truncate long tool results to keep the UI compact.
+    final displayContent = message.content.length > _toolResultMaxChars
+        ? '${message.content.substring(0, _toolResultMaxChars)}...'
+        : message.content;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
@@ -142,13 +172,16 @@ class MessageBubble extends StatelessWidget {
           Icon(icon, size: 16, color: color),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              message.content,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            child: MarkdownBody(
+              data: linkifyUrls(displayContent),
+              fitContent: false,
+              onTapLink: _onTapLink,
+              styleSheet:
+                  MarkdownStyleSheet.fromTheme(theme).copyWith(
+                p: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

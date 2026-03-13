@@ -86,6 +86,7 @@ class AgentLoop {
     if (_needsSummarization(session)) {
       yield const SummarizingEvent();
       await _summarize(session, sessionKey);
+      await sessions.save(session);
     }
 
     // Pre-query: inject Knowledge Graph context if available
@@ -215,6 +216,7 @@ class AgentLoop {
           latencyMs: stopwatch.elapsedMilliseconds,
         ));
 
+        await sessions.save(session);
         yield ErrorEvent(tr(config.resolvedLocale).agentLlmError(e.toString()));
         return;
       }
@@ -259,6 +261,8 @@ class AgentLoop {
           name: toolCall.name,
         ));
       }
+      // Persist once after all tool results (flush is ~10-50ms on Android)
+      await sessions.save(session);
     }
 
     // Max iterations reached
