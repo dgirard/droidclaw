@@ -294,6 +294,8 @@
   "toolProofEditorDesc": "Collaborative document editing via ProofEditor.ai",
   "proofDocCreated": "Document created",
   "proofActionApplied": "Changes applied",
+  "proofDocRenamed": "Title updated: {title}",
+  "@proofDocRenamed": { "placeholders": { "title": { "type": "String" } } },
   "proofDocTruncated": "(Truncated to {max} of {actual} chars)",
   "@proofDocTruncated": { "placeholders": { "max": { "type": "int" }, "actual": { "type": "int" } } },
   "toolKnowledgeSearch": "Knowledge Search",

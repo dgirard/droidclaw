@@ -859,6 +859,11 @@ class AppLocalizationsDe extends AppLocalizations {
   String get proofActionApplied => 'Änderungen angewendet';
 
   @override
+  String proofDocRenamed(String title) {
+    return 'Titel aktualisiert: $title';
+  }
+
+  @override
   String proofDocTruncated(int max, int actual) {
     return '(Gekürzt auf $max von $actual Zeichen)';
   }

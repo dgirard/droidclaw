@@ -1628,6 +1628,12 @@ abstract class AppLocalizations {
   /// **'Changes applied'**
   String get proofActionApplied;
 
+  /// No description provided for @proofDocRenamed.
+  ///
+  /// In en, this message translates to:
+  /// **'Title updated: {title}'**
+  String proofDocRenamed(String title);
+
   /// No description provided for @proofDocTruncated.
   ///
   /// In en, this message translates to:
