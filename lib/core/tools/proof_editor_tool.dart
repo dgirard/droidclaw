@@ -14,6 +14,7 @@ import 'tool.dart';
 class ProofEditorTool extends Tool {
   final ProofDocumentStore store;
   final String locale;
+  final http.Client Function() _clientFactory;
 
   static const _baseUrl = 'https://www.proofeditor.ai';
   static const _agentId = 'droidclaw';
@@ -22,7 +23,11 @@ class ProofEditorTool extends Tool {
   static const _maxContentLength = 15000;
   static const _maxRetries = 2;
 
-  ProofEditorTool({required this.store, this.locale = 'en'});
+  ProofEditorTool({
+    required this.store,
+    this.locale = 'en',
+    http.Client Function()? httpClientFactory,
+  }) : _clientFactory = (httpClientFactory ?? http.Client.new);
 
   @override
   String get name => 'proof_editor';
@@ -31,8 +36,10 @@ class ProofEditorTool extends Tool {
   String get description =>
       'Collaborative document editor via ProofEditor.ai. '
       'Create, read, edit, suggest changes, comment on, and manage shared markdown documents. '
-      'Use "snapshot" + "edit_v2" for precise block-level edits. '
+      'Use "snapshot" + "edit_v2" for precise block-level edits (use "markdown" key, not "content", in ops). '
       'Use "suggest" to propose changes the user can accept/reject. '
+      'Use "prepend" to add content at the very top of the document. '
+      'Use "append" with a "section" heading to add content under a specific section. '
       'Documents persist across sessions and are accessible via shareable URLs.';
 
   @override
@@ -48,6 +55,7 @@ class ProofEditorTool extends Tool {
               'rewrite',
               'comment',
               'suggest',
+              'prepend',
               'append',
               'insert',
               'rename',
@@ -70,7 +78,8 @@ class ProofEditorTool extends Tool {
           'content': {
             'type': 'string',
             'description':
-                'Markdown content (for create, rewrite, suggest, append, insert)',
+                'Markdown content (for create, rewrite, suggest, prepend, append, insert). '
+                    'For edit_v2, use "markdown" key inside ops array instead.',
           },
           'search': {
             'type': 'string',
@@ -97,7 +106,8 @@ class ProofEditorTool extends Tool {
           'section': {
             'type': 'string',
             'description':
-                'Markdown heading text to target (for append; omit to append to document end)',
+                'Markdown heading text to append under (required for append). '
+                    'Use "read" first to see available sections.',
           },
           'base_token': {
             'type': 'string',
@@ -108,8 +118,8 @@ class ProofEditorTool extends Tool {
             'type': 'array',
             'description':
                 'Block-level operations array (for edit_v2). '
-                    'Each item: {op: "replace_block", ref: "bN", content: "..."} '
-                    'or {op: "insert_after", ref: "bN", blocks: [{content: "..."}]}',
+                    'Each item: {op: "replace_block", ref: "bN", markdown: "..."} '
+                    'or {op: "insert_after", ref: "bN", blocks: [{markdown: "..."}]}',
           },
         },
         'required': ['operation'],
@@ -130,6 +140,7 @@ class ProofEditorTool extends Tool {
         'rewrite' => await _rewrite(arguments),
         'comment' => await _comment(arguments),
         'suggest' => await _suggest(arguments),
+        'prepend' => await _prepend(arguments),
         'append' => await _append(arguments),
         'insert' => await _insert(arguments),
         'rename' => await _rename(arguments),
@@ -139,8 +150,8 @@ class ProofEditorTool extends Tool {
         'delete' => await _delete(arguments),
         _ => ToolResult.error(
             'Unknown operation: $operation. '
-            'Valid: create, read, edit, rewrite, comment, suggest, append, '
-            'insert, rename, snapshot, edit_v2, list, delete.'),
+            'Valid: create, read, edit, rewrite, comment, suggest, prepend, '
+            'append, insert, rename, snapshot, edit_v2, list, delete.'),
       };
     } catch (e) {
       // SECURITY: Never expose raw exception (may contain tokens in URLs)
@@ -166,7 +177,7 @@ class ProofEditorTool extends Tool {
           'create operation requires "content" parameter.');
     }
 
-    final client = http.Client();
+    final client = _clientFactory();
     try {
       final response = await _postJson(
         client,
@@ -213,7 +224,7 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = http.Client();
+    final client = _clientFactory();
     try {
       final response = await _getWithRetry(
         client,
@@ -226,13 +237,19 @@ class ProofEditorTool extends Tool {
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final markdown = data['markdown'] as String? ?? '';
-      final marks = data['marks'] as List? ?? [];
+      // marks can be a Map (keyed by ID) or a List — handle both
+      final rawMarks = data['marks'];
+      final marksList = rawMarks is List
+          ? rawMarks
+          : rawMarks is Map
+              ? rawMarks.values.toList()
+              : <dynamic>[];
 
       await store.updateLastAccessed(doc.slug);
 
       // Build comment summary
       final commentBuf = StringBuffer();
-      for (final mark in marks) {
+      for (final mark in marksList) {
         if (mark is Map<String, dynamic>) {
           final type = mark['type'] as String? ?? '';
           final text = mark['text'] as String? ?? '';
@@ -294,18 +311,22 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = http.Client();
+    final client = _clientFactory();
     try {
+      final baseUpdatedAt = await _fetchBaseUpdatedAt(client, doc);
+      final body = <String, dynamic>{
+        'by': _agentBy,
+        'operations': [
+          {'op': 'replace', 'search': search, 'content': replace},
+        ],
+      };
+      if (baseUpdatedAt != null) body['baseUpdatedAt'] = baseUpdatedAt;
+
       final response = await _postJson(
         client,
         Uri.parse('$_baseUrl/api/agent/${doc.slug}/edit'),
         headers: _bearerHeaders(doc.token),
-        body: {
-          'by': _agentBy,
-          'operations': [
-            {'op': 'replace', 'search': search, 'content': replace},
-          ],
-        },
+        body: body,
       );
 
       if (response.statusCode == 409) {
@@ -351,20 +372,47 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = http.Client();
+    final client = _clientFactory();
     try {
+      // Fetch revision for optimistic concurrency on the /ops endpoint.
+      final stateResponse = await _getWithRetry(
+        client,
+        Uri.parse('$_baseUrl/api/agent/${doc.slug}/state'),
+        headers: _bearerHeaders(doc.token),
+      );
+      int? revision;
+      String? updatedAt;
+      if (stateResponse.statusCode >= 200 && stateResponse.statusCode < 300) {
+        final stateData =
+            jsonDecode(stateResponse.body) as Map<String, dynamic>;
+        revision = stateData['revision'] as int?;
+        updatedAt = stateData['updatedAt'] as String?;
+      }
+
       final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops')
           .replace(queryParameters: {'token': doc.token});
+      final rewriteBody = <String, dynamic>{
+        'type': 'rewrite.apply',
+        'by': _agentBy,
+        'content': content,
+      };
+      if (revision != null) {
+        rewriteBody['baseRevision'] = revision;
+      } else if (updatedAt != null) {
+        rewriteBody['baseToken'] = updatedAt;
+      }
       final response = await _postJson(
         client,
         uri,
         headers: {'X-Agent-Id': _agentId},
-        body: {
-          'type': 'rewrite.apply',
-          'by': _agentBy,
-          'content': content,
-        },
+        body: rewriteBody,
       );
+
+      if (response.statusCode == 409) {
+        return ToolResult.error(
+            'Rewrite conflict — document was modified. '
+            'Re-read the document and try again.');
+      }
 
       final error = _checkHttpError(response, doc.slug);
       if (error != null) return error;
@@ -396,7 +444,7 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = http.Client();
+    final client = _clientFactory();
     try {
       final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops')
           .replace(queryParameters: {'token': doc.token});
@@ -443,7 +491,7 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = http.Client();
+    final client = _clientFactory();
     try {
       final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops')
           .replace(queryParameters: {'token': doc.token});
@@ -482,32 +530,114 @@ class ProofEditorTool extends Tool {
     }
   }
 
-  Future<ToolResult> _append(Map<String, dynamic> args) async {
+  Future<ToolResult> _prepend(Map<String, dynamic> args) async {
     final content = args['content'] as String?;
     if (content == null || content.isEmpty) {
       return ToolResult.error(
-          'append operation requires "content" parameter.');
+          'prepend operation requires "content" parameter.');
     }
 
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = http.Client();
+    final client = _clientFactory();
     try {
-      final op = <String, dynamic>{'op': 'append', 'content': content};
-      final section = args['section'] as String?;
-      if (section != null && section.isNotEmpty) {
-        op['section'] = section;
+      // 1. Read current document content.
+      final stateResponse = await _getWithRetry(
+        client,
+        Uri.parse('$_baseUrl/api/agent/${doc.slug}/state'),
+        headers: _bearerHeaders(doc.token),
+      );
+
+      final stateError = _checkHttpError(stateResponse, doc.slug);
+      if (stateError != null) return stateError;
+
+      final stateData =
+          jsonDecode(stateResponse.body) as Map<String, dynamic>;
+      final currentMarkdown = stateData['markdown'] as String? ?? '';
+      final revision = stateData['revision'] as int?;
+      final updatedAt = stateData['updatedAt'] as String?;
+
+      // 2. Prepend new content and rewrite the whole document.
+      final newMarkdown = '$content\n\n$currentMarkdown';
+
+      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops')
+          .replace(queryParameters: {'token': doc.token});
+      final rewriteBody = <String, dynamic>{
+        'type': 'rewrite.apply',
+        'by': _agentBy,
+        'content': newMarkdown,
+      };
+      if (revision != null) {
+        rewriteBody['baseRevision'] = revision;
+      } else if (updatedAt != null) {
+        rewriteBody['baseToken'] = updatedAt;
       }
+      final response = await _postJson(
+        client,
+        uri,
+        headers: {'X-Agent-Id': _agentId},
+        body: rewriteBody,
+      );
+
+      if (response.statusCode == 409) {
+        return ToolResult.error(
+            'Prepend conflict — document was modified. '
+            'Re-read the document and try again.');
+      }
+
+      final error = _checkHttpError(response, doc.slug);
+      if (error != null) return error;
+
+      await store.updateLastAccessed(doc.slug);
+
+      final l = tr(locale);
+      return ToolResult.dual(
+        forLLM: 'Content prepended to document ${doc.slug}.',
+        forUser: l.proofActionApplied,
+      );
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<ToolResult> _append(Map<String, dynamic> args) async {
+    final content = args['content'] as String?;
+    final section = args['section'] as String?;
+    if (content == null || content.isEmpty) {
+      return ToolResult.error(
+          'append operation requires "content" parameter.');
+    }
+    if (section == null || section.isEmpty) {
+      return ToolResult.error(
+          'append operation requires "section" parameter '
+          '(the markdown heading text to append under). '
+          'Use "read" first to see available sections.');
+    }
+
+    final doc = await _resolveDocument(args);
+    if (doc == null) return _noDocError(args);
+
+    final client = _clientFactory();
+    try {
+      final baseUpdatedAt = await _fetchBaseUpdatedAt(client, doc);
+      final op = <String, dynamic>{
+        'op': 'append',
+        'section': section,
+        'content': content,
+      };
+
+      final body = <String, dynamic>{
+        'by': _agentBy,
+        'operations': [op],
+      };
+      if (baseUpdatedAt != null) body['baseUpdatedAt'] = baseUpdatedAt;
 
       final response = await _postJson(
         client,
         Uri.parse('$_baseUrl/api/agent/${doc.slug}/edit'),
         headers: _bearerHeaders(doc.token),
-        body: {
-          'by': _agentBy,
-          'operations': [op],
-        },
+        body: body,
       );
 
       if (response.statusCode == 409) {
@@ -522,7 +652,7 @@ class ProofEditorTool extends Tool {
       await store.updateLastAccessed(doc.slug);
 
       final l = tr(locale);
-      final target = section != null ? 'section "$section"' : 'document end';
+      final target = 'section "$section"';
       return ToolResult.dual(
         forLLM: 'Content appended to $target in document ${doc.slug}.',
         forUser: l.proofActionApplied,
@@ -547,22 +677,26 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = http.Client();
+    final client = _clientFactory();
     try {
+      final baseUpdatedAt = await _fetchBaseUpdatedAt(client, doc);
+      final body = <String, dynamic>{
+        'by': _agentBy,
+        'operations': [
+          {
+            'op': 'insert',
+            'target': {'anchor': quote},
+            'content': content,
+          },
+        ],
+      };
+      if (baseUpdatedAt != null) body['baseUpdatedAt'] = baseUpdatedAt;
+
       final response = await _postJson(
         client,
         Uri.parse('$_baseUrl/api/agent/${doc.slug}/edit'),
         headers: _bearerHeaders(doc.token),
-        body: {
-          'by': _agentBy,
-          'operations': [
-            {
-              'op': 'insert',
-              'target': {'anchor': quote},
-              'content': content,
-            },
-          ],
-        },
+        body: body,
       );
 
       if (response.statusCode == 409) {
@@ -655,7 +789,7 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = http.Client();
+    final client = _clientFactory();
     try {
       final response = await _putJson(
         client,
@@ -687,7 +821,7 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = http.Client();
+    final client = _clientFactory();
     try {
       final response = await _getWithRetry(
         client,
@@ -765,7 +899,7 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = http.Client();
+    final client = _clientFactory();
     try {
       final response = await _postJson(
         client,
@@ -800,6 +934,25 @@ class ProofEditorTool extends Tool {
     } finally {
       client.close();
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // State helpers
+  // ---------------------------------------------------------------------------
+
+  /// Fetch the current document state to get baseUpdatedAt for edit operations.
+  /// Only needed for the /edit endpoint (edit, append, insert).
+  /// The /ops endpoint (rewrite, comment, suggest) handles concurrency differently.
+  Future<String?> _fetchBaseUpdatedAt(
+      http.Client client, ProofDocument doc) async {
+    final response = await _getWithRetry(
+      client,
+      Uri.parse('$_baseUrl/api/agent/${doc.slug}/state'),
+      headers: _bearerHeaders(doc.token),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) return null;
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return data['updatedAt'] as String?;
   }
 
   // ---------------------------------------------------------------------------
@@ -945,6 +1098,9 @@ class ProofEditorTool extends Tool {
   /// Check HTTP response for common errors. Returns null if OK.
   ToolResult? _checkHttpError(http.Response response, String slug) {
     if (response.statusCode >= 200 && response.statusCode < 300) return null;
+
+    // Log status code only — response body may contain tokens.
+    print('[ProofEditor] HTTP ${response.statusCode} for slug "$slug"');
 
     switch (response.statusCode) {
       case 401:
