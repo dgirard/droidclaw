@@ -30,9 +30,10 @@ class ProofEditorTool extends Tool {
   @override
   String get description =>
       'Collaborative document editor via ProofEditor.ai. '
-      'Create, read, edit, comment on, and manage shared markdown documents. '
-      'Documents persist across sessions and are accessible via shareable URLs. '
-      'Use operation "list" to see known documents, "create" to start a new one.';
+      'Create, read, edit, suggest changes, comment on, and manage shared markdown documents. '
+      'Use "snapshot" + "edit_v2" for precise block-level edits. '
+      'Use "suggest" to propose changes the user can accept/reject. '
+      'Documents persist across sessions and are accessible via shareable URLs.';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -46,6 +47,12 @@ class ProofEditorTool extends Tool {
               'edit',
               'rewrite',
               'comment',
+              'suggest',
+              'append',
+              'insert',
+              'rename',
+              'snapshot',
+              'edit_v2',
               'list',
               'delete',
             ],
@@ -62,7 +69,8 @@ class ProofEditorTool extends Tool {
           },
           'content': {
             'type': 'string',
-            'description': 'Markdown content (for create, rewrite)',
+            'description':
+                'Markdown content (for create, rewrite, suggest, append, insert)',
           },
           'search': {
             'type': 'string',
@@ -74,7 +82,8 @@ class ProofEditorTool extends Tool {
           },
           'quote': {
             'type': 'string',
-            'description': 'Text to anchor comment on (for comment)',
+            'description':
+                'Text to anchor on (for comment, suggest, insert)',
           },
           'text': {
             'type': 'string',
@@ -84,6 +93,23 @@ class ProofEditorTool extends Tool {
             'type': 'string',
             'description':
                 'ProofEditor URL to import (registers document from shared URL)',
+          },
+          'section': {
+            'type': 'string',
+            'description':
+                'Markdown heading text to target (for append; omit to append to document end)',
+          },
+          'base_token': {
+            'type': 'string',
+            'description':
+                'Mutation base token from a prior snapshot (required for edit_v2)',
+          },
+          'ops': {
+            'type': 'array',
+            'description':
+                'Block-level operations array (for edit_v2). '
+                    'Each item: {op: "replace_block", ref: "bN", content: "..."} '
+                    'or {op: "insert_after", ref: "bN", blocks: [{content: "..."}]}',
           },
         },
         'required': ['operation'],
@@ -103,11 +129,18 @@ class ProofEditorTool extends Tool {
         'edit' => await _edit(arguments),
         'rewrite' => await _rewrite(arguments),
         'comment' => await _comment(arguments),
+        'suggest' => await _suggest(arguments),
+        'append' => await _append(arguments),
+        'insert' => await _insert(arguments),
+        'rename' => await _rename(arguments),
+        'snapshot' => await _snapshot(arguments),
+        'edit_v2' => await _editV2(arguments),
         'list' => await _list(),
         'delete' => await _delete(arguments),
         _ => ToolResult.error(
             'Unknown operation: $operation. '
-            'Use create, read, edit, rewrite, comment, list, or delete.'),
+            'Valid: create, read, edit, rewrite, comment, suggest, append, '
+            'insert, rename, snapshot, edit_v2, list, delete.'),
       };
     } catch (e) {
       // SECURITY: Never expose raw exception (may contain tokens in URLs)
@@ -395,6 +428,171 @@ class ProofEditorTool extends Tool {
     }
   }
 
+  Future<ToolResult> _suggest(Map<String, dynamic> args) async {
+    final quote = args['quote'] as String?;
+    final content = args['content'] as String?;
+    if (quote == null || quote.isEmpty) {
+      return ToolResult.error(
+          'suggest operation requires "quote" parameter.');
+    }
+    if (content == null || content.isEmpty) {
+      return ToolResult.error(
+          'suggest operation requires "content" parameter.');
+    }
+
+    final doc = await _resolveDocument(args);
+    if (doc == null) return _noDocError(args);
+
+    final client = http.Client();
+    try {
+      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops')
+          .replace(queryParameters: {'token': doc.token});
+      final response = await _postJson(
+        client,
+        uri,
+        headers: {'X-Agent-Id': _agentId},
+        body: {
+          'type': 'suggestion.add',
+          'kind': 'replace',
+          'by': _agentBy,
+          'quote': quote,
+          'content': content,
+        },
+      );
+
+      if (response.statusCode == 409) {
+        return ToolResult.error(
+            'Quoted text not found in document. '
+            'Re-read the document to see current content.');
+      }
+
+      final error = _checkHttpError(response, doc.slug);
+      if (error != null) return error;
+
+      await store.updateLastAccessed(doc.slug);
+
+      final l = tr(locale);
+      return ToolResult.dual(
+        forLLM: 'Suggestion added on "${quote.length > 60 ? '${quote.substring(0, 60)}...' : quote}" '
+            'in document ${doc.slug}. User can accept/reject in ProofEditor UI.',
+        forUser: l.proofActionApplied,
+      );
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<ToolResult> _append(Map<String, dynamic> args) async {
+    final content = args['content'] as String?;
+    if (content == null || content.isEmpty) {
+      return ToolResult.error(
+          'append operation requires "content" parameter.');
+    }
+
+    final doc = await _resolveDocument(args);
+    if (doc == null) return _noDocError(args);
+
+    final client = http.Client();
+    try {
+      final op = <String, dynamic>{'op': 'append', 'content': content};
+      final section = args['section'] as String?;
+      if (section != null && section.isNotEmpty) {
+        op['section'] = section;
+      }
+
+      final response = await _postJson(
+        client,
+        Uri.parse('$_baseUrl/api/agent/${doc.slug}/edit'),
+        headers: _bearerHeaders(doc.token),
+        body: {
+          'by': _agentBy,
+          'operations': [op],
+        },
+      );
+
+      if (response.statusCode == 409) {
+        return ToolResult.error(
+            'Append failed — section may not exist. '
+            'Re-read the document to see current sections.');
+      }
+
+      final error = _checkHttpError(response, doc.slug);
+      if (error != null) return error;
+
+      await store.updateLastAccessed(doc.slug);
+
+      final l = tr(locale);
+      final target = section != null ? 'section "$section"' : 'document end';
+      return ToolResult.dual(
+        forLLM: 'Content appended to $target in document ${doc.slug}.',
+        forUser: l.proofActionApplied,
+      );
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<ToolResult> _insert(Map<String, dynamic> args) async {
+    final content = args['content'] as String?;
+    final quote = args['quote'] as String?;
+    if (content == null || content.isEmpty) {
+      return ToolResult.error(
+          'insert operation requires "content" parameter.');
+    }
+    if (quote == null || quote.isEmpty) {
+      return ToolResult.error(
+          'insert operation requires "quote" parameter (anchor text).');
+    }
+
+    final doc = await _resolveDocument(args);
+    if (doc == null) return _noDocError(args);
+
+    final client = http.Client();
+    try {
+      final response = await _postJson(
+        client,
+        Uri.parse('$_baseUrl/api/agent/${doc.slug}/edit'),
+        headers: _bearerHeaders(doc.token),
+        body: {
+          'by': _agentBy,
+          'operations': [
+            {
+              'op': 'insert',
+              'target': {'anchor': quote},
+              'content': content,
+            },
+          ],
+        },
+      );
+
+      if (response.statusCode == 409) {
+        final errorData = jsonDecode(response.body) as Map<String, dynamic>;
+        final code = errorData['code'] as String? ?? '';
+        if (code == 'ANCHOR_NOT_FOUND') {
+          return ToolResult.error(
+              'Anchor text not found in document. '
+              'Re-read the document to see current content.');
+        }
+        return ToolResult.error(
+            'Insert conflict. Re-read the document and try again.');
+      }
+
+      final error = _checkHttpError(response, doc.slug);
+      if (error != null) return error;
+
+      await store.updateLastAccessed(doc.slug);
+
+      final l = tr(locale);
+      return ToolResult.dual(
+        forLLM: 'Content inserted after "${quote.length > 60 ? '${quote.substring(0, 60)}...' : quote}" '
+            'in document ${doc.slug}.',
+        forUser: l.proofActionApplied,
+      );
+    } finally {
+      client.close();
+    }
+  }
+
   Future<ToolResult> _list() async {
     final docs = await store.loadAll();
     if (docs.isEmpty) {
@@ -445,6 +643,163 @@ class ProofEditorTool extends Tool {
           'The document still exists at ${doc.shareUrl}.',
       forUser: l.proofActionApplied,
     );
+  }
+
+  Future<ToolResult> _rename(Map<String, dynamic> args) async {
+    final title = args['title'] as String?;
+    if (title == null || title.isEmpty) {
+      return ToolResult.error(
+          'rename operation requires "title" parameter.');
+    }
+
+    final doc = await _resolveDocument(args);
+    if (doc == null) return _noDocError(args);
+
+    final client = http.Client();
+    try {
+      final response = await _putJson(
+        client,
+        Uri.parse('$_baseUrl/api/documents/${doc.slug}/title'),
+        headers: _bearerHeaders(doc.token),
+        body: {'title': title},
+      );
+
+      final error = _checkHttpError(response, doc.slug);
+      if (error != null) return error;
+
+      // Update local store with new title
+      await store.save(doc.copyWith(
+        title: title,
+        lastAccessedAt: DateTime.now(),
+      ));
+
+      final l = tr(locale);
+      return ToolResult.dual(
+        forLLM: 'Document ${doc.slug} renamed to "$title".',
+        forUser: l.proofDocRenamed(title),
+      );
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<ToolResult> _snapshot(Map<String, dynamic> args) async {
+    final doc = await _resolveDocument(args);
+    if (doc == null) return _noDocError(args);
+
+    final client = http.Client();
+    try {
+      final response = await _getWithRetry(
+        client,
+        Uri.parse('$_baseUrl/api/agent/${doc.slug}/snapshot'),
+        headers: _bearerHeaders(doc.token),
+      );
+
+      final error = _checkHttpError(response, doc.slug);
+      if (error != null) return error;
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final blocks = data['blocks'] as List? ?? [];
+      final mutationBase = data['mutationBase'] as Map<String, dynamic>? ?? {};
+      final baseToken = mutationBase['token'] as String? ?? '';
+
+      await store.updateLastAccessed(doc.slug);
+
+      // Format blocks with refs
+      final llmBuf = StringBuffer();
+      llmBuf.writeln('Document: "${doc.title}" (slug: ${doc.slug})');
+      llmBuf.writeln('mutationBase: $baseToken');
+      llmBuf.writeln('---');
+
+      var truncated = false;
+      var charCount = 0;
+      for (final block in blocks) {
+        if (block is Map<String, dynamic>) {
+          final ref = block['ref'] as String? ?? '';
+          final content = block['content'] as String? ?? '';
+          final line = '[$ref] $content';
+          charCount += line.length + 1;
+          if (charCount > _maxContentLength) {
+            truncated = true;
+            llmBuf.writeln(
+                '\n[Truncated: showing $_maxContentLength of ~$charCount chars. '
+                '${blocks.length} total blocks.]');
+            break;
+          }
+          llmBuf.writeln(line);
+        }
+      }
+
+      final l = tr(locale);
+      final preview = llmBuf.toString();
+      final userPreview = preview.length > 500
+          ? '${preview.substring(0, 500)}...'
+          : preview;
+      final truncNote = truncated
+          ? '\n${l.proofDocTruncated(_maxContentLength, charCount)}'
+          : '';
+
+      return ToolResult.dual(
+        forLLM: llmBuf.toString().trimRight(),
+        forUser: '$userPreview$truncNote',
+      );
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<ToolResult> _editV2(Map<String, dynamic> args) async {
+    final baseToken = args['base_token'] as String?;
+    final ops = args['ops'] as List?;
+    if (baseToken == null || baseToken.isEmpty) {
+      return ToolResult.error(
+          'edit_v2 operation requires "base_token" parameter '
+          '(from a prior snapshot).');
+    }
+    if (ops == null || ops.isEmpty) {
+      return ToolResult.error(
+          'edit_v2 operation requires "ops" parameter '
+          '(array of block-level operations).');
+    }
+
+    final doc = await _resolveDocument(args);
+    if (doc == null) return _noDocError(args);
+
+    final client = http.Client();
+    try {
+      final response = await _postJson(
+        client,
+        Uri.parse('$_baseUrl/api/agent/${doc.slug}/edit/v2'),
+        headers: {
+          ..._bearerHeaders(doc.token),
+          'Idempotency-Key': _idempotencyKey(),
+        },
+        body: {
+          'baseToken': baseToken,
+          'operations': ops,
+        },
+      );
+
+      if (response.statusCode == 409) {
+        return ToolResult.error(
+            'Document changed since snapshot. '
+            'Use operation "snapshot" to get current state, then retry.');
+      }
+
+      final error = _checkHttpError(response, doc.slug);
+      if (error != null) return error;
+
+      await store.updateLastAccessed(doc.slug);
+
+      final l = tr(locale);
+      return ToolResult.dual(
+        forLLM: 'Block-level edits applied to document ${doc.slug} '
+            '(${ops.length} operation(s)).',
+        forUser: l.proofActionApplied,
+      );
+    } finally {
+      client.close();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -547,6 +902,25 @@ class ProofEditorTool extends Tool {
       body: jsonEncode(body),
     );
   }
+
+  Future<http.Response> _putJson(
+    http.Client client,
+    Uri uri, {
+    Map<String, String>? headers,
+    required Map<String, dynamic> body,
+  }) async {
+    return client.put(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        ...?headers,
+      },
+      body: jsonEncode(body),
+    );
+  }
+
+  String _idempotencyKey() =>
+      DateTime.now().microsecondsSinceEpoch.toString();
 
   /// GET with retry on 429/5xx (exponential backoff).
   Future<http.Response> _getWithRetry(

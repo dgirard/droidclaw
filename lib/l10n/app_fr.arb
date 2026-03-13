@@ -270,6 +270,8 @@
   "toolProofEditorDesc": "Édition collaborative de documents via ProofEditor.ai",
   "proofDocCreated": "Document créé",
   "proofActionApplied": "Modifications appliquées",
+  "proofDocRenamed": "Titre mis à jour : {title}",
+  "@proofDocRenamed": { "placeholders": { "title": { "type": "String" } } },
   "proofDocTruncated": "(Tronqué à {max} sur {actual} caractères)",
   "@proofDocTruncated": { "placeholders": { "max": { "type": "int" }, "actual": { "type": "int" } } },
   "toolKnowledgeSearch": "Recherche mémoire",
