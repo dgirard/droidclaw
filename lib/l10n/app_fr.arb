@@ -278,6 +278,8 @@
   "toolKnowledgeSearchDesc": "Chercher dans les connaissances mémorisées des conversations passées",
   "toolKnowledgeStore": "Stockage mémoire",
   "toolKnowledgeStoreDesc": "Enregistrer un fait à retenir entre les conversations",
+  "toolKbQuery": "Requête mémoire",
+  "toolKbQueryDesc": "Parcourir et interroger la base de connaissances",
 
   "weatherClearSky": "Ciel dégagé",
   "weatherMainlyClear": "Peu nuageux",

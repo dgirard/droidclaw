@@ -406,6 +406,79 @@ class KnowledgeService {
     return await db.countEntitiesFiltered(type: type, temp: temperature);
   }
 
+  /// List entities with combined AND filters (type + temperature + date range).
+  Future<List<(KnowledgeEntity, int)>> listEntitiesFiltered({
+    int limit = 50,
+    int offset = 0,
+    String? type,
+    String? temperature,
+    String? search,
+    int? createdAfterEpoch,
+    int? createdBeforeEpoch,
+    int? accessedAfterEpoch,
+  }) async {
+    List<Map<String, dynamic>> rows;
+
+    if (search != null && search.trim().isNotEmpty) {
+      final ftsQuery = _buildFtsQuery(search);
+      if (ftsQuery.isEmpty) return [];
+      rows = await db.searchEntitiesBrowse(ftsQuery, limit);
+    } else {
+      rows = await db.listEntitiesFiltered(
+        type: type,
+        temperature: temperature,
+        createdAfterEpoch: createdAfterEpoch,
+        createdBeforeEpoch: createdBeforeEpoch,
+        accessedAfterEpoch: accessedAfterEpoch,
+        limit: limit,
+        offset: offset,
+      );
+    }
+
+    return rows.map((r) {
+      final entity = KnowledgeEntity.fromJson(r);
+      final factCount = (r['fact_count'] as int?) ?? 0;
+      return (entity, factCount);
+    }).toList();
+  }
+
+  /// Get KB statistics: total entities, facts, relations, counts by type/temperature.
+  Future<Map<String, dynamic>> getKbStats() async {
+    final totalEntities = await db.countEntitiesFiltered();
+    final totalFacts = await db.countActiveFacts();
+    final totalRelations = await db.countActiveRelations();
+    final byType = await db.countByType();
+    final byTemp = await db.countByTemperature();
+
+    return {
+      'total_entities': totalEntities,
+      'total_facts': totalFacts,
+      'total_relations': totalRelations,
+      'by_type': {for (final r in byType) r['entity_type'] as String: r['cnt'] as int},
+      'by_temperature': {for (final r in byTemp) r['temperature'] as String: r['cnt'] as int},
+    };
+  }
+
+  /// Resolve an entity by exact name match (case-insensitive).
+  Future<KnowledgeEntityDetail?> resolveEntityByName(String name) async {
+    final ftsQuery = '"${name.replaceAll('"', '')}"';
+    final rows = await db.searchEntitiesBrowse(ftsQuery, 5);
+    final nameLower = name.toLowerCase();
+    for (final r in rows) {
+      final entityName = (r['name'] as String?) ?? '';
+      if (entityName.toLowerCase() == nameLower) {
+        final entity = KnowledgeEntity.fromJson(r);
+        if (entity.id != null) return await getEntityDetail(entity.id!);
+      }
+    }
+    // Fallback: return first FTS match if any
+    if (rows.isNotEmpty) {
+      final entity = KnowledgeEntity.fromJson(rows.first);
+      if (entity.id != null) return await getEntityDetail(entity.id!);
+    }
+    return null;
+  }
+
   /// Delete all knowledge graph data.
   Future<void> deleteAll() async {
     await db.deleteAllData();

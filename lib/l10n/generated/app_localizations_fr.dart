@@ -883,6 +883,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Enregistrer un fait à retenir entre les conversations';
 
   @override
+  String get toolKbQuery => 'Requête mémoire';
+
+  @override
+  String get toolKbQueryDesc =>
+      'Parcourir et interroger la base de connaissances';
+
+  @override
   String get weatherClearSky => 'Ciel dégagé';
 
   @override

@@ -864,6 +864,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'Store a fact to remember across conversations';
 
   @override
+  String get toolKbQuery => 'Knowledge Query';
+
+  @override
+  String get toolKbQueryDesc => 'Browse and query the knowledge base';
+
+  @override
   String get weatherClearSky => 'Clear sky';
 
   @override

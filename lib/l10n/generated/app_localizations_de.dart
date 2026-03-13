@@ -883,6 +883,12 @@ class AppLocalizationsDe extends AppLocalizations {
       'Einen Fakt zum Merken über Gespräche hinweg speichern';
 
   @override
+  String get toolKbQuery => 'Wissensabfrage';
+
+  @override
+  String get toolKbQueryDesc => 'Wissensdatenbank durchsuchen und abfragen';
+
+  @override
   String get weatherClearSky => 'Klarer Himmel';
 
   @override

@@ -1664,6 +1664,18 @@ abstract class AppLocalizations {
   /// **'Store a fact to remember across conversations'**
   String get toolKnowledgeStoreDesc;
 
+  /// No description provided for @toolKbQuery.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge Query'**
+  String get toolKbQuery;
+
+  /// No description provided for @toolKbQueryDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse and query the knowledge base'**
+  String get toolKbQueryDesc;
+
   /// No description provided for @weatherClearSky.
   ///
   /// In en, this message translates to:

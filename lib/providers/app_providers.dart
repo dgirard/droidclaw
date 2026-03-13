@@ -18,6 +18,7 @@ import '../core/providers/embedding_provider_factory.dart';
 import '../core/providers/llm_provider.dart';
 import '../core/providers/provider_factory.dart';
 import '../core/session/session_manager.dart';
+import '../core/tools/knowledge_query_tool.dart';
 import '../core/tools/knowledge_search_tool.dart';
 import '../core/tools/knowledge_store_tool.dart';
 import '../shared/constants.dart';
@@ -259,6 +260,11 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
         db: kgDb,
         resolver: resolver,
         kbLanguage: config.knowledge.kbLanguage,
+      ));
+    }
+    if (!disabled.contains('kb_query')) {
+      registry.register(KnowledgeQueryTool(
+        knowledgeService: kgService,
       ));
     }
   }

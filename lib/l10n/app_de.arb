@@ -302,6 +302,8 @@
   "toolKnowledgeSearchDesc": "Gespeichertes Wissen aus früheren Gesprächen durchsuchen",
   "toolKnowledgeStore": "Wissensspeicher",
   "toolKnowledgeStoreDesc": "Einen Fakt zum Merken über Gespräche hinweg speichern",
+  "toolKbQuery": "Wissensabfrage",
+  "toolKbQueryDesc": "Wissensdatenbank durchsuchen und abfragen",
 
   "weatherClearSky": "Klarer Himmel",
   "weatherMainlyClear": "Überwiegend klar",

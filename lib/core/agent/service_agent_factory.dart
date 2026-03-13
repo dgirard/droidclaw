@@ -22,6 +22,7 @@ import '../tools/device_info_tool.dart';
 import '../tools/directions_tool.dart';
 import '../tools/geocode_tool.dart';
 import '../tools/file_tool.dart';
+import '../tools/knowledge_query_tool.dart';
 import '../tools/knowledge_search_tool.dart';
 import '../tools/knowledge_store_tool.dart';
 import '../tools/location_tool.dart';
@@ -224,6 +225,11 @@ class ServiceAgentFactory {
             db: kgDb,
             resolver: resolver,
             kbLanguage: kbLanguage,
+          ));
+        }
+        if (!disabled.contains('kb_query')) {
+          registry.register(KnowledgeQueryTool(
+            knowledgeService: knowledgeService,
           ));
         }
       } catch (_) {

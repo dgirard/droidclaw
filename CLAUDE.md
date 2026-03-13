@@ -211,4 +211,4 @@ For tools needing an API key that must work in both isolates:
 - `AppConstants` in `lib/shared/constants.dart` for all magic values
 - `print('[AgentLoop] ...')` for debug logging (visible via `adb logcat`)
 - Config persisted in `SharedPreferences`, secrets in `FlutterSecureStorage`, sessions in Hive
-- All tool names are snake_case: `web_search`, `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`, `get_directions`, `geocode`, `get_transit`, `weather`, `get_datetime`, `knowledge_search`, `knowledge_store`, `radio`
+- All tool names are snake_case: `web_search`, `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`, `get_directions`, `geocode`, `get_transit`, `weather`, `get_datetime`, `knowledge_search`, `knowledge_store`, `kb_query`, `radio`

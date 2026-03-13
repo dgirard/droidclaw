@@ -1035,7 +1035,10 @@ class ProofEditorTool extends Tool {
   // HTTP helpers
   // ---------------------------------------------------------------------------
 
+  Map<String, String> get _baseHeaders => {'X-DroidClaw-App': _agentId};
+
   Map<String, String> _bearerHeaders(String token) => {
+        ..._baseHeaders,
         'Authorization': 'Bearer $token',
         'X-Agent-Id': _agentId,
       };
@@ -1049,6 +1052,7 @@ class ProofEditorTool extends Tool {
     return client.post(
       uri,
       headers: {
+        ..._baseHeaders,
         'Content-Type': 'application/json',
         ...?headers,
       },
@@ -1065,6 +1069,7 @@ class ProofEditorTool extends Tool {
     return client.put(
       uri,
       headers: {
+        ..._baseHeaders,
         'Content-Type': 'application/json',
         ...?headers,
       },
@@ -1081,8 +1086,9 @@ class ProofEditorTool extends Tool {
     Uri uri, {
     Map<String, String>? headers,
   }) async {
+    final mergedHeaders = {..._baseHeaders, ...?headers};
     for (var attempt = 0; attempt <= _maxRetries; attempt++) {
-      final response = await client.get(uri, headers: headers);
+      final response = await client.get(uri, headers: mergedHeaders);
       if (attempt < _maxRetries &&
           (response.statusCode == 429 || response.statusCode >= 500)) {
         await Future.delayed(
@@ -1092,7 +1098,7 @@ class ProofEditorTool extends Tool {
       return response;
     }
     // Unreachable, but Dart requires a return.
-    return client.get(uri, headers: headers);
+    return client.get(uri, headers: mergedHeaders);
   }
 
   /// Check HTTP response for common errors. Returns null if OK.

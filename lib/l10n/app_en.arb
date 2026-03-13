@@ -302,6 +302,8 @@
   "toolKnowledgeSearchDesc": "Search remembered knowledge from past conversations",
   "toolKnowledgeStore": "Knowledge Store",
   "toolKnowledgeStoreDesc": "Store a fact to remember across conversations",
+  "toolKbQuery": "Knowledge Query",
+  "toolKbQueryDesc": "Browse and query the knowledge base",
 
   "weatherClearSky": "Clear sky",
   "weatherMainlyClear": "Mainly clear",

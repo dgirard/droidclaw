@@ -302,6 +302,8 @@
   "toolKnowledgeSearchDesc": "Cercare conoscenze memorizzate da conversazioni precedenti",
   "toolKnowledgeStore": "Archiviazione conoscenze",
   "toolKnowledgeStoreDesc": "Salvare un fatto da ricordare tra le conversazioni",
+  "toolKbQuery": "Interrogazione conoscenza",
+  "toolKbQueryDesc": "Sfogliare e interrogare la base di conoscenza",
 
   "weatherClearSky": "Cielo sereno",
   "weatherMainlyClear": "Prevalentemente sereno",

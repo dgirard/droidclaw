@@ -312,6 +312,84 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     return result.read<int>('cnt');
   }
 
+  /// List entities with combined AND filters (type + temperature + date range),
+  /// paged, ordered by last_accessed DESC.
+  Future<List<Map<String, dynamic>>> listEntitiesFiltered({
+    String? type,
+    String? temperature,
+    int? createdAfterEpoch,
+    int? createdBeforeEpoch,
+    int? accessedAfterEpoch,
+    required int limit,
+    required int offset,
+  }) async {
+    final conditions = <String>['e.is_active = 1'];
+    final vars = <Variable>[];
+    if (type != null) {
+      conditions.add('e.entity_type = ?');
+      vars.add(Variable.withString(type));
+    }
+    if (temperature != null) {
+      conditions.add('e.temperature = ?');
+      vars.add(Variable.withString(temperature));
+    }
+    if (createdAfterEpoch != null) {
+      conditions.add('e.created_at >= ?');
+      vars.add(Variable.withInt(createdAfterEpoch));
+    }
+    if (createdBeforeEpoch != null) {
+      conditions.add('e.created_at < ?');
+      vars.add(Variable.withInt(createdBeforeEpoch));
+    }
+    if (accessedAfterEpoch != null) {
+      conditions.add('e.last_accessed >= ?');
+      vars.add(Variable.withInt(accessedAfterEpoch));
+    }
+    vars.add(Variable.withInt(limit));
+    vars.add(Variable.withInt(offset));
+    final results = await customSelect(
+      'SELECT e.*, (SELECT COUNT(*) FROM facts f WHERE f.entity_id = e.id AND f.expired_at IS NULL) AS fact_count '
+      'FROM entities e WHERE ${conditions.join(' AND ')} '
+      'ORDER BY e.last_accessed DESC LIMIT ? OFFSET ?',
+      variables: vars,
+    ).get();
+    return results.map((r) => r.data).toList();
+  }
+
+  /// Count entities grouped by entity_type.
+  Future<List<Map<String, dynamic>>> countByType() async {
+    final results = await customSelect(
+      'SELECT entity_type, COUNT(*) AS cnt FROM entities '
+      'WHERE is_active = 1 GROUP BY entity_type ORDER BY cnt DESC',
+    ).get();
+    return results.map((r) => r.data).toList();
+  }
+
+  /// Count entities grouped by temperature.
+  Future<List<Map<String, dynamic>>> countByTemperature() async {
+    final results = await customSelect(
+      'SELECT temperature, COUNT(*) AS cnt FROM entities '
+      'WHERE is_active = 1 GROUP BY temperature ORDER BY cnt DESC',
+    ).get();
+    return results.map((r) => r.data).toList();
+  }
+
+  /// Count active facts.
+  Future<int> countActiveFacts() async {
+    final result = await customSelect(
+      'SELECT COUNT(*) AS cnt FROM facts WHERE expired_at IS NULL',
+    ).getSingle();
+    return result.read<int>('cnt');
+  }
+
+  /// Count active relations.
+  Future<int> countActiveRelations() async {
+    final result = await customSelect(
+      'SELECT COUNT(*) AS cnt FROM relations WHERE is_active = 1 AND expired_at IS NULL',
+    ).getSingle();
+    return result.read<int>('cnt');
+  }
+
   /// Soft-delete an entity: deactivate, expire facts, clear embedding,
   /// delete aliases, deactivate relations. FTS5 triggers handle index cleanup.
   Future<void> deactivateEntity(int entityId) async {

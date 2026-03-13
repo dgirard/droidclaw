@@ -882,6 +882,12 @@ class AppLocalizationsIt extends AppLocalizations {
       'Salvare un fatto da ricordare tra le conversazioni';
 
   @override
+  String get toolKbQuery => 'Interrogazione conoscenza';
+
+  @override
+  String get toolKbQueryDesc => 'Sfogliare e interrogare la base di conoscenza';
+
+  @override
   String get weatherClearSky => 'Cielo sereno';
 
   @override

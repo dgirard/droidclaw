@@ -188,6 +188,12 @@ List<_ToolInfo> _tools(AppLocalizations l) => [
     description: l.toolKnowledgeStoreDesc,
     icon: Icons.save_outlined,
   ),
+  _ToolInfo(
+    name: 'kb_query',
+    label: l.toolKbQuery,
+    description: l.toolKbQueryDesc,
+    icon: Icons.explore_outlined,
+  ),
 ];
 
 /// Screen to enable/disable individual agent tools.

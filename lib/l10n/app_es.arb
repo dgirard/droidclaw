@@ -302,6 +302,8 @@
   "toolKnowledgeSearchDesc": "Buscar conocimientos recordados de conversaciones anteriores",
   "toolKnowledgeStore": "Almacenamiento de conocimiento",
   "toolKnowledgeStoreDesc": "Guardar un dato para recordar entre conversaciones",
+  "toolKbQuery": "Consulta de conocimiento",
+  "toolKbQueryDesc": "Explorar y consultar la base de conocimiento",
 
   "weatherClearSky": "Cielo despejado",
   "weatherMainlyClear": "Mayormente despejado",
