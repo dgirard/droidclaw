@@ -12,6 +12,10 @@ build/
 # macOS
 .DS_Store
 
+# AI assistants
+.gemini/
+.claude/
+
 # Flutter plugin cache
 .flutter-plugins
 .flutter-plugins-dependencies
