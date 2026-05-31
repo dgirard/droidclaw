@@ -304,6 +304,8 @@
   "toolKnowledgeStoreDesc": "Einen Fakt zum Merken über Gespräche hinweg speichern",
   "toolKbQuery": "Wissensabfrage",
   "toolKbQueryDesc": "Wissensdatenbank durchsuchen und abfragen",
+  "toolDream": "Traum",
+  "toolDreamDesc": "KB analysieren und bereinigen durch Finden und Zusammenführen von Duplikaten",
 
   "weatherClearSky": "Klarer Himmel",
   "weatherMainlyClear": "Überwiegend klar",

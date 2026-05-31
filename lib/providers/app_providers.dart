@@ -12,6 +12,7 @@ import '../core/knowledge/database/knowledge_graph_db.dart';
 import '../core/knowledge/services/entity_extractor.dart';
 import '../core/knowledge/services/entity_resolver.dart';
 import '../core/knowledge/services/ingestion_pipeline.dart';
+import '../core/knowledge/services/kb_maintenance_service.dart';
 import '../core/knowledge/services/knowledge_service.dart';
 import '../core/providers/embedding_provider.dart';
 import '../core/providers/embedding_provider_factory.dart';
@@ -44,6 +45,7 @@ import '../core/tools/set_alarm_tool.dart';
 import '../core/tools/speak_tool.dart';
 import '../core/tools/subagent_tool.dart';
 import '../core/tools/transit_tool.dart';
+import '../core/tools/dream_tool.dart';
 import '../core/tools/proof_document_store.dart';
 import '../core/tools/proof_editor_tool.dart';
 import '../core/tools/radio_tool.dart';
@@ -266,6 +268,24 @@ final toolRegistryProvider = FutureProvider<ToolRegistry>((ref) async {
       registry.register(KnowledgeQueryTool(
         knowledgeService: kgService,
       ));
+    }
+    // Dream tool requires LLM provider (first tool with indirect LLM dependency —
+    // creates a Riverpod diamond via llmProviderProvider, which is safe).
+    if (!disabled.contains('dream')) {
+      final llmProvider = await ref.watch(llmProviderProvider.future);
+      if (llmProvider != null) {
+        final configStorage = ref.read(configStorageProvider);
+        registry.register(DreamTool(
+          service: KbMaintenanceService(
+            db: kgDb,
+            knowledgeService: kgService,
+            llmProvider: llmProvider,
+            model: config.agent.model,
+            kbLanguage: config.knowledge.kbLanguage,
+          ),
+          configStorage: configStorage,
+        ));
+      }
     }
   }
 

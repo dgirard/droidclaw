@@ -194,6 +194,12 @@ List<_ToolInfo> _tools(AppLocalizations l) => [
     description: l.toolKbQueryDesc,
     icon: Icons.explore_outlined,
   ),
+  _ToolInfo(
+    name: 'dream',
+    label: l.toolDream,
+    description: l.toolDreamDesc,
+    icon: Icons.bedtime_outlined,
+  ),
 ];
 
 /// Screen to enable/disable individual agent tools.

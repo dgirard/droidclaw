@@ -304,6 +304,8 @@
   "toolKnowledgeStoreDesc": "Guardar un dato para recordar entre conversaciones",
   "toolKbQuery": "Consulta de conocimiento",
   "toolKbQueryDesc": "Explorar y consultar la base de conocimiento",
+  "toolDream": "Sueño",
+  "toolDreamDesc": "Analizar y limpiar la KB encontrando y fusionando entidades duplicadas",
 
   "weatherClearSky": "Cielo despejado",
   "weatherMainlyClear": "Mayormente despejado",

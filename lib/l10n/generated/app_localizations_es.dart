@@ -891,6 +891,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get toolKbQueryDesc => 'Explorar y consultar la base de conocimiento';
 
   @override
+  String get toolDream => 'Sueño';
+
+  @override
+  String get toolDreamDesc =>
+      'Analizar y limpiar la KB encontrando y fusionando entidades duplicadas';
+
+  @override
   String get weatherClearSky => 'Cielo despejado';
 
   @override

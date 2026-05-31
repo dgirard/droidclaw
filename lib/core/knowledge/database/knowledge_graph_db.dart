@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
@@ -161,13 +163,29 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     });
   }
 
-  /// Expire a relation bi-temporally.
+  /// Expire a relation bi-temporally: set expired_at AND is_active = 0.
   Future<void> expireRelation(int relationId) async {
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     await customStatement(
-      'UPDATE relations SET expired_at = ? WHERE id = ?',
+      'UPDATE relations SET expired_at = ?, is_active = 0 WHERE id = ?',
       [now, relationId],
     );
+  }
+
+  /// Get all aliases for all active entities in a single batch query.
+  Future<Map<int, List<String>>> getAllActiveAliases() async {
+    final results = await customSelect(
+      'SELECT a.entity_id, a.alias_name FROM aliases a '
+      'JOIN entities e ON e.id = a.entity_id '
+      'WHERE e.is_active = 1',
+    ).get();
+    final map = <int, List<String>>{};
+    for (final r in results) {
+      final entityId = r.read<int>('entity_id');
+      final aliasName = r.read<String>('alias_name');
+      (map[entityId] ??= []).add(aliasName);
+    }
+    return map;
   }
 
   /// Update temperature for a batch of entities.
@@ -421,6 +439,280 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     );
   }
 
+  /// Merge [secondaryId] into [primaryId] within a single transaction.
+  ///
+  /// Safe 12-step order: validate, expire self-referential relations,
+  /// two-pass conflict handling, re-point remaining, transfer aliases,
+  /// merge metadata, deactivate secondary, nullify primary embedding.
+  ///
+  /// Returns a [MergeResult] with counts of transferred items.
+  Future<MergeResult> mergeEntities(int primaryId, int secondaryId) async {
+    return await transaction(() async {
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+      // 1. Validate both entities exist and are active
+      final primary = await customSelect(
+        'SELECT * FROM entities WHERE id = ? AND is_active = 1',
+        variables: [Variable.withInt(primaryId)],
+      ).getSingleOrNull();
+      final secondary = await customSelect(
+        'SELECT * FROM entities WHERE id = ? AND is_active = 1',
+        variables: [Variable.withInt(secondaryId)],
+      ).getSingleOrNull();
+      if (primary == null || secondary == null) {
+        throw StateError('Both entities must exist and be active');
+      }
+
+      final primaryName = primary.read<String>('name');
+      final secondaryName = secondary.read<String>('name');
+
+      // 2. Expire self-referential relations (secondary↔primary)
+      await customStatement(
+        'UPDATE relations SET expired_at = ?, is_active = 0 '
+        'WHERE is_active = 1 AND expired_at IS NULL AND ('
+        '  (source_id = ? AND target_id = ?) OR '
+        '  (source_id = ? AND target_id = ?)'
+        ')',
+        [now, secondaryId, primaryId, primaryId, secondaryId],
+      );
+
+      // 3. Identify and expire conflicting relations (source side)
+      // A conflict: re-pointing source_id from secondary→primary would
+      // duplicate an existing (primary, predicate, target_id) triplet.
+      await customStatement(
+        'UPDATE relations SET expired_at = ?, is_active = 0 '
+        'WHERE source_id = ? AND is_active = 1 AND expired_at IS NULL '
+        'AND EXISTS ('
+        '  SELECT 1 FROM relations r2 '
+        '  WHERE r2.source_id = ? AND r2.predicate = relations.predicate '
+        '  AND r2.target_id = relations.target_id '
+        '  AND r2.is_active = 1 AND r2.expired_at IS NULL'
+        ')',
+        [now, secondaryId, primaryId],
+      );
+      // Conflicts on target side
+      await customStatement(
+        'UPDATE relations SET expired_at = ?, is_active = 0 '
+        'WHERE target_id = ? AND is_active = 1 AND expired_at IS NULL '
+        'AND EXISTS ('
+        '  SELECT 1 FROM relations r2 '
+        '  WHERE r2.target_id = ? AND r2.predicate = relations.predicate '
+        '  AND r2.source_id = relations.source_id '
+        '  AND r2.is_active = 1 AND r2.expired_at IS NULL'
+        ')',
+        [now, secondaryId, primaryId],
+      );
+
+      // 4. Re-point remaining relations from secondary to primary
+      // Source side
+      await customStatement(
+        'UPDATE relations SET source_id = ? '
+        'WHERE source_id = ? AND is_active = 1 AND expired_at IS NULL',
+        [primaryId, secondaryId],
+      );
+      final srcChanged = await customSelect('SELECT changes() AS cnt').getSingle();
+      final relationsTransferred1 = srcChanged.read<int>('cnt');
+      // Target side
+      await customStatement(
+        'UPDATE relations SET target_id = ? '
+        'WHERE target_id = ? AND is_active = 1 AND expired_at IS NULL',
+        [primaryId, secondaryId],
+      );
+      final tgtChanged = await customSelect('SELECT changes() AS cnt').getSingle();
+      final relationsTransferred2 = tgtChanged.read<int>('cnt');
+
+      // 5. Identify and expire conflicting facts
+      await customStatement(
+        'UPDATE facts SET expired_at = ? '
+        'WHERE entity_id = ? AND expired_at IS NULL '
+        'AND fact_key IN ('
+        '  SELECT fact_key FROM facts '
+        '  WHERE entity_id = ? AND expired_at IS NULL'
+        ')',
+        [now, secondaryId, primaryId],
+      );
+      final factsExpiredResult = await customSelect('SELECT changes() AS cnt').getSingle();
+      final factsExpired = factsExpiredResult.read<int>('cnt');
+
+      // 6. Re-point remaining facts from secondary to primary
+      await customStatement(
+        'UPDATE facts SET entity_id = ? '
+        'WHERE entity_id = ? AND expired_at IS NULL',
+        [primaryId, secondaryId],
+      );
+      final factsTransResult = await customSelect('SELECT changes() AS cnt').getSingle();
+      final factsTransferred = factsTransResult.read<int>('cnt');
+
+      // 7. Transfer aliases (INSERT OR IGNORE handles duplicates)
+      final secondaryAliases = await customSelect(
+        'SELECT alias_name, alias_type, confidence FROM aliases WHERE entity_id = ?',
+        variables: [Variable.withInt(secondaryId)],
+      ).get();
+      var aliasesTransferred = 0;
+      for (final alias in secondaryAliases) {
+        try {
+          await customStatement(
+            'INSERT OR IGNORE INTO aliases (entity_id, alias_name, alias_type, confidence) '
+            'VALUES (?, ?, ?, ?)',
+            [
+              primaryId,
+              alias.read<String>('alias_name'),
+              alias.read<String>('alias_type'),
+              alias.read<double>('confidence'),
+            ],
+          );
+          final inserted = await customSelect('SELECT changes() AS cnt').getSingle();
+          aliasesTransferred += inserted.read<int>('cnt');
+        } catch (_) {
+          // Ignore duplicate alias errors
+        }
+      }
+
+      // 8. Add secondary's name as alias of primary
+      try {
+        await customStatement(
+          'INSERT OR IGNORE INTO aliases (entity_id, alias_name, alias_type, confidence) '
+          'VALUES (?, ?, \'name\', 1.0)',
+          [primaryId, secondaryName],
+        );
+      } catch (_) {}
+
+      // Delete secondary's aliases (they've been transferred)
+      await customStatement(
+        'DELETE FROM aliases WHERE entity_id = ?',
+        [secondaryId],
+      );
+
+      // 9. Merge entity metadata
+      final secAccessCount = secondary.read<int>('access_count');
+      final secCreatedAt = secondary.read<int>('created_at');
+      final secBaseScore = secondary.read<double>('base_score');
+      final secSummary = secondary.readNullable<String>('summary');
+      final secProperties = secondary.read<String>('properties');
+      final secValidAt = secondary.readNullable<int>('valid_at');
+      final secIngestedAt = secondary.read<int>('ingested_at');
+
+      final priCreatedAt = primary.read<int>('created_at');
+      final priBaseScore = primary.read<double>('base_score');
+      final priSummary = primary.readNullable<String>('summary');
+      final priProperties = primary.read<String>('properties');
+      final priValidAt = primary.readNullable<int>('valid_at');
+      final priIngestedAt = primary.read<int>('ingested_at');
+
+      // Merge properties JSON
+      String mergedProperties;
+      try {
+        final priMap = Map<String, dynamic>.from(
+            jsonDecode(priProperties) as Map<String, dynamic>);
+        final secMap = Map<String, dynamic>.from(
+            jsonDecode(secProperties) as Map<String, dynamic>);
+        // Secondary fills in missing keys, primary wins on conflicts
+        secMap.addAll(priMap);
+        mergedProperties = jsonEncode(secMap);
+      } catch (_) {
+        mergedProperties = priProperties;
+      }
+
+      // Merge summary
+      String? mergedSummary;
+      if (priSummary != null && secSummary != null) {
+        mergedSummary = '$priSummary. $secSummary';
+      } else {
+        mergedSummary = priSummary ?? secSummary;
+      }
+
+      // Merge temporal fields
+      final mergedCreatedAt = min(priCreatedAt, secCreatedAt);
+      final mergedIngestedAt = min(priIngestedAt, secIngestedAt);
+      int? mergedValidAt;
+      if (priValidAt != null && secValidAt != null) {
+        mergedValidAt = min(priValidAt, secValidAt);
+      } else {
+        mergedValidAt = priValidAt ?? secValidAt;
+      }
+
+      await customStatement(
+        'UPDATE entities SET '
+        'access_count = access_count + ?, '
+        'base_score = ?, '
+        'last_accessed = ?, '
+        'created_at = ?, '
+        'ingested_at = ?, '
+        'valid_at = ?, '
+        'summary = ?, '
+        'properties = ? '
+        'WHERE id = ?',
+        [
+          secAccessCount,
+          max(priBaseScore, secBaseScore),
+          now, // merge itself counts as access
+          mergedCreatedAt,
+          mergedIngestedAt,
+          mergedValidAt,
+          mergedSummary,
+          mergedProperties,
+          primaryId,
+        ],
+      );
+
+      // 10. Deactivate secondary entity
+      await customStatement(
+        'UPDATE entities SET is_active = 0, expired_at = ? WHERE id = ?',
+        [now, secondaryId],
+      );
+
+      // 11. Nullify primary's embedding (stale after merge)
+      await customStatement(
+        'UPDATE entities SET embedding = NULL WHERE id = ?',
+        [primaryId],
+      );
+
+      // 12. Update summary_nodes.member_ids if applicable
+      final summaryNodes = await customSelect(
+        'SELECT id, member_ids FROM summary_nodes '
+        'WHERE member_ids LIKE ?',
+        variables: [Variable.withString('%$secondaryId%')],
+      ).get();
+      for (final node in summaryNodes) {
+        try {
+          final memberIds = List<dynamic>.from(
+              jsonDecode(node.read<String>('member_ids')) as List);
+          final updated = memberIds.map((id) {
+            return id == secondaryId ? primaryId : id;
+          }).toSet().toList(); // deduplicate
+          await customStatement(
+            'UPDATE summary_nodes SET member_ids = ? WHERE id = ?',
+            [jsonEncode(updated), node.read<int>('id')],
+          );
+        } catch (_) {}
+      }
+
+      // Count expired relations (step 2 + 3)
+      final expiredRels = await customSelect(
+        'SELECT COUNT(*) AS cnt FROM relations '
+        'WHERE (source_id = ? OR target_id = ?) '
+        'AND is_active = 0 AND expired_at = ?',
+        variables: [
+          Variable.withInt(secondaryId),
+          Variable.withInt(secondaryId),
+          Variable.withInt(now),
+        ],
+      ).getSingle();
+
+      return MergeResult(
+        primaryId: primaryId,
+        secondaryId: secondaryId,
+        primaryName: primaryName,
+        secondaryName: secondaryName,
+        relationsTransferred: relationsTransferred1 + relationsTransferred2,
+        factsTransferred: factsTransferred,
+        aliasesTransferred: aliasesTransferred,
+        relationsExpired: expiredRels.read<int>('cnt'),
+        factsExpired: factsExpired,
+      );
+    });
+  }
+
   /// Update embedding BLOB for an entity.
   Future<void> updateEntityEmbedding(int entityId, Uint8List embedding) async {
     await customStatement(
@@ -468,4 +760,36 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     // 4. Recreate empty FTS5 tables + triggers
     await _createFts5Tables();
   }
+}
+
+/// Result of merging two entities.
+class MergeResult {
+  final int primaryId;
+  final int secondaryId;
+  final String primaryName;
+  final String secondaryName;
+  final int relationsTransferred;
+  final int factsTransferred;
+  final int aliasesTransferred;
+  final int relationsExpired;
+  final int factsExpired;
+
+  const MergeResult({
+    required this.primaryId,
+    required this.secondaryId,
+    required this.primaryName,
+    required this.secondaryName,
+    required this.relationsTransferred,
+    required this.factsTransferred,
+    required this.aliasesTransferred,
+    required this.relationsExpired,
+    required this.factsExpired,
+  });
+
+  @override
+  String toString() =>
+      'Merged "$secondaryName" (#$secondaryId) → "$primaryName" (#$primaryId): '
+      '$relationsTransferred relations transferred, $factsTransferred facts transferred, '
+      '$aliasesTransferred aliases transferred, $relationsExpired relations expired, '
+      '$factsExpired facts expired';
 }

@@ -280,6 +280,8 @@
   "toolKnowledgeStoreDesc": "Enregistrer un fait à retenir entre les conversations",
   "toolKbQuery": "Requête mémoire",
   "toolKbQueryDesc": "Parcourir et interroger la base de connaissances",
+  "toolDream": "Rêve",
+  "toolDreamDesc": "Analyser et nettoyer la KB en trouvant et fusionnant les doublons",
 
   "weatherClearSky": "Ciel dégagé",
   "weatherMainlyClear": "Peu nuageux",

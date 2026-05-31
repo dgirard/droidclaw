@@ -1676,6 +1676,18 @@ abstract class AppLocalizations {
   /// **'Browse and query the knowledge base'**
   String get toolKbQueryDesc;
 
+  /// No description provided for @toolDream.
+  ///
+  /// In en, this message translates to:
+  /// **'Dream'**
+  String get toolDream;
+
+  /// No description provided for @toolDreamDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyze and clean the KB by finding and merging duplicate entities'**
+  String get toolDreamDesc;
+
   /// No description provided for @weatherClearSky.
   ///
   /// In en, this message translates to:

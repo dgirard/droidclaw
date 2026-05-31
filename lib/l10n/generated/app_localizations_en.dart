@@ -870,6 +870,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get toolKbQueryDesc => 'Browse and query the knowledge base';
 
   @override
+  String get toolDream => 'Dream';
+
+  @override
+  String get toolDreamDesc =>
+      'Analyze and clean the KB by finding and merging duplicate entities';
+
+  @override
   String get weatherClearSky => 'Clear sky';
 
   @override

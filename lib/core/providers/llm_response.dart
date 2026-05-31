@@ -67,11 +67,16 @@ class ToolCall {
   final String name;
   final Map<String, dynamic> arguments;
 
+  /// Opaque extra content from the provider (e.g. Gemini thought_signature).
+  /// Must be echoed back unchanged in conversation history.
+  final Map<String, dynamic>? extraContent;
+
   const ToolCall({
     required this.id,
     this.type = 'function',
     required this.name,
     required this.arguments,
+    this.extraContent,
   });
 
   /// Parse from OpenAI format (function.name) or Anthropic format (name).
@@ -95,23 +100,34 @@ class ToolCall {
           {};
     }
 
+    // Preserve extra_content (Gemini thought_signature lives here)
+    final extraContent = json['extra_content'] as Map<String, dynamic>?;
+
     return ToolCall(
       id: json['id'] as String,
       type: json['type'] as String? ?? 'function',
       name: name,
       arguments: arguments,
+      extraContent: extraContent,
     );
   }
 
   /// Serialize to OpenAI tool_calls format.
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'type': type,
-        'function': {
-          'name': name,
-          'arguments': jsonEncode(arguments),
-        },
-      };
+  Map<String, dynamic> toJson() {
+    final json = <String, dynamic>{
+      'id': id,
+      'type': type,
+      'function': {
+        'name': name,
+        'arguments': jsonEncode(arguments),
+      },
+    };
+    // Echo back extra_content (required by Gemini 3.x for thought_signature)
+    if (extraContent != null) {
+      json['extra_content'] = extraContent;
+    }
+    return json;
+  }
 }
 
 /// Response from an LLM provider.

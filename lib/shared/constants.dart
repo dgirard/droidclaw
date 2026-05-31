@@ -90,4 +90,7 @@ class AppConstants {
   static const String cachedEmbeddingApiBaseKey = 'cached_embedding_api_base';
   static const String cachedEmbeddingUseOwnKeyKey =
       'cached_embedding_use_own_key';
+
+  // Dream (KB dedup)
+  static const String lastDreamAtKey = 'last_dream_at';
 }

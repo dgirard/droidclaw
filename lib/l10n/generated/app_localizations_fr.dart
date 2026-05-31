@@ -890,6 +890,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Parcourir et interroger la base de connaissances';
 
   @override
+  String get toolDream => 'Rêve';
+
+  @override
+  String get toolDreamDesc =>
+      'Analyser et nettoyer la KB en trouvant et fusionnant les doublons';
+
+  @override
   String get weatherClearSky => 'Ciel dégagé';
 
   @override

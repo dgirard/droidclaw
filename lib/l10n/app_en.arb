@@ -304,6 +304,8 @@
   "toolKnowledgeStoreDesc": "Store a fact to remember across conversations",
   "toolKbQuery": "Knowledge Query",
   "toolKbQueryDesc": "Browse and query the knowledge base",
+  "toolDream": "Dream",
+  "toolDreamDesc": "Analyze and clean the KB by finding and merging duplicate entities",
 
   "weatherClearSky": "Clear sky",
   "weatherMainlyClear": "Mainly clear",

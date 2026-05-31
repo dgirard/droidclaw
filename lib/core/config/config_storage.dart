@@ -95,4 +95,15 @@ class ConfigStorage {
         AppConstants.cronDefinitionsKey,
         jsonEncode(crons.map((c) => c.toJson()).toList()),
       );
+
+  /// Get last dream timestamp (epoch seconds).
+  int? get lastDreamAt {
+    final raw = _storage.getString(AppConstants.lastDreamAtKey);
+    if (raw == null) return null;
+    return int.tryParse(raw);
+  }
+
+  /// Save last dream timestamp (epoch seconds).
+  Future<void> setLastDreamAt(int epochSeconds) =>
+      _storage.setString(AppConstants.lastDreamAtKey, epochSeconds.toString());
 }
