@@ -31,9 +31,13 @@ class ConfigStorage {
   Future<void> setApiKey(String providerName, String apiKey) =>
       _storage.setSecure('api_key_$providerName', apiKey);
 
-  /// Delete API key for a provider.
-  Future<void> deleteApiKey(String providerName) =>
-      _storage.deleteSecure('api_key_$providerName');
+  /// Delete API key for a provider. Also clears the cleartext mirror in
+  /// SharedPreferences so a deleted key does not linger for the service
+  /// isolate (re-cached only if the key still exists in secure storage).
+  Future<void> deleteApiKey(String providerName) async {
+    await _storage.deleteSecure('api_key_$providerName');
+    await _storage.remove(AppConstants.cachedApiKeyKey);
+  }
 
   /// Get Brave Search API key from secure storage.
   Future<String?> getBraveApiKey() => _storage.getSecure('brave_api_key');
@@ -106,4 +110,35 @@ class ConfigStorage {
   /// Save last dream timestamp (epoch seconds).
   Future<void> setLastDreamAt(int epochSeconds) =>
       _storage.setString(AppConstants.lastDreamAtKey, epochSeconds.toString());
+
+  /// SharedPreferences keys that mirror a secret value for the service isolate.
+  /// These must never outlive the secure-storage key they mirror.
+  static const List<String> _cachedSecretKeys = [
+    AppConstants.cachedApiKeyKey,
+    AppConstants.cachedBraveApiKeyKey,
+    AppConstants.cachedOrsApiKeyKey,
+    AppConstants.cachedSncfApiKeyKey,
+    AppConstants.cachedPrimApiKeyKey,
+    AppConstants.cachedEmbeddingApiKeyKey,
+  ];
+
+  /// Remove every cleartext secret mirror from SharedPreferences. The next
+  /// service start re-caches only the keys that still exist in secure storage,
+  /// so deleted keys do not survive.
+  Future<void> wipeCachedSecrets() async {
+    for (final key in _cachedSecretKeys) {
+      await _storage.remove(key);
+    }
+  }
+
+  /// One-time migration for installs that pre-date clear-on-delete: earlier
+  /// versions wrote cleartext key mirrors to SharedPreferences and never
+  /// cleared them, so stale/rotated keys could linger indefinitely. Wipe them
+  /// once on first launch after the update; current keys are re-cached on the
+  /// next service start. Runs before the service isolate starts.
+  Future<void> runSecretCacheMigration() async {
+    if (_storage.getBool(AppConstants.secretsCacheMigratedKey) ?? false) return;
+    await wipeCachedSecrets();
+    await _storage.setBool(AppConstants.secretsCacheMigratedKey, true);
+  }
 }

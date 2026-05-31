@@ -6,8 +6,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
+import 'core/config/config_storage.dart';
 import 'core/services/app_logger.dart';
 import 'core/services/llm_trace_logger.dart';
+import 'data/local/storage_service.dart';
 import 'providers/app_providers.dart';
 
 Future<void> main() async {
@@ -30,6 +32,10 @@ Future<void> main() async {
 
   // Initialize SharedPreferences
   final prefs = await SharedPreferences.getInstance();
+
+  // One-time wipe of cleartext secret mirrors left by earlier versions.
+  // Runs before the background service isolate can re-cache current keys.
+  await ConfigStorage(StorageService(prefs: prefs)).runSecretCacheMigration();
 
   runApp(
     ProviderScope(

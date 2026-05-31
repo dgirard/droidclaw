@@ -93,4 +93,8 @@ class AppConstants {
 
   // Dream (KB dedup)
   static const String lastDreamAtKey = 'last_dream_at';
+
+  // Security: one-time wipe of cleartext secret mirrors that earlier versions
+  // wrote to SharedPreferences and never cleared on key delete/rotate.
+  static const String secretsCacheMigratedKey = 'secrets_cache_migrated_v1';
 }
