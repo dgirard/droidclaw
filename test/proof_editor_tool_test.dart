@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:droidclaw/core/tools/proof_document_store.dart';
 import 'package:droidclaw/core/tools/proof_editor_tool.dart';
-import 'package:droidclaw/core/tools/tool.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -46,20 +45,6 @@ ProofEditorTool _buildTool(
     locale: 'en',
     httpClientFactory: () => client,
   );
-}
-
-/// MockClient that routes requests to a handler map.
-/// Key: "METHOD path" (e.g. "GET /api/agent/foo/state").
-MockClient _mockRouter(Map<String, http.Response> routes) {
-  return MockClient((request) async {
-    final key = '${request.method} ${request.url.path}';
-    for (final entry in routes.entries) {
-      if (key.contains(entry.key) || request.url.path.contains(entry.key)) {
-        return entry.value;
-      }
-    }
-    return http.Response('Not found', 404);
-  });
 }
 
 http.Response _jsonResponse(Map<String, dynamic> body, {int status = 200}) {
