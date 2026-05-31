@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../config/llm_trace.dart';
+import '../config/trace_redactor.dart';
 
 /// Persistent LLM call trace logger.
 ///
@@ -51,10 +52,12 @@ class LlmTraceLogger {
     }
   }
 
-  /// Log a trace entry.
+  /// Log a trace entry. Sensitive content (PII, secrets) is redacted at this
+  /// write boundary so it never reaches the persisted `.jsonl` file or the
+  /// trace viewer (which reads from that file).
   void log(LlmTrace trace) {
     try {
-      _sink?.writeln(jsonEncode(trace.toJson()));
+      _sink?.writeln(jsonEncode(TraceRedactor.redactTraceJson(trace.toJson())));
     } catch (e) {
       // ignore: avoid_print
       print('[LlmTraceLogger] Write failed: $e');
