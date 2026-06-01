@@ -365,14 +365,14 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get telegramAllowedUsers => 'Erlaubte Benutzer (optional)';
+  String get telegramAllowedUsers => 'Erlaubte Benutzer-IDs (erforderlich)';
 
   @override
   String get telegramAllowedUsersHelper =>
-      'Durch Komma getrennte Telegram-Benutzernamen. Leer lassen für alle.';
+      'Durch Komma getrennte numerische Telegram-Benutzer-IDs (z. B. von @userinfobot). Der Bot antwortet niemandem, bis mindestens eine ID hinzugefügt wurde.';
 
   @override
-  String get telegramAllowedUsersHint => 'alice, bob, charlie';
+  String get telegramAllowedUsersHint => '123456789, 987654321';
 
   @override
   String get telegramSaveUsers => 'Benutzer speichern';

@@ -9,6 +9,10 @@ import '../../shared/constants.dart';
 class TelegramUpdate {
   final int updateId;
   final int chatId;
+
+  /// Stable numeric sender ID (`from.id`). Used for allowlisting — usernames
+  /// are user-changeable and spoofable, so they are display-only.
+  final int? userId;
   final String? username;
   final String text;
   final DateTime date;
@@ -16,6 +20,7 @@ class TelegramUpdate {
   const TelegramUpdate({
     required this.updateId,
     required this.chatId,
+    this.userId,
     this.username,
     required this.text,
     required this.date,
@@ -33,6 +38,7 @@ class TelegramUpdate {
     return TelegramUpdate(
       updateId: json['update_id'] as int,
       chatId: chat['id'] as int,
+      userId: from?['id'] as int?,
       username: from?['username'] as String?,
       text: message['text'] as String? ?? '',
       date: DateTime.fromMillisecondsSinceEpoch(

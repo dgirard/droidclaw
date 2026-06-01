@@ -364,14 +364,14 @@ class AppLocalizationsIt extends AppLocalizations {
   }
 
   @override
-  String get telegramAllowedUsers => 'Utenti Autorizzati (opzionale)';
+  String get telegramAllowedUsers => 'ID utente autorizzati (obbligatorio)';
 
   @override
   String get telegramAllowedUsersHelper =>
-      'Nomi utente Telegram separati da virgola. Lascia vuoto per tutti.';
+      'ID utente Telegram numerici separati da virgola (es. da @userinfobot). Il bot non risponde a nessuno finché non viene aggiunto almeno un ID.';
 
   @override
-  String get telegramAllowedUsersHint => 'alice, bob, charlie';
+  String get telegramAllowedUsersHint => '123456789, 987654321';
 
   @override
   String get telegramSaveUsers => 'Salva Utenti';

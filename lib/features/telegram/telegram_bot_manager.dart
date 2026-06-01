@@ -20,7 +20,10 @@ class TelegramBotManager {
   final RateLimiter _rateLimiter = RateLimiter();
   final Map<int, Queue<_IncomingMessage>> _chatQueues = {};
   final Set<int> _processing = {};
-  Set<String> _allowedUsers = {};
+
+  /// Allowlist of permitted Telegram user IDs. Matching is by stable numeric
+  /// ID, never username (usernames are user-changeable and spoofable).
+  Set<int> _allowedUsers = {};
 
   /// Callback invoked when a message is received or response sent.
   /// Used by the provider to update stats.
@@ -28,9 +31,17 @@ class TelegramBotManager {
 
   TelegramBotManager({required this.agentLoop, this.locale = 'en'});
 
-  /// Update the whitelist of allowed usernames.
-  void setAllowedUsers(Set<String> users) {
+  /// Update the allowlist of permitted Telegram user IDs.
+  void setAllowedUsers(Set<int> users) {
     _allowedUsers = users;
+  }
+
+  /// Whether [userId] may use the bot. Fail-closed: an empty allowlist denies
+  /// everyone (an open bot exposes contacts/calendar/location/file tools), and
+  /// a null/absent user ID is never allowed. Matching is by numeric ID only.
+  static bool isAllowed(Set<int> allowed, int? userId) {
+    if (allowed.isEmpty || userId == null) return false;
+    return allowed.contains(userId);
   }
 
   /// Handle an incoming message from the TaskHandler isolate.
@@ -40,22 +51,20 @@ class TelegramBotManager {
   Future<void> handleIncomingMessage({
     required int chatId,
     required String text,
+    int? userId,
     String? username,
     required int updateId,
   }) async {
-    // Check whitelist
-    if (_allowedUsers.isNotEmpty) {
-      if (username == null || !_allowedUsers.contains(username.toLowerCase())) {
-        // Send access denied message
-        await _rateLimiter.waitForSlot(chatId);
-        FlutterForegroundTask.sendDataToTask({
-          'action': 'send',
-          'chat_id': chatId,
-          'text': tr(locale).telegramBotPrivate,
-        });
-        onEvent?.call(TelegramBotEvent.accessDenied(chatId, username));
-        return;
-      }
+    // Allowlist check — fail-closed (see [isAllowed]).
+    if (!isAllowed(_allowedUsers, userId)) {
+      await _rateLimiter.waitForSlot(chatId);
+      FlutterForegroundTask.sendDataToTask({
+        'action': 'send',
+        'chat_id': chatId,
+        'text': tr(locale).telegramBotPrivate,
+      });
+      onEvent?.call(TelegramBotEvent.accessDenied(chatId, username));
+      return;
     }
 
     // Add to per-chat queue

@@ -179,6 +179,7 @@ class BackgroundTaskHandler extends TaskHandler {
           'type': 'message',
           'update_id': update.updateId,
           'chat_id': update.chatId,
+          'user_id': update.userId,
           'username': update.username,
           'text': update.text,
           'date': update.date.millisecondsSinceEpoch,

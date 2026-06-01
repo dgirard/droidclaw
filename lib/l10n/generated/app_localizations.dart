@@ -743,19 +743,19 @@ abstract class AppLocalizations {
   /// No description provided for @telegramAllowedUsers.
   ///
   /// In en, this message translates to:
-  /// **'Allowed Users (optional)'**
+  /// **'Allowed user IDs (required)'**
   String get telegramAllowedUsers;
 
   /// No description provided for @telegramAllowedUsersHelper.
   ///
   /// In en, this message translates to:
-  /// **'Comma-separated Telegram usernames. Leave empty for all.'**
+  /// **'Comma-separated numeric Telegram user IDs (e.g. from @userinfobot). The bot replies to no one until at least one ID is added.'**
   String get telegramAllowedUsersHelper;
 
   /// No description provided for @telegramAllowedUsersHint.
   ///
   /// In en, this message translates to:
-  /// **'alice, bob, charlie'**
+  /// **'123456789, 987654321'**
   String get telegramAllowedUsersHint;
 
   /// No description provided for @telegramSaveUsers.

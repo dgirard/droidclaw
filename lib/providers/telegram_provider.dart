@@ -203,6 +203,7 @@ class TelegramNotifier extends Notifier<TelegramState> {
         _botManager?.handleIncomingMessage(
           chatId: map['chat_id'] as int,
           text: map['text'] as String,
+          userId: map['user_id'] as int?,
           username: map['username'] as String?,
           updateId: map['update_id'] as int,
         );
@@ -238,11 +239,14 @@ class TelegramNotifier extends Notifier<TelegramState> {
     }
   }
 
-  Set<String> _parseAllowedUsers(String usersStr) {
+  /// Parse the allowlist as numeric Telegram user IDs. Non-numeric entries
+  /// (e.g. legacy `@username` values) are ignored — an all-invalid list yields
+  /// an empty set, which the bot manager treats as fail-closed (deny all).
+  Set<int> _parseAllowedUsers(String usersStr) {
     return usersStr
         .split(',')
-        .map((u) => u.trim().toLowerCase())
-        .where((u) => u.isNotEmpty)
+        .map((u) => int.tryParse(u.trim().replaceFirst('@', '')))
+        .whereType<int>()
         .toSet();
   }
 }
