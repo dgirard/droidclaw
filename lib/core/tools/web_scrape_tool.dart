@@ -1,6 +1,7 @@
 import 'package:http/http.dart' as http;
 
 import '../../shared/constants.dart';
+import '../net/url_guard.dart';
 import 'html_to_markdown.dart';
 import 'tool.dart';
 
@@ -52,6 +53,13 @@ class WebScrapeTool extends Tool {
 
         // Follow redirects manually
         for (var i = 0; i <= maxRedirects; i++) {
+          // SSRF guard: re-checked on every hop so a public page cannot
+          // redirect into a private/loopback address.
+          try {
+            await UrlGuard.validate(currentUrl);
+          } on UrlGuardException catch (e) {
+            return ToolResult.error('Blocked URL: ${e.message}');
+          }
           final request = http.Request('GET', Uri.parse(currentUrl))
             ..followRedirects = false;
           final streamedResponse = await client.send(request);

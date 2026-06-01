@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../../shared/constants.dart';
+import '../net/url_guard.dart';
 import 'html_to_markdown.dart';
 import 'tool.dart';
 
@@ -45,6 +46,15 @@ class WebScrapeJsTool extends Tool {
     final url = arguments['url'] as String?;
     if (url == null || url.isEmpty) {
       return ToolResult.error('Missing required parameter: url');
+    }
+
+    // SSRF guard before loading. Note: the WebView can still issue
+    // sub-requests (XHR/iframe) that bypass this pre-load check — tracked as a
+    // residual for the deferred WebView sandbox review.
+    try {
+      await UrlGuard.validate(url);
+    } on UrlGuardException catch (e) {
+      return ToolResult.error('Blocked URL: ${e.message}');
     }
 
     HeadlessInAppWebView? headless;
