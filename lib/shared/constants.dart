@@ -97,4 +97,7 @@ class AppConstants {
   // Security: one-time wipe of cleartext secret mirrors that earlier versions
   // wrote to SharedPreferences and never cleared on key delete/rotate.
   static const String secretsCacheMigratedKey = 'secrets_cache_migrated_v1';
+
+  // file tool: cap on a single write so the LLM cannot fill the workspace.
+  static const int fileWriteMaxChars = 2000000;
 }

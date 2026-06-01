@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../../shared/constants.dart';
 import 'tool.dart';
 
 /// Sandboxed file operations tool. Restricted to the app workspace directory.
@@ -68,14 +69,20 @@ class FileTool extends Tool {
   }
 
   /// Resolve and validate a path, ensuring it stays within workspace.
+  ///
+  /// Uses [p.isWithin] rather than a prefix-string compare so a sibling
+  /// directory sharing a name prefix (e.g. `workspace_evil` vs `workspace`)
+  /// cannot pass. The workspace root itself is allowed (for `list_dir`).
   String? _resolvePath(String relativePath) {
     final normalized = p.normalize(relativePath);
-    if (p.isAbsolute(normalized) || normalized.startsWith('..')) {
+    if (p.isAbsolute(normalized)) {
       return null;
     }
     final resolved = p.join(workspacePath, normalized);
     final canonical = p.canonicalize(resolved);
-    if (!canonical.startsWith(p.canonicalize(workspacePath))) {
+    final canonicalWorkspace = p.canonicalize(workspacePath);
+    if (canonical != canonicalWorkspace &&
+        !p.isWithin(canonicalWorkspace, canonical)) {
       return null;
     }
     return resolved;
@@ -94,6 +101,10 @@ class FileTool extends Tool {
   }
 
   Future<ToolResult> _writeFile(String path, String content) async {
+    if (content.length > AppConstants.fileWriteMaxChars) {
+      return ToolResult.error(
+          'Content exceeds the ${AppConstants.fileWriteMaxChars}-character write limit');
+    }
     final file = File(path);
     await file.parent.create(recursive: true);
     await file.writeAsString(content);
