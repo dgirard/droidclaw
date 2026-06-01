@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +5,7 @@ import '../core/agent/agent_loop.dart';
 import '../core/config/log_entry.dart';
 import '../core/services/app_logger.dart';
 import '../core/services/background_task_handler.dart';
+import '../core/session/isolate_persistence/durable_trigger_queue.dart';
 import '../l10n/l10n.dart';
 import '../shared/constants.dart';
 import 'app_providers.dart';
@@ -282,13 +281,13 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
     final raw = storage.getString(AppConstants.cronPendingTriggersKey);
     if (raw == null) return;
     try {
-      final pending = jsonDecode(raw) as List;
-      pending.removeWhere((t) => t['cron_id'] == cronId);
+      final pending = DurableTriggerQueue.removeByCronId(
+          DurableTriggerQueue.decode(raw), cronId);
       if (pending.isEmpty) {
         storage.remove(AppConstants.cronPendingTriggersKey);
       } else {
-        storage.setString(
-            AppConstants.cronPendingTriggersKey, jsonEncode(pending));
+        storage.setString(AppConstants.cronPendingTriggersKey,
+            DurableTriggerQueue.encode(pending));
       }
     } catch (_) {}
   }
@@ -301,15 +300,14 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
     if (raw == null) return;
 
     try {
-      final pending = jsonDecode(raw) as List;
+      final pending = DurableTriggerQueue.decode(raw);
       if (pending.isEmpty) return;
 
       AppLogger.instance.info(LogSource.cron,
           'Found ${pending.length} pending cron trigger(s), executing...');
 
       for (final trigger in pending) {
-        final map = Map<String, dynamic>.from(trigger as Map);
-        await _handleCronTrigger(map);
+        await _handleCronTrigger(trigger);
       }
 
       // Clear pending queue after processing

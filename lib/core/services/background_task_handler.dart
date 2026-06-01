@@ -11,6 +11,7 @@ import '../config/cron_config.dart';
 import '../config/log_entry.dart';
 import '../../shared/constants.dart';
 import '../../features/telegram/telegram_api.dart';
+import '../session/isolate_persistence/durable_trigger_queue.dart';
 import '../session/isolate_persistence/hive_path_resolver.dart';
 import 'app_logger.dart';
 import 'llm_trace_logger.dart';
@@ -560,14 +561,13 @@ class BackgroundTaskHandler extends TaskHandler {
   /// Add a trigger to the pending queue in SharedPreferences.
   void _addPendingTrigger(
       SharedPreferences prefs, Map<String, dynamic> trigger) {
-    final raw = prefs.getString(AppConstants.cronPendingTriggersKey);
-    final List<dynamic> pending =
-        raw != null ? (jsonDecode(raw) as List) : [];
-    // Avoid duplicates by cron_id
-    pending.removeWhere((t) => t['cron_id'] == trigger['cron_id']);
-    pending.add(trigger);
-    prefs.setString(
-        AppConstants.cronPendingTriggersKey, jsonEncode(pending));
+    final pending = DurableTriggerQueue.enqueue(
+      DurableTriggerQueue.decode(
+          prefs.getString(AppConstants.cronPendingTriggersKey)),
+      trigger,
+    );
+    prefs.setString(AppConstants.cronPendingTriggersKey,
+        DurableTriggerQueue.encode(pending));
     AppLogger.instance.info(LogSource.cron,
         'Queued pending trigger for "${trigger['cron_name']}" '
         '(${pending.length} pending)',
@@ -578,13 +578,13 @@ class BackgroundTaskHandler extends TaskHandler {
   void _removePendingTrigger(SharedPreferences prefs, String cronId) {
     final raw = prefs.getString(AppConstants.cronPendingTriggersKey);
     if (raw == null) return;
-    final List<dynamic> pending = jsonDecode(raw) as List;
-    pending.removeWhere((t) => t['cron_id'] == cronId);
+    final pending = DurableTriggerQueue.removeByCronId(
+        DurableTriggerQueue.decode(raw), cronId);
     if (pending.isEmpty) {
       prefs.remove(AppConstants.cronPendingTriggersKey);
     } else {
-      prefs.setString(
-          AppConstants.cronPendingTriggersKey, jsonEncode(pending));
+      prefs.setString(AppConstants.cronPendingTriggersKey,
+          DurableTriggerQueue.encode(pending));
     }
     AppLogger.instance.debug(LogSource.cron,
         'Removed pending trigger for $cronId (${pending.length} remaining)');
