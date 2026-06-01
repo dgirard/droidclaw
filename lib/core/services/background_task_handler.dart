@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +11,7 @@ import '../config/cron_config.dart';
 import '../config/log_entry.dart';
 import '../../shared/constants.dart';
 import '../../features/telegram/telegram_api.dart';
+import '../session/isolate_persistence/hive_path_resolver.dart';
 import 'app_logger.dart';
 import 'llm_trace_logger.dart';
 
@@ -83,7 +83,7 @@ class BackgroundTaskHandler extends TaskHandler {
     // Initialize logger for service isolate
     final workspacePath = prefs.getString(AppConstants.cachedWorkspacePathKey);
     if (workspacePath != null) {
-      final appDir = Directory(workspacePath).parent.path;
+      final appDir = HivePathResolver.hiveDirFromWorkspace(workspacePath);
       AppLogger.init(dirPath: appDir, isolateName: 'service');
       await AppLogger.instance.purge();
 
@@ -372,10 +372,9 @@ class BackgroundTaskHandler extends TaskHandler {
         return;
       }
 
-      // Derive Hive path: workspace is <appDocDir>/droidclaw_workspace,
-      // getApplicationDocumentsDirectory() returns <appDocDir> which IS app_flutter
-      final appDir = Directory(workspacePath).parent.path;
-      final hivePath = appDir;
+      // Derive Hive path via the shared resolver: the service isolate must use
+      // the same directory the main isolate's Hive.initFlutter() uses.
+      final hivePath = HivePathResolver.hiveDirFromWorkspace(workspacePath);
 
       _agentLoop = await ServiceAgentFactory.create(
         prefs: prefs,
