@@ -255,6 +255,15 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
         // bump counter so CronConfigScreen can react via ref.watch().
         _reloadAfterCronCompletion();
 
+      case 'service_error':
+        // Service isolate could not initialize its AgentLoop (e.g. missing
+        // cached config). Surface it so the UI does not show a healthy
+        // service while crons silently never fire.
+        final message = map['message'] as String?;
+        AppLogger.instance.warning(LogSource.service,
+            'Service isolate reported init failure: $message');
+        state = state.copyWith(error: message);
+
     }
   }
 

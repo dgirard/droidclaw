@@ -370,6 +370,12 @@ class BackgroundTaskHandler extends TaskHandler {
             'Cannot init AgentLoop: missing cached config '
             '(apiKey=${apiKey != null}, provider=${providerName != null}, '
             'workspace=${workspacePath != null})');
+        FlutterForegroundTask.sendDataToMain({
+          'type': 'service_error',
+          'message': 'Background service is running but not configured '
+              '(missing API key, provider, or workspace). Crons will not run '
+              'until the app is opened to refresh settings.',
+        });
         return;
       }
 
@@ -408,6 +414,10 @@ class BackgroundTaskHandler extends TaskHandler {
     } catch (e) {
       AppLogger.instance.error(LogSource.service,
           'Failed to init AgentLoop in service: $e');
+      FlutterForegroundTask.sendDataToMain({
+        'type': 'service_error',
+        'message': 'Background service failed to initialize: $e',
+      });
     } finally {
       _agentInitializing = false;
     }
