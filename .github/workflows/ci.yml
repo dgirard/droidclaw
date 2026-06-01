@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter --version
+
+      - run: flutter pub get
+
+      # Generated localizations are committed, but regenerate to catch drift.
+      - run: flutter gen-l10n
+
+      # --no-fatal-infos: a few pre-existing info-level lints (avoid_print in
+      # the proof_editor tools) are tracked separately; warnings and errors
+      # still fail the build.
+      - run: flutter analyze --no-fatal-infos
+
+      # Exclude integration tests that require the live ProofEditor.ai API.
+      - run: flutter test --exclude-tags integration

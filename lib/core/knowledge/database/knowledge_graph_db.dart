@@ -12,6 +12,11 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   KnowledgeGraphDB(String dbPath)
       : super(_openConnection(dbPath));
 
+  /// Test-only: construct against a caller-provided executor (e.g. an
+  /// in-memory database) so the knowledge graph can be exercised without a
+  /// real file or device.
+  KnowledgeGraphDB.forExecutor(QueryExecutor executor) : super(executor);
+
   @override
   int get schemaVersion => 3;
 
