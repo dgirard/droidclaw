@@ -13,12 +13,15 @@ class AnthropicProvider implements LLMProvider {
   final String apiKey;
   final String apiBase;
   final String _defaultModel;
+  final http.Client? _client;
 
   AnthropicProvider({
     required this.apiKey,
     this.apiBase = AppConstants.anthropicApiBase,
     String defaultModel = 'claude-sonnet-4-20250514',
-  }) : _defaultModel = defaultModel;
+    http.Client? client,
+  })  : _defaultModel = defaultModel,
+        _client = client;
 
   @override
   String get defaultModel => _defaultModel;
@@ -64,15 +67,21 @@ class AnthropicProvider implements LLMProvider {
     }
 
     final uri = Uri.parse('$apiBase/messages');
-    final response = await http.post(
-      uri,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': AppConstants.anthropicVersion,
-      },
-      body: jsonEncode(body),
-    );
+    final client = _client ?? http.Client();
+    final http.Response response;
+    try {
+      response = await client.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': AppConstants.anthropicVersion,
+        },
+        body: jsonEncode(body),
+      );
+    } finally {
+      if (_client == null) client.close();
+    }
 
     if (response.statusCode != 200) {
       throw LLMException(

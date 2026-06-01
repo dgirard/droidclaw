@@ -13,6 +13,8 @@ class HttpProvider implements LLMProvider {
   final String _defaultModel;
   final String _providerName;
   final Map<String, String> _extraHeaders;
+  final http.Client? _client;
+  final Duration _retryBaseDelay;
 
   HttpProvider({
     required this.apiKey,
@@ -20,9 +22,13 @@ class HttpProvider implements LLMProvider {
     required String defaultModel,
     required String providerName,
     Map<String, String>? extraHeaders,
+    http.Client? client,
+    Duration retryBaseDelay = const Duration(milliseconds: 500),
   })  : _defaultModel = defaultModel,
         _providerName = providerName,
-        _extraHeaders = extraHeaders ?? {};
+        _extraHeaders = extraHeaders ?? {},
+        _client = client,
+        _retryBaseDelay = retryBaseDelay;
 
   @override
   String get defaultModel => _defaultModel;
@@ -57,48 +63,53 @@ class HttpProvider implements LLMProvider {
 
     final uri = Uri.parse('$apiBase/chat/completions');
 
-    // Retry with exponential backoff for transient failures
-    const maxRetries = 2;
-    for (var attempt = 0; attempt <= maxRetries; attempt++) {
-      final response = await http.post(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $apiKey',
-          ..._extraHeaders,
-        },
-        body: jsonEncode(body),
-      );
-
-      if (response.statusCode != 200) {
-        // Retry on 429 (rate limit) or 5xx (server errors)
-        if (attempt < maxRetries &&
-            (response.statusCode == 429 || response.statusCode >= 500)) {
-          await Future.delayed(Duration(milliseconds: 500 * (attempt + 1)));
-          continue;
-        }
-        throw LLMException(
-          'API error ${response.statusCode}',
-          statusCode: response.statusCode,
-          body: response.body,
+    final client = _client ?? http.Client();
+    try {
+      // Retry with exponential backoff for transient failures
+      const maxRetries = 2;
+      for (var attempt = 0; attempt <= maxRetries; attempt++) {
+        final response = await client.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $apiKey',
+            ..._extraHeaders,
+          },
+          body: jsonEncode(body),
         );
-      }
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      try {
-        return _parseResponse(data);
-      } on LLMException {
-        // Retry on empty choices (transient provider issue)
-        if (attempt < maxRetries) {
-          await Future.delayed(Duration(milliseconds: 500 * (attempt + 1)));
-          continue;
+        if (response.statusCode != 200) {
+          // Retry on 429 (rate limit) or 5xx (server errors)
+          if (attempt < maxRetries &&
+              (response.statusCode == 429 || response.statusCode >= 500)) {
+            await Future.delayed(_retryBaseDelay * (attempt + 1));
+            continue;
+          }
+          throw LLMException(
+            'API error ${response.statusCode}',
+            statusCode: response.statusCode,
+            body: response.body,
+          );
         }
-        rethrow;
-      }
-    }
 
-    // Unreachable, but Dart requires it
-    throw LLMException('Max retries exceeded');
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        try {
+          return _parseResponse(data);
+        } on LLMException {
+          // Retry on empty choices (transient provider issue)
+          if (attempt < maxRetries) {
+            await Future.delayed(_retryBaseDelay * (attempt + 1));
+            continue;
+          }
+          rethrow;
+        }
+      }
+
+      // Unreachable, but Dart requires it
+      throw LLMException('Max retries exceeded');
+    } finally {
+      if (_client == null) client.close();
+    }
   }
 
   LLMResponse _parseResponse(Map<String, dynamic> data) {
