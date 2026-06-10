@@ -13,6 +13,7 @@ import '../../shared/constants.dart';
 import '../../features/telegram/telegram_api.dart';
 import '../session/isolate_persistence/durable_trigger_queue.dart';
 import '../session/isolate_persistence/hive_path_resolver.dart';
+import '../session/isolate_persistence/write_then_notify.dart';
 import 'app_logger.dart';
 import 'llm_trace_logger.dart';
 import 'service_secret_reader.dart';
@@ -405,16 +406,11 @@ class BackgroundTaskHandler extends TaskHandler {
         return;
       }
 
-      // Derive Hive path via the shared resolver: the service isolate must use
-      // the same directory the main isolate's Hive.initFlutter() uses.
-      final hivePath = HivePathResolver.hiveDirFromWorkspace(workspacePath);
-
       _agentLoop = await ServiceAgentFactory.create(
         prefs: prefs,
         apiKey: apiKey,
         providerName: providerName,
         workspacePath: workspacePath,
-        hivePath: hivePath,
         braveApiKey: await _secrets!.read(
             secureKey: AppConstants.secureBraveApiKeyKey,
             mirrorKey: AppConstants.cachedBraveApiKeyKey),
@@ -489,22 +485,26 @@ class BackgroundTaskHandler extends TaskHandler {
         }
       }
 
-      // Save session BEFORE notifying main isolate (avoids race condition
-      // where main reloads Hive before session is flushed to disk).
-      final session = _agentLoop!.sessions.get(sessionKey);
-      if (session != null) {
-        await _agentLoop!.sessions.save(session);
-        AppLogger.instance.debug(LogSource.cron,
-            'Session saved for "${cron.name}"');
-      }
-
-      // Notify main isolate of completion (for UI update if app is open)
-      FlutterForegroundTask.sendDataToMain({
-        'type': 'cron_completed',
-        'cron_id': cron.id,
-        'cron_name': cron.name,
-        'response_length': responseLength,
-      });
+      // Save session BEFORE notifying main isolate — WriteThenNotify makes
+      // the ordering structural (main must never reload Hive before the
+      // session is flushed to disk).
+      await WriteThenNotify.run(
+        persist: () async {
+          final session = _agentLoop!.sessions.get(sessionKey);
+          if (session != null) {
+            await _agentLoop!.sessions.save(session);
+            AppLogger.instance.debug(LogSource.cron,
+                'Session saved for "${cron.name}"');
+          }
+        },
+        // Notify main isolate of completion (for UI update if app is open)
+        notify: () => FlutterForegroundTask.sendDataToMain({
+          'type': 'cron_completed',
+          'cron_id': cron.id,
+          'cron_name': cron.name,
+          'response_length': responseLength,
+        }),
+      );
 
       // Update notification
       FlutterForegroundTask.updateService(
@@ -562,7 +562,10 @@ class BackgroundTaskHandler extends TaskHandler {
           // Execute directly in service isolate (autonomous mode)
           _executeCronLocally(cron, prefs);
         } else {
-          // Fallback: queue for main isolate
+          // Fallback: queue for main isolate. The trigger must be durably
+          // staged in SharedPreferences BEFORE the main isolate is notified
+          // or woken — if the app process dies mid-handoff, the queued
+          // trigger is replayed on next startup.
           final triggerData = {
             'type': 'cron_trigger',
             'cron_id': cron.id,
@@ -570,9 +573,13 @@ class BackgroundTaskHandler extends TaskHandler {
             'prompt': cron.prompt,
             'session_strategy': cron.sessionStrategy.name,
           };
-          _addPendingTrigger(prefs, triggerData);
-          FlutterForegroundTask.sendDataToMain(triggerData);
-          FlutterForegroundTask.launchApp();
+          await WriteThenNotify.run(
+            persist: () => _addPendingTrigger(prefs, triggerData),
+            notify: () {
+              FlutterForegroundTask.sendDataToMain(triggerData);
+              FlutterForegroundTask.launchApp();
+            },
+          );
         }
       }
     }
@@ -604,14 +611,16 @@ class BackgroundTaskHandler extends TaskHandler {
   }
 
   /// Add a trigger to the pending queue in SharedPreferences.
-  void _addPendingTrigger(
-      SharedPreferences prefs, Map<String, dynamic> trigger) {
+  /// The returned future completes when the write has been committed, so
+  /// callers (via [WriteThenNotify]) can sequence notification after it.
+  Future<void> _addPendingTrigger(
+      SharedPreferences prefs, Map<String, dynamic> trigger) async {
     final pending = DurableTriggerQueue.enqueue(
       DurableTriggerQueue.decode(
           prefs.getString(AppConstants.cronPendingTriggersKey)),
       trigger,
     );
-    prefs.setString(AppConstants.cronPendingTriggersKey,
+    await prefs.setString(AppConstants.cronPendingTriggersKey,
         DurableTriggerQueue.encode(pending));
     AppLogger.instance.info(LogSource.cron,
         'Queued pending trigger for "${trigger['cron_name']}" '

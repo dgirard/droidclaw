@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:hive/hive.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -15,6 +14,7 @@ import '../knowledge/services/knowledge_service.dart';
 import '../providers/embedding_provider.dart';
 import '../providers/embedding_provider_factory.dart';
 import '../providers/provider_factory.dart';
+import '../session/isolate_persistence/hive_path_resolver.dart';
 import '../session/session_manager.dart';
 import '../skills/skill_loader.dart';
 import '../tools/datetime_tool.dart';
@@ -54,14 +54,13 @@ class ServiceAgentFactory {
   /// Create a fully-initialized AgentLoop.
   ///
   /// All parameters come from SharedPreferences (cached by the main isolate).
-  /// [hivePath] must point to the same directory used by Hive.initFlutter()
-  /// so both isolates share the same session data.
+  /// The Hive directory is derived from [workspacePath] by [SessionManager]
+  /// via `HivePathResolver`, so both isolates share the same session data.
   static Future<AgentLoop> create({
     required SharedPreferences prefs,
     required String apiKey,
     required String providerName,
     required String workspacePath,
-    required String hivePath,
     String? braveApiKey,
     String? orsApiKey,
     String? sncfApiKey,
@@ -75,10 +74,10 @@ class ServiceAgentFactory {
     String embeddingApiBase = '',
     bool embeddingUseOwnKey = false,
   }) async {
-    // 1. Initialize Hive (plain Dart — no initFlutter)
-    Hive.init(hivePath);
+    // 1. Initialize Hive (plain Dart — no initFlutter): SessionManager
+    //    resolves the shared Hive directory from the workspace path.
     final sessionManager = SessionManager();
-    await sessionManager.init();
+    await sessionManager.init(workspacePath: workspacePath);
 
     // 2. Load AppConfig from SharedPreferences
     final configRaw = prefs.getString(AppConstants.configKey);
@@ -149,7 +148,9 @@ class ServiceAgentFactory {
       registry.register(WeatherTool(locale: locale));
     }
     if (!disabled.contains('proof_editor')) {
-      final proofStorePath = p.join(hivePath, 'proof_documents.json');
+      final proofStorePath = p.join(
+          HivePathResolver.hiveDirFromWorkspace(workspacePath),
+          'proof_documents.json');
       registry.register(ProofEditorTool(
         store: ProofDocumentStore(proofStorePath),
         locale: locale,
@@ -248,7 +249,9 @@ class ServiceAgentFactory {
     // 6. Create ContextBuilder
     final memoryManager = MemoryManager(storageService);
     final skillLoader = SkillLoader(storageService);
-    final proofStorePath = p.join(hivePath, 'proof_documents.json');
+    final proofStorePath = p.join(
+        HivePathResolver.hiveDirFromWorkspace(workspacePath),
+        'proof_documents.json');
     final contextBuilder = ContextBuilder(
       memoryManager: memoryManager,
       skillLoader: skillLoader,

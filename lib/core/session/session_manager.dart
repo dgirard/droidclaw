@@ -5,70 +5,64 @@ import 'package:hive/hive.dart';
 import '../../shared/constants.dart';
 import '../services/app_logger.dart';
 import '../config/log_entry.dart';
+import 'isolate_persistence/cache_reload.dart';
+import 'isolate_persistence/hive_path_resolver.dart';
 import 'session.dart';
 
 /// Manages conversation sessions with Hive persistence and in-memory cache.
+///
+/// Dual-isolate aware: persistence mechanics (path resolution, cache reload,
+/// write-then-notify ordering) live in `isolate_persistence/`. Note the
+/// cross-isolate compaction constraint documented in [CacheReload] — do not
+/// add `compact()` calls here.
 class SessionManager {
   static const String _boxName = 'sessions';
   final Map<String, Session> _cache = {};
   Box<String>? _box;
 
-  /// Initialize the session manager and open Hive box.
-  Future<void> init() async {
+  /// Initialize the session manager and open the Hive box.
+  ///
+  /// In the main isolate, `Hive.initFlutter()` (called in `main.dart`) has
+  /// already set the Hive home directory — pass nothing. In the service
+  /// isolate (no Flutter binding), pass [workspacePath]: the Hive home is
+  /// derived from it via [HivePathResolver], guaranteeing both isolates open
+  /// the SAME box file.
+  Future<void> init({String? workspacePath}) async {
+    if (workspacePath != null) {
+      Hive.init(HivePathResolver.hiveDirFromWorkspace(workspacePath));
+    }
     _box = await Hive.openBox<String>(_boxName);
 
-    // Compact on startup to reclaim space from deleted entries.
-    // Wrapped in try-catch: compact() is unsafe if another isolate runs it
-    // concurrently (Hive advisory locks are per-process, not per-isolate).
-    try {
-      await _box!.compact();
-    } catch (e) {
-      AppLogger.instance.warning(
-        LogSource.app,
-        'Hive compact failed: ${e.runtimeType}',
-      );
-    }
-
     // Load all sessions into cache
-    for (final key in _box!.keys) {
-      final raw = _box!.get(key);
-      if (raw != null) {
-        try {
-          final json = jsonDecode(raw) as Map<String, dynamic>;
-          _cache[key as String] = Session.fromJson(json);
-        } catch (e) {
-          AppLogger.instance.warning(
-            LogSource.app,
-            'Corrupted session skipped: $key — ${e.runtimeType}',
-          );
-        }
-      }
-    }
+    CacheReload.populate<Session>(
+      box: _box!,
+      cache: _cache,
+      decode: _decodeSession,
+      onCorrupt: (key, e) => AppLogger.instance.warning(
+        LogSource.app,
+        'Corrupted session skipped: $key — ${e.runtimeType}',
+      ),
+    );
   }
 
   /// Reload sessions from Hive to pick up writes from other isolates.
   /// Closes and reopens the Hive box to force a disk re-read.
   Future<void> reload() async {
-    final boxName = _box?.name;
-    if (boxName == null) return;
-    await _box!.close();
-    _box = await Hive.openBox<String>(boxName);
-    _cache.clear();
-    for (final key in _box!.keys) {
-      final raw = _box!.get(key);
-      if (raw != null) {
-        try {
-          final json = jsonDecode(raw) as Map<String, dynamic>;
-          _cache[key as String] = Session.fromJson(json);
-        } catch (e) {
-          AppLogger.instance.warning(
-            LogSource.app,
-            'Corrupted session skipped on reload: $key — ${e.runtimeType}',
-          );
-        }
-      }
-    }
+    final box = _box;
+    if (box == null) return;
+    _box = await CacheReload.reload<Session>(
+      box: box,
+      cache: _cache,
+      decode: _decodeSession,
+      onCorrupt: (key, e) => AppLogger.instance.warning(
+        LogSource.app,
+        'Corrupted session skipped on reload: $key — ${e.runtimeType}',
+      ),
+    );
   }
+
+  static Session _decodeSession(String raw) =>
+      Session.fromJson(jsonDecode(raw) as Map<String, dynamic>);
 
   /// Get or create a session by key.
   Session getOrCreate(String key) {
