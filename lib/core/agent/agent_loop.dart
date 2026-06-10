@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:meta/meta.dart';
+
 import '../../l10n/l10n.dart';
 import '../../shared/constants.dart';
 import '../config/app_config.dart';
@@ -145,7 +147,7 @@ class AgentLoop {
       // (e.g. Gemini Flash) that tend to follow conversation patterns over
       // system instructions. The tag is on the copy, not the stored session.
       if (resolvedLocale != 'en') {
-        final hint = _languageHint(resolvedLocale);
+        final hint = languageHint(resolvedLocale);
         for (var i = messages.length - 1; i >= 0; i--) {
           if (messages[i].role == 'user') {
             messages[i] = messages[i].copyWith(
@@ -361,9 +363,20 @@ class AgentLoop {
     });
   }
 
-  /// Brief language hint in the target language.
-  /// Appended to the last user message to nudge weaker models.
-  static String _languageHint(String locale) => switch (locale) {
+  /// Brief language hint written IN the target language (Layer 2 of the
+  /// language-enforcement contract; see docs/solutions/runtime-errors/
+  /// gemini-flash-ignores-system-prompt-language-instructions.md).
+  /// Appended to the LLM-bound copy of the last user message only — never
+  /// stored — to nudge weak models that follow history language patterns
+  /// over system-prompt directives.
+  ///
+  /// This is NOT a language-NAME map (that single source is
+  /// [KnowledgeConfig.languageName]); the hint must use target-language
+  /// tokens for priming. Keys mirror the supported-locale set; unknown
+  /// locales fall back to English, consistent with `languageName`.
+  /// Pinned by test/agent/language_compliance_test.dart.
+  @visibleForTesting
+  static String languageHint(String locale) => switch (locale) {
         'fr' => 'Réponds en français',
         'es' => 'Responde en español',
         'de' => 'Antworte auf Deutsch',

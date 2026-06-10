@@ -1,3 +1,4 @@
+import '../../../config/app_config.dart';
 import '../../../config/log_entry.dart';
 import '../../../providers/llm_provider.dart';
 import '../../../providers/llm_response.dart';
@@ -160,7 +161,8 @@ class KbCleanupService {
   /// per chunk) and aggregate the returned operations.
   Future<List<CleanupOperation>> proposeCleanup(String snapshot) async {
     final langInstr = (kbLanguage != null && kbLanguage != 'en')
-        ? '\n\nIMPORTANT: The KB data is in ${_languageName(kbLanguage!)}. '
+        ? '\n\nIMPORTANT: The KB data is in '
+          '${KnowledgeConfig.languageName(kbLanguage!)}. '
           'Write reasons in the same language as the data.'
         : '';
 
@@ -438,22 +440,5 @@ class KbCleanupService {
       'UPDATE facts SET expired_at = ? WHERE id = ?',
       [now, factId],
     );
-  }
-
-  /// Language-code → English name map for cleanup prompts.
-  ///
-  /// Moved verbatim from `kb_maintenance_service.dart` in U17. NOTE for U19
-  /// (language consolidation): this duplicates `KnowledgeConfig.languageName`
-  /// with a divergent default (returns the raw code instead of English) —
-  /// U19 should consolidate to the single source. New location:
-  /// `lib/core/knowledge/services/dedup/cleanup_service.dart`.
-  static String _languageName(String code) {
-    const names = {
-      'fr': 'French',
-      'es': 'Spanish',
-      'de': 'German',
-      'it': 'Italian',
-    };
-    return names[code] ?? code;
   }
 }
