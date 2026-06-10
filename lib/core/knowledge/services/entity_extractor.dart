@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:math';
 
 import '../../config/app_config.dart';
@@ -8,6 +7,7 @@ import '../../providers/llm_response.dart';
 import '../../services/app_logger.dart';
 import '../../services/llm_trace_logger.dart';
 import '../../config/log_entry.dart';
+import 'llm_json_parser.dart';
 
 /// Extracted data from a conversation turn.
 class ExtractionResult {
@@ -197,14 +197,7 @@ Rules:
   /// Parse the LLM JSON response into an ExtractionResult.
   ExtractionResult _parseResponse(String content) {
     try {
-      // Strip markdown fences if present
-      var json = content.trim();
-      if (json.startsWith('```')) {
-        json = json.replaceFirst(RegExp(r'^```\w*\n?'), '');
-        json = json.replaceFirst(RegExp(r'\n?```$'), '');
-      }
-
-      final data = jsonDecode(json) as Map<String, dynamic>;
+      final data = LlmJsonParser.decodeObject(content);
 
       final entities = (data['entities'] as List?)
               ?.map((e) => ExtractedEntity(

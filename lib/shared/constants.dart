@@ -159,6 +159,73 @@ class AppConstants {
   // Dream (KB dedup)
   static const String lastDreamAtKey = 'last_dream_at';
 
+  // KB dedup thresholds (U17 — values unchanged from kb_maintenance_service)
+
+  /// Maximum active entities loaded per dedup scan (entity rows and
+  /// embedding BLOBs alike).
+  static const int dedupEntityScanLimit = 5000;
+
+  /// Default cap on candidate pairs returned by `findCandidates`.
+  static const int dedupMaxPairsDefault = 40;
+
+  /// Facts loaded per entity for dedup fact scoring.
+  static const int dedupFactsPerEntityLimit = 10;
+
+  /// Token-blocked pairs whose embedding cosine similarity falls below this
+  /// are discarded before scoring (embedding pre-filter).
+  static const double dedupEmbeddingPrefilterMinSim = 0.5;
+
+  /// Minimum cosine similarity for the embedding-only candidate discovery
+  /// path (semantic synonyms that share no tokens).
+  static const double dedupEmbeddingCandidateMinSim = 0.75;
+
+  /// Minimum best name similarity for a token-blocked pair.
+  static const double dedupNameFloor = 0.60;
+
+  /// Relaxed name floor when one name is contained in the other
+  /// (e.g. "Noé" ⊂ "Noé Girard").
+  static const double dedupContainmentNameFloor = 0.20;
+
+  /// Minimum normalized name length for containment to count (avoids noise).
+  static const int dedupContainmentMinNameLength = 3;
+
+  /// Composite score weights: name / relations / facts.
+  static const double dedupNameWeight = 0.50;
+  static const double dedupRelationWeight = 0.35;
+  static const double dedupFactWeight = 0.15;
+
+  /// Composite-score floor when the pair has relations or facts.
+  static const double dedupCompositeThresholdStructured = 0.50;
+
+  /// Name-score floor when neither entity has relations or facts.
+  static const double dedupCompositeThresholdNameOnly = 0.60;
+
+  /// Candidate pairs per LLM verification call, and max calls per run.
+  static const int dedupVerifyBatchSize = 20;
+  static const int dedupVerifyMaxBatches = 2;
+
+  /// Entities scanned per duplicate-facts run.
+  static const int dedupFactScanMaxEntities = 100;
+
+  /// Minimum [DateSimilarity.score] for two date facts to be candidates.
+  static const double dedupFactDateScoreMin = 0.7;
+
+  /// Minimum string similarity for two same-key fact values to be candidates.
+  static const double dedupFactStringScoreMin = 0.60;
+
+  /// Entity fact bundles per cross-key LLM call, and deterministic fact
+  /// candidates per verification call.
+  static const int dedupFactBundleLimit = 10;
+  static const int dedupFactVerifyBatchSize = 20;
+
+  /// Score boundaries for pair level classification (1 = auto-merge zone).
+  static const double dedupLevel1MinScore = 0.85;
+  static const double dedupLevel2MinScore = 0.50;
+
+  /// Fact-score blend: date-aware value match vs fact-key Jaccard.
+  static const double dedupFactMatchWeight = 0.6;
+  static const double dedupFactKeyJaccardWeight = 0.4;
+
   // Security: one-time wipe of cleartext secret mirrors that earlier versions
   // wrote to SharedPreferences and never cleared on key delete/rotate.
   static const String secretsCacheMigratedKey = 'secrets_cache_migrated_v1';
