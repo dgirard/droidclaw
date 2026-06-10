@@ -90,10 +90,22 @@ class RadioPlaybackService : MediaSessionService() {
     }
 
     private fun isTrustedCaller(controllerInfo: MediaSession.ControllerInfo): Boolean {
-        return controllerInfo.uid == Process.myUid() ||
-            controllerInfo.uid == Process.SYSTEM_UID ||
-            controllerInfo.packageName == packageName ||
-            controllerInfo.packageName in TRUSTED_SYSTEM_PACKAGES
+        // UID checks first: the kernel-verified identity. Our own UID also
+        // covers connections claiming our own package name.
+        if (controllerInfo.uid == Process.myUid() ||
+            controllerInfo.uid == Process.SYSTEM_UID
+        ) {
+            return true
+        }
+        // controllerInfo.packageName is self-reported on some API levels, so
+        // the allowlist must verify the claimed package actually belongs to
+        // the caller's UID (getPackagesForUid handles sharedUserId arrays).
+        val claimedPackage = controllerInfo.packageName
+        if (claimedPackage !in TRUSTED_SYSTEM_PACKAGES) {
+            return false
+        }
+        return packageManager.getPackagesForUid(controllerInfo.uid)
+            ?.contains(claimedPackage) == true
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:http/http.dart' as http;
 
 import '../../shared/constants.dart';
@@ -23,11 +25,17 @@ typedef RetryPredicate = bool Function(http.Response response);
 ///   injected client is never closed (caller owns it).
 /// - `shouldRetry` hooks consumer-specific "this response is transient"
 ///   checks without baking them into the net layer.
+/// - Every attempt is bounded by [timeout]; a timed-out attempt throws
+///   `TimeoutException` immediately and is NOT retried (a hang is not a
+///   429/5xx — retrying a hung host would double the stall). LLM providers
+///   pass a longer budget ([AppConstants.llmRequestTimeoutSeconds]); tools
+///   use the default ([AppConstants.httpRequestTimeoutSeconds]).
 class RetryingHttpClient {
   final http.Client _inner;
   final bool _ownsInner;
   final int maxRetries;
   final Duration baseDelay;
+  final Duration timeout;
   final RetryPredicate? shouldRetry;
   final Future<void> Function(Duration) _delay;
 
@@ -36,6 +44,8 @@ class RetryingHttpClient {
     this.maxRetries = AppConstants.httpMaxRetries,
     this.baseDelay =
         const Duration(milliseconds: AppConstants.httpRetryBaseDelayMs),
+    this.timeout =
+        const Duration(seconds: AppConstants.httpRequestTimeoutSeconds),
     this.shouldRetry,
     Future<void> Function(Duration)? delay,
   })  : _inner = inner ?? http.Client(),
@@ -71,7 +81,8 @@ class RetryingHttpClient {
       Future<http.Response> Function() attempt) async {
     http.Response response;
     for (var i = 0;; i++) {
-      response = await attempt();
+      // A hung attempt throws TimeoutException out of the loop: no retry.
+      response = await attempt().timeout(timeout);
       final transient =
           response.statusCode == 429 || response.statusCode >= 500;
       if (i >= maxRetries ||

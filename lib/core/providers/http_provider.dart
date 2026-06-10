@@ -71,6 +71,8 @@ class HttpProvider implements LLMProvider {
     final client = RetryingHttpClient(
       inner: _client,
       baseDelay: _retryBaseDelay,
+      // LLM generations need more headroom than the default tool budget.
+      timeout: const Duration(seconds: AppConstants.llmRequestTimeoutSeconds),
       shouldRetry: _hasEmptyChoices,
     );
     try {

@@ -74,8 +74,12 @@ class AnthropicProvider implements LLMProvider {
     final uri = Uri.parse('$apiBase/messages');
     // Shared retry policy (U16): 429/5xx with exponential backoff —
     // parity with HttpProvider, which always retried transient errors.
-    final client =
-        RetryingHttpClient(inner: _client, baseDelay: _retryBaseDelay);
+    final client = RetryingHttpClient(
+      inner: _client,
+      baseDelay: _retryBaseDelay,
+      // LLM generations need more headroom than the default tool budget.
+      timeout: const Duration(seconds: AppConstants.llmRequestTimeoutSeconds),
+    );
     final http.Response response;
     try {
       response = await client.post(

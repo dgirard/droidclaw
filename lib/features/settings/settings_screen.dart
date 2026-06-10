@@ -11,6 +11,7 @@ import '../../core/knowledge/services/knowledge_service.dart';
 import '../../core/services/app_logger.dart';
 import '../../core/services/data_wiper.dart';
 import '../../core/services/llm_trace_logger.dart';
+import '../../core/session/isolate_persistence/hive_path_resolver.dart';
 import '../../core/session/session.dart';
 import '../../core/session/session_manager.dart';
 import '../../l10n/l10n.dart';
@@ -273,6 +274,11 @@ Future<void> _resetAllData(BuildContext context, WidgetRef ref) async {
       storage: storage,
       configStorage: ref.read(configStorageProvider),
       sessions: sessions,
+      // File-level fallback for a degraded sessions box (same rationale as
+      // knowledgeDbPath): the box file lives in the Hive home directory.
+      sessionsBoxPath:
+          '${HivePathResolver.hiveDirFromWorkspace(workspacePath)}'
+          '/${SessionManager.boxName}',
       knowledge: knowledge,
       knowledgeDbPath: '$workspacePath/${AppConstants.knowledgeDbFilename}',
       workspacePath: workspacePath,

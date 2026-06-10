@@ -26,11 +26,13 @@ class ServiceSecretCache {
 
     // Ensure the probe value exists in secure storage before the service
     // isolate runs its capability probe.
+    var probeWritten = true;
     try {
       await configStorage.writeSecureStorageProbe();
     } catch (_) {
-      // Secure storage write failed — mirrors below still keep the service
-      // isolate functional.
+      // Secure storage write failed (e.g. Keystore down) — mirrors below
+      // still keep the service isolate functional.
+      probeWritten = false;
     }
 
     // --- Non-secret values: always cached. ---
@@ -59,7 +61,15 @@ class ServiceSecretCache {
 
     // --- Secret values: only mirrored when the service isolate cannot read
     // secure storage itself. ---
-    if (configStorage.serviceSecureStorageCapable) {
+    //
+    // The persisted capability flag is only trusted when the probe value was
+    // actually (re)written above: if secure storage failed the WRITE right
+    // now, a stale `capable=true` flag (owned by the service-side probe, so
+    // not reset here) would otherwise wipe the mirrors AND leave the service
+    // isolate unable to read secure storage — no secrets anywhere. In that
+    // case, treat the device as not-capable for this refresh and write the
+    // mirrors unconditionally.
+    if (probeWritten && configStorage.serviceSecureStorageCapable) {
       // Probe succeeded on this device: the service isolate reads secrets
       // directly from FlutterSecureStorage. Remove any cleartext leftovers.
       await configStorage.wipeCachedSecrets();
@@ -87,5 +97,13 @@ class ServiceSecretCache {
         AppConstants.cachedPrimApiKeyKey, await configStorage.getPrimApiKey());
     await mirror(AppConstants.cachedEmbeddingApiKeyKey,
         await configStorage.getEmbeddingApiKey());
+    // The Telegram token is only needed by the service isolate while the bot
+    // is enabled. When disabled, pass null through the same mirror() path so
+    // a stale cleartext mirror is removed instead of left (or re-written).
+    final telegramEnabled =
+        prefs.getBool(AppConstants.telegramBotEnabledKey) ?? false;
+    await mirror(
+        AppConstants.cachedTelegramBotTokenKey,
+        telegramEnabled ? await configStorage.getTelegramBotToken() : null);
   }
 }

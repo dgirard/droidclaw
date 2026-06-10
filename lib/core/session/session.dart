@@ -30,6 +30,23 @@ class Session {
     updated = DateTime.now();
   }
 
+  /// Merge a persisted history into this session: [persisted]'s messages are
+  /// PREPENDED (they happened earlier) and the summaries MERGED (persisted
+  /// first — it covers the older part of the conversation). Used by
+  /// SessionManager rehydration — a session fabricated while its persisted
+  /// record was unreadable (reload window / degraded box) must absorb the
+  /// real history before it is ever saved, so an empty in-memory session can
+  /// never overwrite persisted messages, and a summary acquired mid-reload
+  /// can never silently discard the persisted one.
+  void absorbPersistedHistory(Session persisted) {
+    _messages.insertAll(0, persisted._messages);
+    final merged = [persisted.summary, summary]
+        .whereType<String>()
+        .where((s) => s.isNotEmpty)
+        .join('\n\n');
+    summary = merged.isEmpty ? null : merged;
+  }
+
   /// Get messages for the LLM context.
   /// If a summary exists, prepends it as a system message.
   /// Repairs tool messages missing `name` and strips orphaned tool results

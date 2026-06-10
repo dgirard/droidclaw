@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -209,6 +211,47 @@ void main() {
 
       expect(response.statusCode, 302);
       expect(calls, 1);
+    });
+
+    test('a hung request throws TimeoutException promptly without retrying',
+        () async {
+      var calls = 0;
+      final client = RetryingHttpClient(
+        inner: MockClient((_) {
+          calls++;
+          return Completer<http.Response>().future; // never completes
+        }),
+        timeout: const Duration(milliseconds: 50),
+        delay: (_) async => fail('a timed-out attempt must not be retried'),
+      );
+
+      await expectLater(
+        client.get(Uri.parse('https://x.test/')),
+        throwsA(isA<TimeoutException>()),
+      );
+      expect(calls, 1, reason: 'no retry attempt after a timeout');
+    });
+
+    test('a fast response is unaffected by the timeout', () async {
+      final client = RetryingHttpClient(
+        inner: MockClient((_) async => http.Response('ok', 200)),
+        timeout: const Duration(seconds: 5),
+        delay: (_) async {},
+      );
+
+      final response = await client.get(Uri.parse('https://x.test/'));
+
+      expect(response.statusCode, 200);
+      expect(response.body, 'ok');
+    });
+
+    test('default timeout matches AppConstants.httpRequestTimeoutSeconds',
+        () {
+      final client = RetryingHttpClient(
+        inner: MockClient((_) async => http.Response('', 200)),
+      );
+      expect(client.timeout,
+          const Duration(seconds: AppConstants.httpRequestTimeoutSeconds));
     });
   });
 }

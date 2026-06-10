@@ -104,14 +104,43 @@ class AgentLoop {
         // paraphrased questions and stored fact tokens (see docs/solutions/
         // logic-errors/knowledge-graph-retrieval-fts5-tokenization-and-
         // semantic-gap.md), so it stays on in that degraded mode.
-        final kgQuery = knowledgeService!.hasEmbedder
+        final hasEmbedder = knowledgeService!.hasEmbedder;
+        var kgQuery = hasEmbedder
             ? userMessage
             : await _expandQueryForKG(userMessage);
 
-        final results = await knowledgeService!.queryRelevant(
+        var results = await knowledgeService!.queryRelevant(
           kgQuery,
           limit: 10,
         );
+
+        // The embedder was supposed to bridge the semantic gap, but the
+        // embed call failed at query time (API down, bad key, ...): the
+        // call above silently degraded to lexical-only on the RAW query —
+        // exactly the documented pre-fix failure. Retry once with LLM
+        // keyword expansion (degraded mode).
+        if (hasEmbedder && knowledgeService!.lastQueryVectorPathFailed) {
+          AppLogger.instance.warning(LogSource.agent,
+              'KG retrieval degraded: query embedding failed, retrying '
+              'pre-query with LLM keyword expansion',
+              sessionKey: sessionKey);
+          // The retry has its own try/catch: if the expansion LLM call (or
+          // the second query) throws, the first query's LEXICAL results must
+          // survive — discarding them would doubly degrade the turn.
+          try {
+            final expandedQuery = await _expandQueryForKG(userMessage);
+            results = await knowledgeService!.queryRelevant(
+              expandedQuery,
+              limit: 10,
+            );
+            kgQuery = expandedQuery;
+          } catch (e) {
+            AppLogger.instance.warning(LogSource.agent,
+                'KG degraded retry failed: $e — keeping the lexical results '
+                'from the first query',
+                sessionKey: sessionKey);
+          }
+        }
         if (results.isNotEmpty) {
           kgContext = formatKnowledgeContext(results);
           AppLogger.instance.debug(LogSource.agent,
@@ -461,9 +490,14 @@ class AgentLoop {
       session.summary = response.content;
     } catch (_) {
       // If summarization fails, just set a basic summary from truncated messages
+      final firstUserContent = messagesToSummarize
+          .firstWhere((m) => m.role == 'user',
+              orElse: () =>
+                  const Message(role: 'user', content: 'various topics'))
+          .content;
       session.summary =
           'Previous conversation (${messagesToSummarize.length} messages) about: '
-          '${messagesToSummarize.firstWhere((m) => m.role == "user", orElse: () => const Message(role: "user", content: "various topics")).content.substring(0, 100)}...';
+          '${firstUserContent.substring(0, min(100, firstUserContent.length))}...';
     }
   }
 }

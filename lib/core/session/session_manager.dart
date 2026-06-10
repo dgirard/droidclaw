@@ -60,7 +60,9 @@ import 'session_metadata.dart';
 /// fsyncs, and the lifecycle layers (now load-bearing, see todos/004) flush
 /// any pending intermediate writes when Android backgrounds the app.
 class SessionManager {
-  static const String _boxName = 'sessions';
+  /// Hive box name. Public so DataWiper can derive the on-disk box file path
+  /// (`<hiveDir>/<boxName>.hive`) for the file-level wipe fallback.
+  static const String boxName = 'sessions';
 
   /// Lazily decoded full sessions (only the ones actually accessed).
   final Map<String, Session> _cache = {};
@@ -68,7 +70,29 @@ class SessionManager {
   /// Metadata for every persisted session (built at init/reload).
   final Map<String, SessionMetadata> _meta = {};
 
+  /// Sessions fabricated by [getOrCreate] while their persisted record was
+  /// unreadable (reload()'s close→reopen window, or the degraded box state).
+  /// [_rehydrateFabricated] merges the on-disk history back into these same
+  /// instances once the box is readable again — BEFORE any awaited [save]
+  /// proceeds — so an empty fabricated session can never overwrite persisted
+  /// history.
+  final Map<String, Session> _awaitingRehydration = {};
+
+  /// The in-flight [reload], if any. Mutating operations await it before
+  /// touching the box; a reentrant [reload] returns it instead of starting
+  /// a second close→reopen cycle on the same handle.
+  Future<void>? _reloading;
+
   Box<String>? _box;
+
+  /// The box, but only when it is actually open. Null during reload()'s
+  /// close→reopen window and in the degraded state after a failed reload
+  /// recovery — callers fall back to cache-only instead of throwing a
+  /// HiveError mid-turn.
+  Box<String>? get _openBox {
+    final box = _box;
+    return (box != null && box.isOpen) ? box : null;
+  }
 
   /// Number of `box.flush()` (fsync) calls issued. Exposed so tests can pin
   /// the flush POLICY (which operations fsync) — a true SIGKILL-without-
@@ -92,7 +116,7 @@ class SessionManager {
     if (workspacePath != null) {
       Hive.init(HivePathResolver.hiveDirFromWorkspace(workspacePath));
     }
-    _box = await Hive.openBox<String>(_boxName);
+    _box = await Hive.openBox<String>(boxName);
 
     // Build the metadata index only — no full history decode (lazy load).
     // Legacy/crash-gap records get healed (metadata written back) so the
@@ -102,19 +126,93 @@ class SessionManager {
 
   /// Reload sessions from Hive to pick up writes from other isolates.
   /// Closes and reopens the Hive box to force a disk re-read.
-  Future<void> reload() async {
+  ///
+  /// Failure recovery: if the close→reopen→rebuild sequence throws, attempt
+  /// a plain reopen so [_box] points to an OPEN box again — a stale
+  /// cache/index beats throwing a HiveError on every subsequent save. If
+  /// even that fails, the manager degrades to cache-only: the [_openBox]
+  /// guards keep [get]/[save]/[flush] from throwing mid-turn.
+  ///
+  /// Reentrancy/concurrency: a reload already in flight is returned as-is
+  /// (never two concurrent close→reopen cycles), and every mutating
+  /// operation ([save], [deleteSession], [deleteAllSessions], [flush])
+  /// awaits the in-flight reload before touching the box.
+  Future<void> reload() {
+    final inflight = _reloading;
+    if (inflight != null) return inflight;
+    final run = _doReload().whenComplete(() => _reloading = null);
+    _reloading = run;
+    return run;
+  }
+
+  Future<void> _doReload() async {
     final box = _box;
     if (box == null) return;
-    _box = await CacheReload.reload(
-      box: box,
-      rebuild: (reopened) async {
-        _cache.clear();
-        // Read-only rebuild: no heal writes from the reload path (it runs
-        // on cron-completion notifications, when the service isolate may
-        // also be writing).
-        await _rebuildIndex(reopened, writeBackMissingMeta: false);
-      },
-    );
+    try {
+      _box = await CacheReload.reload(
+        box: box,
+        rebuild: (reopened) async {
+          _cache.clear();
+          // Read-only rebuild: no heal writes from the reload path (it runs
+          // on cron-completion notifications, when the service isolate may
+          // also be writing).
+          await _rebuildIndex(reopened, writeBackMissingMeta: false);
+        },
+      );
+    } catch (e) {
+      AppLogger.instance.warning(
+        LogSource.app,
+        'Session box reload failed (${e.runtimeType}) — '
+        'attempting plain reopen',
+      );
+      try {
+        // Hive returns the already-open instance if the reopen inside
+        // CacheReload succeeded but the rebuild failed afterwards.
+        _box = await Hive.openBox<String>(boxName);
+      } catch (e2) {
+        AppLogger.instance.error(
+          LogSource.app,
+          'Session box recovery reopen failed (${e2.runtimeType}) — '
+          'persistence degraded to in-memory cache until restart',
+        );
+        // _box may point at a closed handle; _openBox keeps operations
+        // cache-only instead of throwing.
+      }
+    } finally {
+      // Runs before reload()'s future resolves: every operation that awaited
+      // the in-flight reload observes the rehydrated state.
+      _rehydrateFabricated();
+    }
+  }
+
+  /// Merge persisted histories back into sessions fabricated while the box
+  /// was unreadable (see [getOrCreate]). The merged messages are PREPENDED
+  /// into the same [Session] instance the caller holds, so nothing added
+  /// mid-reload is lost and a subsequent [save] writes the full history.
+  void _rehydrateFabricated() {
+    if (_awaitingRehydration.isEmpty) return;
+    final box = _openBox;
+    if (box == null) return; // still degraded — retry on the next reload
+    for (final key in _awaitingRehydration.keys.toList()) {
+      final fabricated = _awaitingRehydration.remove(key)!;
+      final persisted = _decodeOrNull(key, box.get(key));
+      if (persisted == null) {
+        // Record gone (deleted by the other isolate) or corrupt — nothing
+        // recoverable to merge. Keep the in-memory session as-is.
+        AppLogger.instance.warning(
+          LogSource.app,
+          'Session $key could not be rehydrated after reload (record '
+          'missing or unreadable) — keeping the in-memory session',
+        );
+      } else {
+        fabricated.absorbPersistedHistory(persisted);
+      }
+      // Re-link the caller-held instance into the rebuilt cache (reload
+      // cleared it); a plain get(key) would otherwise decode a SECOND,
+      // diverging instance from disk.
+      _cache[key] = fabricated;
+      _meta[key] = SessionMetadata.fromSession(fabricated);
+    }
   }
 
   /// Rebuild the [_meta] index from [box]. Sessions with a metadata sidecar
@@ -188,8 +286,23 @@ class SessionManager {
   }
 
   /// Get or create a session by key (lazily decoding it on first access).
+  ///
+  /// Invariant: never overwrite persisted history with an empty session.
+  /// When [_meta] proves a persisted record exists but the box is unreadable
+  /// right now (reload()'s close→reopen window, or the degraded recovery
+  /// state), the freshly created session is queued for rehydration: once the
+  /// box reopens, [_rehydrateFabricated] merges the on-disk messages back
+  /// into this same instance — before any [save] (which awaits the in-flight
+  /// reload) can write it out.
   Session getOrCreate(String key) {
-    return get(key) ?? (_cache[key] = Session(key: key));
+    final existing = get(key);
+    if (existing != null) return existing;
+    final session = Session(key: key);
+    _cache[key] = session;
+    if (_meta.containsKey(key) && _openBox == null) {
+      _awaitingRehydration[key] = session;
+    }
+    return session;
   }
 
   /// Get a session by key, returns null if not found.
@@ -197,11 +310,11 @@ class SessionManager {
   Session? get(String key) {
     final cached = _cache[key];
     if (cached != null) return cached;
-    final box = _box;
-    // isOpen guard: during reload()'s close→reopen window (and only then)
-    // the handle is briefly closed — fall back to cache-only, like the
-    // pre-lazy behavior.
-    if (box == null || !box.isOpen) return null;
+    // _openBox guard: during reload()'s close→reopen window (and after a
+    // failed reload recovery) the handle is closed — fall back to
+    // cache-only, like the pre-lazy behavior.
+    final box = _openBox;
+    if (box == null) return null;
     final session = _decodeOrNull(key, box.get(key));
     if (session != null) _cache[key] = session;
     return session;
@@ -213,11 +326,12 @@ class SessionManager {
   /// class docs. Pass `flush: false` ONLY for mid-turn intermediate saves
   /// whose loss is recoverable (tool batches, post-summarization saves).
   Future<void> save(Session session, {bool flush = true}) async {
+    await _awaitReload();
     _cache[session.key] = session;
     final meta = SessionMetadata.fromSession(session);
     _meta[session.key] = meta;
-    await _box?.put(session.key, jsonEncode(session.toJson()));
-    await _box?.put(AppConstants.sessionMetaKeyPrefix + session.key,
+    await _openBox?.put(session.key, jsonEncode(session.toJson()));
+    await _openBox?.put(AppConstants.sessionMetaKeyPrefix + session.key,
         jsonEncode(meta.toJson()));
     if (flush) await this.flush();
   }
@@ -240,26 +354,63 @@ class SessionManager {
 
   /// Delete a session (and its metadata sidecar) and force sync to disk.
   Future<void> deleteSession(String key) async {
+    await _awaitReload();
     _cache.remove(key);
     _meta.remove(key);
+    _awaitingRehydration.remove(key);
     // Sidecar first: a crash in between leaves a session without metadata
     // (healed at next init) rather than a ghost list entry.
-    await _box?.delete(AppConstants.sessionMetaKeyPrefix + key);
-    await _box?.delete(key);
+    await _openBox?.delete(AppConstants.sessionMetaKeyPrefix + key);
+    await _openBox?.delete(key);
     await flush();
   }
 
   /// Delete every session (cache + Hive) and force sync to disk.
+  ///
+  /// Throws a [StateError] when the box is unavailable (degraded state):
+  /// the in-memory caches are still cleared, but the on-disk records were
+  /// NOT deleted — a silent success here would let "erase all data" report
+  /// a wipe that never reached the disk. DataWiper records the failure and
+  /// falls back to deleting the box files directly.
   Future<void> deleteAllSessions() async {
+    await _awaitReload();
     _cache.clear();
     _meta.clear();
-    await _box?.clear();
+    _awaitingRehydration.clear();
+    final box = _openBox;
+    if (box == null) {
+      throw StateError(
+          'sessions box unavailable (degraded) — on-disk sessions were not '
+          'deleted');
+    }
+    await box.clear();
     await flush();
+  }
+
+  /// Close the underlying Hive box (best-effort). Used by DataWiper before
+  /// deleting the box files so a live handle cannot resurrect wiped data.
+  /// A degraded/already-closed box is a no-op.
+  Future<void> close() async {
+    await _awaitReload();
+    final box = _box;
+    _box = null;
+    if (box != null && box.isOpen) {
+      await box.close();
+    }
+  }
+
+  /// Await the in-flight [reload], if any, so a mutating operation never
+  /// interleaves with the close→reopen window (where a write would land on
+  /// a closed handle, or clobber state the rebuild is about to replace).
+  Future<void> _awaitReload() async {
+    final pending = _reloading;
+    if (pending != null) await pending;
   }
 
   /// Force sync all pending Hive writes to disk.
   Future<void> flush() async {
-    final box = _box;
+    await _awaitReload();
+    final box = _openBox;
     if (box == null) return;
     flushCount++;
     await box.flush();

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:meta/meta.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../l10n/l10n.dart';
@@ -13,6 +14,7 @@ import '../../shared/constants.dart';
 import '../../features/telegram/telegram_api.dart';
 import '../session/isolate_persistence/durable_trigger_queue.dart';
 import '../session/isolate_persistence/hive_path_resolver.dart';
+import '../session/session_manager.dart';
 import 'app_logger.dart';
 import 'llm_trace_logger.dart';
 import 'service_secret_reader.dart';
@@ -97,13 +99,21 @@ class BackgroundTaskHandler extends TaskHandler {
             'cleartext mirrors no longer needed' : 'FAILED — falling back to '
             'SharedPreferences secret mirrors'}');
 
-    // Receive bot token from secure storage (when capable) or stored prefs
+    // Receive bot token from secure storage (when capable) or its
+    // SharedPreferences mirror (written by ServiceSecretCache.refresh on
+    // probe-fail devices).
     final token = await _secrets!.read(
       secureKey: AppConstants.telegramBotTokenKey,
-      mirrorKey: AppConstants.telegramBotTokenKey,
+      mirrorKey: AppConstants.cachedTelegramBotTokenKey,
     );
     if (token != null && token.isNotEmpty) {
       _api = TelegramApi(token: token);
+    } else if (prefs.getBool(AppConstants.telegramBotEnabledKey) ?? false) {
+      AppLogger.instance.warning(LogSource.service,
+          'Telegram is enabled but no bot token could be resolved '
+          '(secure storage ${capable ? 'has no token' : 'unreadable'} and no '
+          'SharedPreferences mirror) — Telegram polling is disabled in the '
+          'service isolate. Open the app to refresh the secret cache.');
     }
 
     // Restore persisted offset
@@ -484,29 +494,22 @@ class BackgroundTaskHandler extends TaskHandler {
         }
       }
 
-      // Save (write + flush) the session BEFORE notifying the main isolate.
-      // If the notification raced ahead of the disk flush, the main isolate
-      // would re-read the box *before* the bytes land and the cron session
-      // would be invisible until the next reload — a field incident class
-      // that is otherwise unreproducible locally (see
-      // docs/solutions/database-issues/
-      // session-data-loss-hive-flush-and-destructive-reads.md). If the save
-      // throws, the notification is skipped — the main isolate must never be
-      // told to reload state that was never written. The same persist-then-
-      // notify invariant applies to the pending-trigger handoff below.
-      final session = _agentLoop!.sessions.get(sessionKey);
-      if (session != null) {
-        await _agentLoop!.sessions.save(session);
-        AppLogger.instance.debug(LogSource.cron,
-            'Session saved for "${cron.name}"');
-      }
-      // Notify main isolate of completion (for UI update if app is open)
-      FlutterForegroundTask.sendDataToMain({
-        'type': 'cron_completed',
-        'cron_id': cron.id,
-        'cron_name': cron.name,
-        'response_length': responseLength,
-      });
+      // Persist-then-notify: save (write + flush) the session BEFORE the
+      // 'cron_completed' notification — and skip the notification entirely
+      // if the save throws (see [persistSessionThenNotify]).
+      await persistSessionThenNotify(
+        sessions: _agentLoop!.sessions,
+        sessionKey: sessionKey,
+        notification: {
+          'type': 'cron_completed',
+          'cron_id': cron.id,
+          'cron_name': cron.name,
+          'response_length': responseLength,
+        },
+        notify: FlutterForegroundTask.sendDataToMain,
+      );
+      AppLogger.instance.debug(LogSource.cron,
+          'Session saved for "${cron.name}"');
 
       // Update notification
       FlutterForegroundTask.updateService(
@@ -520,6 +523,35 @@ class BackgroundTaskHandler extends TaskHandler {
     } finally {
       _cronExecuting = false;
     }
+  }
+
+  /// Persist-then-notify invariant for the cron-session cross-isolate
+  /// handoff. The session save (an awaited write + fsync) MUST complete
+  /// before the main isolate is notified: if the notification raced ahead of
+  /// the disk flush, the main isolate would re-read the box *before* the
+  /// bytes land and the cron session would be invisible until the next
+  /// reload — a field incident class that is otherwise unreproducible
+  /// locally (see docs/solutions/database-issues/
+  /// session-data-loss-hive-flush-and-destructive-reads.md). If the save
+  /// throws, [notify] is never invoked — the main isolate must never be told
+  /// to reload state that was never written. The same invariant applies to
+  /// the pending-trigger handoff in [_checkCrons].
+  ///
+  /// Static and injectable so the invariant is unit-testable without a
+  /// FlutterForegroundTask harness ([notify] is
+  /// `FlutterForegroundTask.sendDataToMain` in production).
+  @visibleForTesting
+  static Future<void> persistSessionThenNotify({
+    required SessionManager sessions,
+    required String sessionKey,
+    required Map<String, dynamic> notification,
+    required void Function(Map<String, dynamic> data) notify,
+  }) async {
+    final session = sessions.get(sessionKey);
+    if (session != null) {
+      await sessions.save(session);
+    }
+    notify(notification);
   }
 
   // --- Cron scheduling ---

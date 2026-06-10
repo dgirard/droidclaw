@@ -44,6 +44,9 @@ class ProofEditorTool extends Tool {
       'Use "suggest" to propose changes the user can accept/reject. '
       'Use "prepend" to add content at the very top of the document. '
       'Use "append" with a "section" heading to add content under a specific section. '
+      'DEPRECATED: "edit" and "insert" are no longer supported by the server '
+      'and will fail — use "rewrite", "append", "suggest", or '
+      '"snapshot"+"edit_v2" instead. '
       'Documents persist across sessions and are accessible via shareable URLs.';
 
   @override
@@ -68,7 +71,11 @@ class ProofEditorTool extends Tool {
               'list',
               'delete',
             ],
-            'description': 'The operation to perform on a Proof document',
+            'description':
+                'The operation to perform on a Proof document. '
+                    '"edit" and "insert" are DEPRECATED (removed from the '
+                    'live API, they always fail): use "rewrite", "append", '
+                    '"suggest", or "snapshot"+"edit_v2" instead.',
           },
           'slug': {
             'type': 'string',
@@ -87,11 +94,11 @@ class ProofEditorTool extends Tool {
           },
           'search': {
             'type': 'string',
-            'description': 'Text to find in document (for edit)',
+            'description': 'Text to find in document (for deprecated edit)',
           },
           'replace': {
             'type': 'string',
-            'description': 'Replacement text (for edit)',
+            'description': 'Replacement text (for deprecated edit)',
           },
           'quote': {
             'type': 'string',

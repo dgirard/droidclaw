@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:meta/meta.dart';
+
 import '../../../shared/constants.dart';
 import '../../config/log_entry.dart';
 import '../../providers/embedding_provider.dart';
@@ -41,6 +43,16 @@ class KnowledgeService {
   final int embeddingScanPageSize;
 
   final _spreading = const SpreadingActivation();
+
+  /// True when the last [queryRelevant] call had an embedder configured but
+  /// the query embed failed at query time (API down, bad key, ...) — the
+  /// vector path was skipped and retrieval degraded to lexical-only on the
+  /// raw query. Callers that skip LLM keyword expansion BECAUSE an embedder
+  /// is configured (see AgentLoop) must check this and retry with expansion,
+  /// or the documented semantic-gap bug re-opens (docs/solutions/logic-errors/
+  /// knowledge-graph-retrieval-fts5-tokenization-and-semantic-gap.md).
+  bool get lastQueryVectorPathFailed => _lastQueryVectorPathFailed;
+  bool _lastQueryVectorPathFailed = false;
 
   KnowledgeService({
     required this.db,
@@ -99,6 +111,7 @@ class KnowledgeService {
     // 2. Vector similarity search (if embedder is available). Runs regardless
     // of FTS results: this is the semantic-gap bridge.
     final vectorScores = <int, double>{};
+    _lastQueryVectorPathFailed = false;
     if (hasEmbedder) {
       try {
         final queryResult = await embeddingProvider!.embed(
@@ -109,9 +122,14 @@ class KnowledgeService {
         );
         if (queryResult.embeddings.isNotEmpty) {
           final queryVec = Float32List.fromList(queryResult.embeddings.first);
-          vectorScores.addAll(await _scanEmbeddings(queryVec));
+          // Same candidate-pool multiplier as the FTS path above: the
+          // downstream getEntitiesByIds/findNeighborsBatch IN-lists are
+          // documented as top-K-sized, so the vector pool must be capped too.
+          vectorScores.addAll(
+              await _scanEmbeddings(queryVec, maxCandidates: limit * 3));
         }
       } catch (e) {
+        _lastQueryVectorPathFailed = true;
         AppLogger.instance.warning(
           LogSource.agent,
           'KG vector search failed, falling back to degraded mode: $e',
@@ -279,19 +297,34 @@ class KnowledgeService {
     return results;
   }
 
+  /// Number of vector candidates produced by the last [_scanEmbeddings] run
+  /// (after the top-N cap). Test-only observability for the candidate cap.
+  @visibleForTesting
+  int lastVectorCandidateCount = 0;
+
   /// Cosine-scan ALL active entity embeddings against [queryVec], in keyset
-  /// pages of [embeddingScanPageSize] rows (U14).
+  /// pages of [embeddingScanPageSize] rows (U14), keeping only the
+  /// [maxCandidates] best-scoring entities above the similarity threshold.
   ///
   /// Replaces the old single `getActiveEntityEmbeddings(limit: 1000)` load,
   /// which silently ignored every entity past the first 1000 and kept the
   /// whole embedding list materialized on the agent isolate. Paging bounds
   /// memory to one page of BLOBs; scoring is unchanged (same math, same
-  /// threshold), so fused rankings are identical. The scan stays on the
-  /// calling isolate by design: the benchmark in
-  /// tool/benchmark_cosine_scan.dart showed Isolate.run is ~2x slower at 5K
-  /// entities because copying the embeddings dominates the cosine math.
-  Future<Map<int, double>> _scanEmbeddings(Float32List queryVec) async {
-    final scores = <int, double>{};
+  /// threshold). The scan stays on the calling isolate by design: the
+  /// benchmark in tool/benchmark_cosine_scan.dart showed Isolate.run is ~2x
+  /// slower at 5K entities because copying the embeddings dominates the
+  /// cosine math.
+  ///
+  /// The cap mirrors the FTS candidate pool (`limit * 3` in [queryRelevant]):
+  /// without it, every entity above the threshold would flow into the
+  /// `getEntitiesByIds`/`findNeighborsBatch` IN-lists, which are documented
+  /// as top-K-sized. Running top-N selection per page (sort of at most
+  /// pageSize + maxCandidates entries) keeps memory bounded.
+  Future<Map<int, double>> _scanEmbeddings(
+    Float32List queryVec, {
+    required int maxCandidates,
+  }) async {
+    var top = <({int id, double sim})>[];
     var afterId = 0;
     while (true) {
       final page = await db.getActiveEntityEmbeddingsPage(
@@ -304,13 +337,20 @@ class KnowledgeService {
         if (entVec.length != queryVec.length) continue;
         final sim = MemoryClusterer.cosineSimilarity(queryVec, entVec);
         if (sim > AppConstants.knowledgeVectorSimilarityThreshold) {
-          scores[entry.id] = sim;
+          top.add((id: entry.id, sim: sim));
         }
+      }
+      // Running top-N: prune once per page, never let the pool exceed the cap
+      // between pages.
+      if (top.length > maxCandidates) {
+        top.sort((a, b) => b.sim.compareTo(a.sim));
+        top = top.sublist(0, maxCandidates);
       }
       afterId = page.last.id;
       if (page.length < embeddingScanPageSize) break;
     }
-    return scores;
+    lastVectorCandidateCount = top.length;
+    return {for (final t in top) t.id: t.sim};
   }
 
   /// Batch recalculate memory decay.

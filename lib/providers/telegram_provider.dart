@@ -141,6 +141,10 @@ class TelegramNotifier extends Notifier<TelegramState> {
   Future<void> disable() async {
     final storage = ref.read(storageServiceProvider);
     await storage.setBool(AppConstants.telegramBotEnabledKey, false);
+    // Belt and braces with ServiceSecretCache.refresh() (which skips the
+    // mirror while disabled): drop the cleartext token mirror immediately
+    // rather than waiting for the next refresh.
+    await storage.remove(AppConstants.cachedTelegramBotTokenKey);
 
     _botManager?.dispose();
     _botManager = null;

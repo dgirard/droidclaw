@@ -24,6 +24,17 @@ class AppConstants {
   /// misbehaving server cannot stall a tool call for minutes.
   static const int httpRetryAfterCapSeconds = 30;
 
+  /// Default per-attempt request timeout for [RetryingHttpClient]. A hung
+  /// connection throws `TimeoutException` promptly instead of blocking the
+  /// caller (e.g. the service-isolate cron) forever. A timeout is NOT
+  /// retried — a hang is not a 429/5xx, and retrying a hung host doubles
+  /// the stall.
+  static const int httpRequestTimeoutSeconds = 30;
+
+  /// Per-attempt request budget for LLM chat calls (long generations need
+  /// more headroom than tool HTTP calls).
+  static const int llmRequestTimeoutSeconds = 120;
+
   // Web tools
   static const int webSearchMaxResults = 5;
   static const int webFetchMaxChars = 50000;
@@ -141,6 +152,7 @@ class AppConstants {
   static const String cachedOrsApiKeyKey = 'cached_ors_api_key';
   static const String cachedSncfApiKeyKey = 'cached_sncf_api_key';
   static const String cachedPrimApiKeyKey = 'cached_prim_api_key';
+  static const String cachedTelegramBotTokenKey = 'cached_telegram_bot_token';
   static const String cachedWorkspacePathKey = 'cached_workspace_path';
   static const String cachedLocaleKey = 'cached_locale';
 

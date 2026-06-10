@@ -1,5 +1,6 @@
 // ignore_for_file: depend_on_referenced_packages
 
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:drift/drift.dart' hide isNull;
@@ -236,6 +237,74 @@ void main() {
       final results =
           await serviceWithEmbedder().queryRelevant('quantum banana smoothie');
       expect(results, isEmpty); // unknown text embeds to the zero vector
+    });
+  });
+
+  group('KnowledgeService.queryRelevant — vector candidate pool cap', () {
+    test(
+        'more than limit*3 entities above the threshold: only the top '
+        'limit*3 by similarity become vector candidates', () async {
+      // 10 entities whose names share no token with the query, all with
+      // similarity to [1,0,0,0] above the 0.5 threshold, strictly
+      // decreasing: VecOnly 0 is the closest, VecOnly 9 the farthest.
+      const n = 10;
+      for (var i = 0; i < n; i++) {
+        final id = await db.into(db.entities).insert(
+              EntitiesCompanion.insert(
+                name: 'VecOnly $i',
+                entityType: const Value('CONCEPT'),
+                summary: const Value('semantic-only candidate'),
+              ),
+            );
+        final theta = 0.1 + 0.08 * i; // cos: ~0.995 down to ~0.68, all > 0.5
+        await db.updateEntityEmbedding(
+            id, _blob([cos(theta), sin(theta), 0.0, 0.0]));
+      }
+
+      final service = KnowledgeService(
+        db: db,
+        embeddingProvider: FakeEmbeddingProvider({
+          'quantum banana smoothie': [1.0, 0.0, 0.0, 0.0],
+        }),
+        embeddingModel: 'fake-model',
+        embeddingDimensions: 4,
+      );
+
+      // limit=2 → vector pool capped at 6, though all 10 pass the threshold.
+      final results =
+          await service.queryRelevant('quantum banana smoothie', limit: 2);
+
+      expect(service.lastVectorCandidateCount, 6,
+          reason: 'the vector pool must mirror the FTS limit*3 cap');
+      // The best-similarity entities still win the fused ranking.
+      expect(results.map((r) => r.entity.name).toList(),
+          ['VecOnly 0', 'VecOnly 1']);
+    });
+  });
+
+  group('KnowledgeService.queryRelevant — embed failure observability', () {
+    test(
+        'query-time embed failure sets lastQueryVectorPathFailed and falls '
+        'back to lexical-only; a healthy query resets it', () async {
+      await seedGraph();
+      final failing = KnowledgeService(
+        db: db,
+        embeddingProvider: FakeEmbeddingProvider(const {}, throwOnEmbed: true),
+        embeddingModel: 'fake-model',
+        embeddingDimensions: 4,
+      );
+
+      final results = await failing.queryRelevant('rue Paix');
+
+      expect(failing.lastQueryVectorPathFailed, isTrue,
+          reason: 'the caller must be able to see the degraded vector path');
+      // Lexical fallback still retrieves what FTS can match.
+      expect(results, isNotEmpty);
+      expect(results.first.entity.name, 'Home');
+
+      final healthy = serviceWithEmbedder();
+      await healthy.queryRelevant('where does Didier live');
+      expect(healthy.lastQueryVectorPathFailed, isFalse);
     });
   });
 

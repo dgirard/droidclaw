@@ -101,6 +101,11 @@ class ConfigStorage {
       AppConstants.cachedPrimApiKeyKey,
       apiKey);
 
+  /// Get the Telegram bot token from secure storage (written by
+  /// `telegram_provider.dart` / the Telegram config screen).
+  Future<String?> getTelegramBotToken() =>
+      _storage.getSecure(AppConstants.telegramBotTokenKey);
+
   /// Get embedding provider API key from secure storage.
   Future<String?> getEmbeddingApiKey() =>
       _storage.getSecure(AppConstants.secureEmbeddingApiKeyKey);
@@ -169,6 +174,7 @@ class ConfigStorage {
     AppConstants.cachedSncfApiKeyKey,
     AppConstants.cachedPrimApiKeyKey,
     AppConstants.cachedEmbeddingApiKeyKey,
+    AppConstants.cachedTelegramBotTokenKey,
   ];
 
   /// Remove every cleartext secret mirror from SharedPreferences. The next

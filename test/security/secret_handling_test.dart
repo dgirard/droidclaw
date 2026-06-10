@@ -1,12 +1,16 @@
 import 'dart:io';
 
+import 'package:drift/native.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:droidclaw/core/config/app_config.dart';
 import 'package:droidclaw/core/config/config_storage.dart';
 import 'package:droidclaw/core/config/service_secret_cache.dart';
+import 'package:droidclaw/core/knowledge/database/knowledge_graph_db.dart';
+import 'package:droidclaw/core/knowledge/services/knowledge_service.dart';
 import 'package:droidclaw/core/services/data_wiper.dart';
 import 'package:droidclaw/core/services/service_secret_reader.dart';
 import 'package:droidclaw/core/session/session_manager.dart';
@@ -14,6 +18,47 @@ import 'package:droidclaw/data/local/storage_service.dart';
 import 'package:droidclaw/shared/constants.dart';
 
 import '../support/hive_test_harness.dart';
+
+/// FlutterSecureStorage stand-in whose every call fails — a device whose
+/// Keystore is unreadable in this engine (the probe-fail service isolate).
+class _UnreadableSecureStorage implements FlutterSecureStorage {
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      Future<String?>.error(StateError('keystore unreadable'));
+}
+
+/// FlutterSecureStorage stand-in where reads succeed (backed by [store]) but
+/// every WRITE throws — a Keystore that still decrypts existing entries but
+/// can no longer store new ones (the stale-capability-flag lockout case).
+class _WriteFailsSecureStorage implements FlutterSecureStorage {
+  _WriteFailsSecureStorage(this.store);
+
+  final Map<String, String> store;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    if (invocation.memberName == #read) {
+      return Future<String?>.value(
+          store[invocation.namedArguments[#key] as String]);
+    }
+    if (invocation.memberName == #write) {
+      return Future<void>.error(StateError('keystore write failed'));
+    }
+    return super.noSuchMethod(invocation);
+  }
+}
+
+/// StorageService whose secure-storage bulk delete fails (Keystore down
+/// while the user runs "erase all data").
+class _SecureWipeFailsStorage extends StorageService {
+  _SecureWipeFailsStorage({required super.prefs})
+      : super(overrideWorkspacePath: '/ws');
+
+  @override
+  Future<void> deleteSecureAll() async {
+    throw StateError('keystore down');
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -127,6 +172,16 @@ void main() {
 
       expect(await cs.getBraveApiKey(), 'brave-new');
     });
+
+    test('wipeCachedSecrets covers the Telegram bot token mirror', () async {
+      final (cs, _, sp) = await buildStorage(
+        prefs: {AppConstants.cachedTelegramBotTokenKey: 'tg-x'},
+      );
+
+      await cs.wipeCachedSecrets();
+
+      expect(sp.getString(AppConstants.cachedTelegramBotTokenKey), isNull);
+    });
   });
 
   group('ServiceSecretCache.refresh (mirror writing)', () {
@@ -194,6 +249,202 @@ void main() {
       expect(sp.getString(AppConstants.cachedProviderNameKey),
           AppConstants.defaultProvider);
       expect(sp.getString(AppConstants.cachedWorkspacePathKey), '/ws');
+    });
+
+    test('probe-fail device: refresh() mirrors the Telegram bot token and '
+        'ServiceSecretReader resolves it from the mirror', () async {
+      // Capability flag absent (service probe never succeeded) → mirrors on.
+      // The Telegram mirror is additionally gated on the bot being ENABLED.
+      final (cs, _, sp) = await buildStorage(
+        prefs: {AppConstants.telegramBotEnabledKey: true},
+        secure: {
+          'api_key_openrouter': 'sk-current',
+          AppConstants.telegramBotTokenKey: 'tg-token',
+        },
+      );
+
+      await ServiceSecretCache.refresh(
+        prefs: sp,
+        configStorage: cs,
+        config: AppConfig.defaults(),
+        workspacePath: '/ws',
+      );
+
+      expect(sp.getString(AppConstants.cachedTelegramBotTokenKey), 'tg-token');
+
+      // The service isolate on that device cannot read secure storage at
+      // all — the token must still resolve through the mirror.
+      final reader = ServiceSecretReader(
+        prefs: sp,
+        secure: _UnreadableSecureStorage(),
+      );
+      expect(await reader.probe(), isFalse);
+      expect(
+        await reader.read(
+          secureKey: AppConstants.telegramBotTokenKey,
+          mirrorKey: AppConstants.cachedTelegramBotTokenKey,
+        ),
+        'tg-token',
+      );
+    });
+
+    test('Telegram bot DISABLED on a probe-fail device: refresh() writes no '
+        'token mirror and removes a stale one', () async {
+      // A token can remain in secure storage after the bot is disabled (the
+      // user may re-enable later). Disabled → the service isolate has no use
+      // for it, so no cleartext mirror may exist.
+      final (cs, _, sp) = await buildStorage(
+        prefs: {
+          AppConstants.telegramBotEnabledKey: false,
+          // Stale mirror left from when the bot was enabled.
+          AppConstants.cachedTelegramBotTokenKey: 'tg-stale',
+        },
+        secure: {
+          'api_key_openrouter': 'sk-current',
+          AppConstants.telegramBotTokenKey: 'tg-token',
+        },
+      );
+
+      await ServiceSecretCache.refresh(
+        prefs: sp,
+        configStorage: cs,
+        config: AppConfig.defaults(),
+        workspacePath: '/ws',
+      );
+
+      expect(sp.getString(AppConstants.cachedTelegramBotTokenKey), isNull,
+          reason: 'disabled bot: the stale cleartext mirror must be removed');
+      // The other mirrors are unaffected by the Telegram gate.
+      expect(sp.getString(AppConstants.cachedApiKeyKey), 'sk-current');
+    });
+
+    test('Telegram enabled flag ABSENT (never configured): refresh() treats '
+        'it as disabled and writes no token mirror', () async {
+      final (cs, _, sp) = await buildStorage(
+        secure: {
+          'api_key_openrouter': 'sk-current',
+          AppConstants.telegramBotTokenKey: 'tg-token',
+        },
+      );
+
+      await ServiceSecretCache.refresh(
+        prefs: sp,
+        configStorage: cs,
+        config: AppConfig.defaults(),
+        workspacePath: '/ws',
+      );
+
+      expect(sp.getString(AppConstants.cachedTelegramBotTokenKey), isNull);
+    });
+
+    test('capability-true: no Telegram token mirror is written and an '
+        'existing one is wiped', () async {
+      final (cs, _, sp) = await buildStorage(
+        prefs: {
+          AppConstants.serviceSecureStorageCapableKey: true,
+          AppConstants.cachedTelegramBotTokenKey: 'tg-leftover',
+        },
+        secure: {
+          'api_key_openrouter': 'sk-current',
+          AppConstants.telegramBotTokenKey: 'tg-token',
+        },
+      );
+
+      await ServiceSecretCache.refresh(
+        prefs: sp,
+        configStorage: cs,
+        config: AppConfig.defaults(),
+        workspacePath: '/ws',
+      );
+
+      expect(sp.getString(AppConstants.cachedTelegramBotTokenKey), isNull);
+    });
+
+    test('stale capable=true flag is not trusted when the probe WRITE fails: '
+        'mirrors are written, not wiped', () async {
+      // Keystore reads still work, writes fail (e.g. Keystore degraded after
+      // an OS update). The persisted capable=true flag is stale: if it were
+      // trusted, refresh() would wipe the mirrors and the service isolate —
+      // which may no longer read secure storage either — would start with NO
+      // secrets anywhere.
+      SharedPreferences.setMockInitialValues({
+        AppConstants.serviceSecureStorageCapableKey: true,
+        AppConstants.cachedApiKeyKey: 'sk-old-mirror',
+        AppConstants.telegramBotEnabledKey: true,
+      });
+      final sp = await SharedPreferences.getInstance();
+      final storage = StorageService(
+        prefs: sp,
+        secure: _WriteFailsSecureStorage({
+          'api_key_openrouter': 'sk-current',
+          AppConstants.telegramBotTokenKey: 'tg-token',
+        }),
+        overrideWorkspacePath: '/ws',
+      );
+      final cs = ConfigStorage(storage);
+
+      await ServiceSecretCache.refresh(
+        prefs: sp,
+        configStorage: cs,
+        config: AppConfig.defaults(),
+        workspacePath: '/ws',
+      );
+
+      expect(sp.getString(AppConstants.cachedApiKeyKey), 'sk-current');
+      expect(sp.getString(AppConstants.cachedTelegramBotTokenKey), 'tg-token');
+    });
+
+    test('flag transition sequence: no flag → mirrors written; flag set by '
+        'the service probe → next refresh removes every secret mirror',
+        () async {
+      final (cs, _, sp) = await buildStorage(
+        // Telegram enabled: its mirror participates like every other secret.
+        prefs: {AppConstants.telegramBotEnabledKey: true},
+        secure: {
+          'api_key_openrouter': 'sk-current',
+          AppConstants.secureBraveApiKeyKey: 'brave-x',
+          AppConstants.secureOrsApiKeyKey: 'ors-x',
+          AppConstants.secureSncfApiKeyKey: 'sncf-x',
+          AppConstants.securePrimApiKeyKey: 'prim-x',
+          AppConstants.secureEmbeddingApiKeyKey: 'emb-x',
+          AppConstants.telegramBotTokenKey: 'tg-x',
+        },
+      );
+
+      const mirrorKeys = [
+        AppConstants.cachedApiKeyKey,
+        AppConstants.cachedBraveApiKeyKey,
+        AppConstants.cachedOrsApiKeyKey,
+        AppConstants.cachedSncfApiKeyKey,
+        AppConstants.cachedPrimApiKeyKey,
+        AppConstants.cachedEmbeddingApiKeyKey,
+        AppConstants.cachedTelegramBotTokenKey,
+      ];
+
+      await ServiceSecretCache.refresh(
+        prefs: sp,
+        configStorage: cs,
+        config: AppConfig.defaults(),
+        workspacePath: '/ws',
+      );
+      for (final key in mirrorKeys) {
+        expect(sp.getString(key), isNotNull,
+            reason: '$key must be mirrored while the flag is unset');
+      }
+
+      // The service isolate's probe succeeds and persists the flag.
+      await sp.setBool(AppConstants.serviceSecureStorageCapableKey, true);
+
+      await ServiceSecretCache.refresh(
+        prefs: sp,
+        configStorage: cs,
+        config: AppConfig.defaults(),
+        workspacePath: '/ws',
+      );
+      for (final key in mirrorKeys) {
+        expect(sp.getString(key), isNull,
+            reason: '$key must be wiped once the device is capable');
+      }
     });
 
     test('writes the secure-storage probe value for the service isolate',
@@ -337,6 +588,70 @@ void main() {
       expect(logsCleared, isTrue);
     });
 
+    test('degraded sessions box (closed handle): wipeAll records the '
+        'sessions failure AND deletes the box files anyway', () async {
+      final hive = await HiveTestHarness.create();
+      addTearDown(hive.dispose);
+
+      final (cs, storage, _) = await buildStorage();
+
+      final sessions = SessionManager();
+      await sessions.init();
+      await sessions.save(sessions.getOrCreate('default'));
+      final boxFile = File('${hive.dir.path}/${SessionManager.boxName}.hive');
+      expect(boxFile.existsSync(), isTrue,
+          reason: 'precondition: the persisted box file exists on disk');
+
+      // Degrade the manager: its handle is now closed (the reload-recovery
+      // end state), so deleteAllSessions cannot reach the on-disk records.
+      await Hive.close();
+
+      final wiper = DataWiper(
+        storage: storage,
+        configStorage: cs,
+        sessions: sessions,
+        sessionsBoxPath: '${hive.dir.path}/${SessionManager.boxName}',
+      );
+
+      final failures = await wiper.wipeAll();
+
+      expect(failures, contains('sessions'),
+          reason: 'the degraded box clear must be reported, not silently '
+              'counted as success');
+      // The file-level fallback still removed the conversations from disk.
+      expect(boxFile.existsSync(), isFalse);
+      expect(
+          File('${hive.dir.path}/${SessionManager.boxName}.lock').existsSync(),
+          isFalse);
+    });
+
+    test('healthy sessions box: wipeAll also removes the box file set '
+        '(no recoverable bytes left behind)', () async {
+      final hive = await HiveTestHarness.create();
+      addTearDown(hive.dispose);
+
+      final (cs, storage, _) = await buildStorage();
+
+      final sessions = SessionManager();
+      await sessions.init();
+      await sessions.save(sessions.getOrCreate('default'));
+      final boxFile = File('${hive.dir.path}/${SessionManager.boxName}.hive');
+      expect(boxFile.existsSync(), isTrue);
+
+      final wiper = DataWiper(
+        storage: storage,
+        configStorage: cs,
+        sessions: sessions,
+        sessionsBoxPath: '${hive.dir.path}/${SessionManager.boxName}',
+      );
+
+      final failures = await wiper.wipeAll();
+
+      expect(failures, isEmpty);
+      expect(sessions.getAllSessionMetadata(), isEmpty);
+      expect(boxFile.existsSync(), isFalse);
+    });
+
     test('deletes the knowledge DB file when no service is open', () async {
       final hive = await HiveTestHarness.create();
       addTearDown(hive.dispose);
@@ -393,6 +708,75 @@ void main() {
       // Directory survives (tools stay functional), contents are gone.
       expect(workspace.existsSync(), isTrue);
       expect(workspace.listSync(), isEmpty);
+    });
+
+    test('deletes the knowledge DB file set even when a live KnowledgeService '
+        'is open (DELETE-d rows must not stay recoverable in the pages)',
+        () async {
+      final dir = await Directory.systemTemp.createTemp('wiper_kg_live_');
+      addTearDown(() async {
+        if (await dir.exists()) {
+          await dir.delete(recursive: true);
+        }
+      });
+
+      final dbFile = File('${dir.path}/knowledge_graph.db');
+      final db = KnowledgeGraphDB.forExecutor(NativeDatabase(dbFile));
+      final knowledge = KnowledgeService(db: db);
+      // Touch the DB so the file (and its WAL sidecar) exists on disk and
+      // the connection is live.
+      await db.customSelect('SELECT 1').get();
+      expect(dbFile.existsSync(), isTrue);
+
+      final (cs, storage, _) = await buildStorage();
+      final wiper = DataWiper(
+        storage: storage,
+        configStorage: cs,
+        knowledge: knowledge,
+        knowledgeDbPath: dbFile.path,
+      );
+
+      final failures = await wiper.wipeAll();
+
+      expect(failures, isEmpty);
+      expect(dbFile.existsSync(), isFalse);
+      expect(File('${dbFile.path}-wal').existsSync(), isFalse);
+      expect(File('${dbFile.path}-shm').existsSync(), isFalse);
+      expect(File('${dbFile.path}-journal').existsSync(), isFalse);
+    });
+
+    test('an early-step failure (deleteSecureAll throws) is reported and '
+        'every downstream step still runs', () async {
+      final hive = await HiveTestHarness.create();
+      addTearDown(hive.dispose);
+
+      SharedPreferences.setMockInitialValues({
+        AppConstants.cronDefinitionsKey: '[]',
+        AppConstants.onboardingCompleteKey: true,
+      });
+      final sp = await SharedPreferences.getInstance();
+      final storage = _SecureWipeFailsStorage(prefs: sp);
+      final cs = ConfigStorage(storage);
+
+      final sessions = SessionManager();
+      await sessions.init();
+      await sessions.save(sessions.getOrCreate('default'));
+
+      final wiper = DataWiper(
+        storage: storage,
+        configStorage: cs,
+        sessions: sessions,
+      );
+
+      final failures = await wiper.wipeAll();
+
+      expect(failures, contains('secure_storage'));
+      expect(failures, hasLength(1),
+          reason: 'only the secure-storage step may fail');
+      // Downstream steps completed despite the early failure.
+      expect(sessions.getAllSessionMetadata(), isEmpty);
+      expect(sp.getString(AppConstants.cronDefinitionsKey), isNull);
+      expect(sp.getBool(AppConstants.onboardingCompleteKey), isNull);
     });
 
     test('a failing step does not prevent the others from running', () async {

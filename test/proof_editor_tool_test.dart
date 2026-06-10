@@ -689,6 +689,76 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  // Legacy /edit route removed server-side (API drift, U18)
+  //
+  // The live server returns 404 "Unsupported agent route" for the removed
+  // POST /api/agent/{slug}/edit route. That 404 means the OPERATION is
+  // unsupported — NOT that the document was deleted — so it must never
+  // reach the generic 404 handling that purges the document token.
+  // -------------------------------------------------------------------------
+  group('Legacy /edit 404 (route removed) must not purge the token', () {
+    late ProofDocumentStore store;
+    late MockClient client;
+
+    setUp(() async {
+      store = await _createTempStore();
+      await _seedDoc(store);
+      client = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path.contains('/state')) {
+          return _jsonResponse({
+            'markdown': '# Doc\n\nBody',
+            'marks': [],
+            'updatedAt': '2026-01-01T00:00:00Z',
+          });
+        }
+        // The removed legacy route.
+        return http.Response(
+            jsonEncode({'error': 'Unsupported agent route'}), 404);
+      });
+    });
+
+    test('edit against 404 /edit fails with alternatives, doc kept',
+        () async {
+      final tool = _buildTool(store, client);
+
+      final result = await tool.execute({
+        'operation': 'edit',
+        'slug': 'test-doc',
+        'search': 'Body',
+        'replace': 'New body',
+      });
+
+      expect(result.isError, isTrue);
+      expect(result.forLLM, contains('rewrite'));
+      expect(result.forLLM, contains('append'));
+      expect(result.forLLM, contains('suggest'));
+      expect(result.forLLM, isNot(contains('deleted')),
+          reason: 'must not claim the document was deleted');
+      expect(await store.getBySlug('test-doc'), isNotNull,
+          reason: 'the token of a healthy document must NOT be purged');
+    });
+
+    test('insert against 404 /edit fails with alternatives, doc kept',
+        () async {
+      final tool = _buildTool(store, client);
+
+      final result = await tool.execute({
+        'operation': 'insert',
+        'slug': 'test-doc',
+        'quote': 'Body',
+        'content': 'inserted',
+      });
+
+      expect(result.isError, isTrue);
+      expect(result.forLLM, contains('rewrite'));
+      expect(result.forLLM, contains('append'));
+      expect(result.forLLM, contains('suggest'));
+      expect(await store.getBySlug('test-doc'), isNotNull,
+          reason: 'the token of a healthy document must NOT be purged');
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Append operation
   // -------------------------------------------------------------------------
   group('Append operation', () {
@@ -1371,6 +1441,10 @@ void main() {
     });
 
     /// Operations that hit the network, with minimal valid arguments.
+    /// "edit" and "insert" are deprecated (the live /edit route is gone) but
+    /// stay in this matrix: the catch-all mock answers 200, so they still
+    /// exercise their full URL/auth-header path without triggering the
+    /// removed-route 404 handling.
     final networkOperations = <Map<String, dynamic>>[
       {'operation': 'read', 'slug': 'test-doc'},
       {'operation': 'edit', 'slug': 'test-doc', 'search': 'Body', 'replace': 'B'},

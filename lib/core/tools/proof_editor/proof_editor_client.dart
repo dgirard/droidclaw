@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../../shared/constants.dart';
 import '../../config/log_entry.dart';
 import '../../net/retrying_http_client.dart';
 import '../../services/app_logger.dart';
@@ -110,7 +111,6 @@ class ProofEditorClient {
   static const baseUrl = 'https://www.proofeditor.ai';
   static const agentId = 'droidclaw';
   static const agentBy = 'ai:droidclaw';
-  static const _maxRetries = 2;
 
   ProofEditorClient({
     required this.store,
@@ -493,6 +493,20 @@ class ProofEditorClient {
           body: body,
         );
 
+        // The legacy /edit route was removed server-side (404 "Unsupported
+        // agent route" — see the API drift notes in the class doc comment).
+        // A 404 here means the OPERATION is unsupported, NOT that the
+        // document was deleted, so it must be intercepted BEFORE
+        // _checkHttpError — which would purge the document's token for a
+        // perfectly healthy document.
+        if (response.statusCode == 404) {
+          return const ProofFailure(
+              'This operation is no longer supported by the ProofEditor API '
+              '(the legacy edit route was removed). The document was NOT '
+              'modified and is still available. Use operation "rewrite", '
+              '"append", or "suggest" instead.');
+        }
+
         if (response.statusCode == 409) {
           final errorData = jsonDecode(response.body) as Map<String, dynamic>;
           final code = errorData['code'] as String? ?? '';
@@ -664,7 +678,8 @@ class ProofEditorClient {
   }) {
     // Injected inner client → close() is a no-op; the per-operation client
     // lifecycle stays with the operation methods.
-    return RetryingHttpClient(inner: client, maxRetries: _maxRetries)
+    return RetryingHttpClient(
+            inner: client, maxRetries: AppConstants.httpMaxRetries)
         .get(uri, headers: {..._baseHeaders, ...?headers});
   }
 

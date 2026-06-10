@@ -251,6 +251,16 @@ void main() {
       expect(mgr.flushCount, baseline + 2);
     });
 
+    test('flush() issues exactly one fsync — the app-pause lifecycle hook '
+        'in app.dart relies on this contract', () async {
+      final mgr = SessionManager();
+      await mgr.init();
+      final baseline = mgr.flushCount;
+
+      await mgr.flush();
+      expect(mgr.flushCount, baseline + 1);
+    });
+
     test('init/reload metadata healing never fsyncs', () async {
       // Legacy box → init writes sidecars back, but without flush: metadata
       // is derivable, losing it only costs one decode at next startup.
