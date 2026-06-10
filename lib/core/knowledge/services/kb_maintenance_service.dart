@@ -8,6 +8,7 @@ import '../../config/log_entry.dart';
 import '../../providers/llm_provider.dart';
 import '../../providers/llm_response.dart';
 import '../../services/app_logger.dart';
+import '../../../shared/constants.dart';
 import '../algorithms/date_similarity.dart';
 import '../algorithms/memory_clusterer.dart';
 import '../algorithms/string_similarity.dart';
@@ -820,8 +821,30 @@ No markdown fences, no explanation.''';
 
   // ─── Cleanup: LLM-based full KB analysis ──────────────────────────
 
-  /// Build a compact markdown snapshot of the entire KB for LLM analysis.
-  Future<String> buildKBSnapshot() async {
+  static const _entityTableHeader =
+      '| ID | Name | Type | Facts | Aliases | Relations |\n'
+      '|----|------|------|-------|---------|-----------|\n';
+  static const _relationTableHeader =
+      '| ID | Source | → | Target | Type |\n'
+      '|----|--------|---|--------|------|\n';
+
+  /// Build compact markdown snapshots of the KB for LLM analysis, chunked
+  /// by entity id range so each cleanup prompt stays within context bounds
+  /// at several-thousand-entity scale (U15).
+  ///
+  /// Each chunk is self-contained: a complete entity table plus the
+  /// relation table for relations whose *source* entity falls in the chunk
+  /// (target names are inlined, so cross-chunk targets stay readable).
+  /// Chunk boundaries never split an entity row — an entity and its
+  /// outgoing relations always land in the same chunk. A small KB yields a
+  /// single chunk with the same content as the old unchunked snapshot.
+  ///
+  /// [maxChunkChars] defaults to [AppConstants.kbSnapshotChunkMaxChars]; a
+  /// single oversized entity block still becomes its own chunk (the bound
+  /// is best-effort for pathological rows).
+  Future<List<String>> buildKBSnapshotChunks({int? maxChunkChars}) async {
+    final budget = maxChunkChars ?? AppConstants.kbSnapshotChunkMaxChars;
+
     // Batch query: all active entities with fact counts, aliases, relations
     final entities = await _db.customSelect(
       'SELECT e.id, e.name, e.entity_type, '
@@ -852,18 +875,43 @@ No markdown fences, no explanation.''';
       (aliasMap[eid] ??= []).add(a.read<String>('alias_name'));
     }
 
-    // Index relations by entity_id (for entity table summary)
+    // Index relations by source entity_id: short target list for the entity
+    // table, full rows for the relation table.
     final relByEntity = <int, List<String>>{};
+    final relRowsBySource = <int, List<String>>{};
     for (final r in relations) {
       final srcId = r.read<int>('source_id');
       final tgtName = r.read<String>('target_name');
       (relByEntity[srcId] ??= []).add('→$tgtName');
+      (relRowsBySource[srcId] ??= []).add(
+        '| ${r.read<int>('id')} | ${r.read<String>('source_name')} '
+        '| → | $tgtName | ${r.read<String>('predicate')} |\n',
+      );
     }
 
-    // Build entities table
-    final buf = StringBuffer();
-    buf.writeln('| ID | Name | Type | Facts | Aliases | Relations |');
-    buf.writeln('|----|------|------|-------|---------|-----------|');
+    // Fixed per-chunk overhead: both table headers + the blank separator.
+    final overhead =
+        _entityTableHeader.length + 1 + _relationTableHeader.length;
+
+    final chunks = <String>[];
+    var entityLines = <String>[];
+    var relationLines = <String>[];
+    var size = overhead;
+
+    void flush() {
+      if (entityLines.isEmpty) return;
+      final buf = StringBuffer()
+        ..write(_entityTableHeader)
+        ..writeAll(entityLines)
+        ..writeln()
+        ..write(_relationTableHeader)
+        ..writeAll(relationLines);
+      chunks.add(buf.toString());
+      entityLines = <String>[];
+      relationLines = <String>[];
+      size = overhead;
+    }
+
     for (final e in entities) {
       final id = e.read<int>('id');
       final name = e.read<String>('name');
@@ -871,24 +919,35 @@ No markdown fences, no explanation.''';
       final factCount = e.read<int>('fact_count');
       final aliasList = aliasMap[id]?.join(', ') ?? '';
       final relList = relByEntity[id]?.join(', ') ?? '';
-      buf.writeln('| $id | $name | $type | $factCount | $aliasList | $relList |');
-    }
+      final entityLine =
+          '| $id | $name | $type | $factCount | $aliasList | $relList |\n';
+      final relRows = relRowsBySource[id] ?? const <String>[];
+      var blockSize = entityLine.length;
+      for (final row in relRows) {
+        blockSize += row.length;
+      }
 
-    buf.writeln();
-    buf.writeln('| ID | Source | → | Target | Type |');
-    buf.writeln('|----|--------|---|--------|------|');
-    for (final r in relations) {
-      final id = r.read<int>('id');
-      final srcName = r.read<String>('source_name');
-      final tgtName = r.read<String>('target_name');
-      final predicate = r.read<String>('predicate');
-      buf.writeln('| $id | $srcName | → | $tgtName | $predicate |');
-    }
+      // Flush before adding if the whole block would overflow the budget
+      // (never split an entity row from its relations).
+      if (entityLines.isNotEmpty && size + blockSize > budget) flush();
 
-    return buf.toString();
+      entityLines.add(entityLine);
+      relationLines.addAll(relRows);
+      size += blockSize;
+    }
+    flush();
+
+    // Empty KB: keep the old behavior of one (header-only) snapshot.
+    if (chunks.isEmpty) {
+      chunks.add('$_entityTableHeader\n$_relationTableHeader');
+    }
+    return chunks;
   }
 
-  /// Send KB snapshot to LLM and get proposed cleanup operations.
+  /// Send one KB snapshot chunk to LLM and get proposed cleanup operations.
+  ///
+  /// Callers iterate the chunks from [buildKBSnapshotChunks] (one LLM call
+  /// per chunk) and aggregate the returned operations.
   Future<List<CleanupOperation>> proposeCleanup(String snapshot) async {
     final langInstr = (kbLanguage != null && kbLanguage != 'en')
         ? '\n\nIMPORTANT: The KB data is in ${_languageName(kbLanguage!)}. '
@@ -921,7 +980,7 @@ No markdown fences, no explanation.''';
         '- delete_relation: {"type":"delete_relation", "relation_id":N, "confidence":70, "reason":"..."}'
         '$langInstr';
 
-    final userMessage = 'Here is the full KB snapshot:\n\n$snapshot';
+    final userMessage = 'Here is the KB snapshot:\n\n$snapshot';
 
     final response = await _llmProvider.chat(
       messages: [

@@ -18,6 +18,9 @@ class CronConfigScreen extends ConsumerStatefulWidget {
 }
 
 class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
+  /// Hoisted formatter — never allocate DateFormat per list item.
+  static final _lastRunFormat = DateFormat('MMM d HH:mm');
+
   List<CronDefinition> _crons = [];
 
   @override
@@ -116,7 +119,7 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
                     title: Text(cron.name),
                     subtitle: Text(
                       hasRun
-                          ? '${cron.schedule.localizedDisplayText(l)} - ${l.cronLastRun(DateFormat('MMM d HH:mm').format(cron.lastRun!))}'
+                          ? '${cron.schedule.localizedDisplayText(l)} - ${l.cronLastRun(_lastRunFormat.format(cron.lastRun!))}'
                           : '${cron.schedule.localizedDisplayText(l)} - ${l.cronNeverRan}',
                       style: !hasRun && cron.enabled
                           ? TextStyle(

@@ -341,6 +341,44 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     return map;
   }
 
+  /// Max access_count among active cold entities (0 when there are none).
+  ///
+  /// Feeds the decay-candidate cutoff: combined with
+  /// [MemoryDecay.maxAgeForRetention] it bounds how recently a cold entity
+  /// must have been accessed to possibly leave 'cold'.
+  Future<int> maxColdAccessCount() async {
+    final row = await customSelect(
+      "SELECT COALESCE(MAX(access_count), 0) AS m FROM entities "
+      "WHERE is_active = 1 AND temperature = 'cold'",
+    ).getSingle();
+    return row.read<int>('m');
+  }
+
+  /// Active entities whose temperature could cross a threshold (U15).
+  ///
+  /// Non-cold rows are always candidates (they can still decay downward).
+  /// Cold rows can only leave 'cold' if a recent access pushed retention
+  /// back above the cool threshold, i.e. last_accessed >= [coldCutoffEpoch]
+  /// (computed by the caller from the decay formula). Cold rows older than
+  /// the cutoff provably stay cold and are skipped entirely.
+  Future<List<({int id, int lastAccessed, int accessCount, String temperature})>>
+      getDecayCandidates(int coldCutoffEpoch) async {
+    final rows = await customSelect(
+      "SELECT id, last_accessed, access_count, temperature FROM entities "
+      "WHERE is_active = 1 AND (temperature != 'cold' OR last_accessed >= ?)",
+      variables: [Variable.withInt(coldCutoffEpoch)],
+    ).get();
+    return [
+      for (final r in rows)
+        (
+          id: r.read<int>('id'),
+          lastAccessed: r.read<int>('last_accessed'),
+          accessCount: r.read<int>('access_count'),
+          temperature: r.read<String>('temperature'),
+        ),
+    ];
+  }
+
   /// Update temperature for a batch of entities.
   Future<void> batchUpdateTemperatures(List<({int id, String temp})> updates) async {
     await batch((b) {

@@ -19,6 +19,9 @@ class MessageBubble extends StatelessWidget {
     r'(?<!\]\()https?://[^\s\)<>\]]+',
   );
 
+  /// Hoisted timestamp formatter — never allocate DateFormat per build.
+  static final _timeFormat = DateFormat('HH:mm');
+
   const MessageBubble({super.key, required this.message});
 
   @override
@@ -87,7 +90,7 @@ class MessageBubble extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  DateFormat('HH:mm').format(message.timestamp),
+                  _timeFormat.format(message.timestamp),
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: 11,
                     color: isUser
@@ -144,6 +147,15 @@ class MessageBubble extends StatelessWidget {
     });
   }
 
+  /// Truncate + linkify a tool result for display (memoized on [ChatMessage]
+  /// as `toolDisplayContent` so the transformation never runs per build).
+  static String toolDisplayText(String content) {
+    final truncated = content.length > _toolResultMaxChars
+        ? '${content.substring(0, _toolResultMaxChars)}...'
+        : content;
+    return linkifyUrls(truncated);
+  }
+
   Widget _buildToolMessage(BuildContext context, ThemeData theme) {
     final icon = message.isToolResult
         ? (message.isError ? Icons.error_outline : Icons.check_circle_outline)
@@ -151,11 +163,6 @@ class MessageBubble extends StatelessWidget {
     final color = message.isError
         ? theme.colorScheme.error
         : theme.colorScheme.tertiary;
-
-    // Truncate long tool results to keep the UI compact.
-    final displayContent = message.content.length > _toolResultMaxChars
-        ? '${message.content.substring(0, _toolResultMaxChars)}...'
-        : message.content;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
@@ -173,7 +180,7 @@ class MessageBubble extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: MarkdownBody(
-              data: linkifyUrls(displayContent),
+              data: message.toolDisplayContent,
               fitContent: false,
               onTapLink: _onTapLink,
               styleSheet:

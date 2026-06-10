@@ -18,6 +18,10 @@ class ChatMessage {
   /// Pre-computed linkified content for MarkdownBody rendering.
   late final String linkifiedContent = MessageBubble.linkifyUrls(content);
 
+  /// Pre-computed truncated + linkified tool-result content for display.
+  /// Computed lazily on first render, never re-run per build.
+  late final String toolDisplayContent = MessageBubble.toolDisplayText(content);
+
   ChatMessage({
     required this.role,
     required this.content,

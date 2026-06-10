@@ -314,20 +314,30 @@ class KnowledgeService {
     return scores;
   }
 
-  /// Batch recalculate memory decay for all active entities.
+  /// Batch recalculate memory decay.
   /// Returns the number of entities whose temperature changed.
+  ///
+  /// U15: the recompute is restricted to rows whose temperature could
+  /// actually cross a threshold instead of loading every active entity each
+  /// hour. Non-cold rows can always decay further, so they are always
+  /// candidates (a small population — anything untouched for days is cold).
+  /// A cold row can only leave 'cold' when a recent access pushed its
+  /// retention back above the cool threshold; using
+  /// [MemoryDecay.maxAgeForRetention] with the max access count among cold
+  /// rows gives an exact superset cutoff (stability grows with access
+  /// count), so no crossing row is ever missed and the decay math stays
+  /// solely in memory_decay.dart.
   Future<int> recalculateDecay() async {
-    final activeEntities = await db.getActiveEntities().get();
-    final entities = activeEntities
-        .map((e) => (
-              id: e.id,
-              lastAccessed: e.lastAccessed,
-              accessCount: e.accessCount,
-              temperature: e.temperature,
-            ))
-        .toList();
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final maxColdAccessCount = await db.maxColdAccessCount();
+    final coldCutoff = now -
+        MemoryDecay.maxAgeForRetention(
+          MemoryDecay.coolThreshold,
+          maxColdAccessCount,
+        ).ceil();
+    final entities = await db.getDecayCandidates(coldCutoff);
 
-    final updates = MemoryDecay.batchDecay(entities);
+    final updates = MemoryDecay.batchDecay(entities, nowEpoch: now);
     if (updates.isNotEmpty) {
       await db.batchUpdateTemperatures(
         updates.map((u) => (id: u.id, temp: u.temp)).toList(),

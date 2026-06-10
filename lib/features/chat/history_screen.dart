@@ -97,28 +97,32 @@ class HistoryScreen extends ConsumerWidget {
       );
     }
 
-    return ListView(
-      children: [
-        if (chatSessions.isNotEmpty) ...[
-          _SectionHeader(title: l.historySectionChat),
-          ...chatSessions.map((s) => _SessionTile(
-                session: s,
-                isCurrent: s.key == currentSessionKey,
-                onTap: () => _loadSession(context, ref, s.key),
-                onDelete: () => _confirmDelete(context, ref, s),
-              )),
-        ],
-        if (telegramSessions.isNotEmpty) ...[
-          _SectionHeader(title: l.historySectionTelegram),
-          ...telegramSessions.map((s) => _SessionTile(
-                session: s,
-                isCurrent: s.key == currentSessionKey,
-                isTelegram: true,
-                onTap: () => _loadSession(context, ref, s.key),
-                onDelete: () => _confirmDelete(context, ref, s),
-              )),
-        ],
+    // Precompute the flat row list once per build (cheap descriptors, no
+    // widgets); tiles are then created lazily by ListView.builder so only
+    // visible rows are instantiated.
+    final rows = <_ConversationRow>[
+      if (chatSessions.isNotEmpty) ...[
+        _HeaderRow(l.historySectionChat),
+        for (final s in chatSessions) _SessionRow(s, isTelegram: false),
       ],
+      if (telegramSessions.isNotEmpty) ...[
+        _HeaderRow(l.historySectionTelegram),
+        for (final s in telegramSessions) _SessionRow(s, isTelegram: true),
+      ],
+    ];
+
+    return ListView.builder(
+      itemCount: rows.length,
+      itemBuilder: (context, index) => switch (rows[index]) {
+        _HeaderRow(:final title) => _SectionHeader(title: title),
+        _SessionRow(:final session, :final isTelegram) => _SessionTile(
+            session: session,
+            isCurrent: session.key == currentSessionKey,
+            isTelegram: isTelegram,
+            onTap: () => _loadSession(context, ref, session.key),
+            onDelete: () => _confirmDelete(context, ref, session),
+          ),
+      },
     );
   }
 
@@ -136,9 +140,13 @@ class HistoryScreen extends ConsumerWidget {
       );
     }
 
-    return ListView(
-      children: cronGroups.entries.map((entry) {
-        final group = entry.value;
+    // Group list precomputed once per build; tiles built lazily.
+    final groups = cronGroups.values.toList();
+
+    return ListView.builder(
+      itemCount: groups.length,
+      itemBuilder: (context, index) {
+        final group = groups[index];
         final cronName = group.name;
         final sessions = group.sessions;
         final lastSession = sessions.first;
@@ -188,7 +196,7 @@ class HistoryScreen extends ConsumerWidget {
             }
           },
         );
-      }).toList(),
+      },
     );
   }
 
@@ -315,6 +323,23 @@ class _CronGroup {
   _CronGroup({required this.name, this.prompt, required this.sessions});
 }
 
+/// Lightweight row descriptor for the conversations tab, so the flat list
+/// (headers + tiles) is computed once per build and rendered lazily.
+sealed class _ConversationRow {
+  const _ConversationRow();
+}
+
+class _HeaderRow extends _ConversationRow {
+  final String title;
+  const _HeaderRow(this.title);
+}
+
+class _SessionRow extends _ConversationRow {
+  final SessionMetadata session;
+  final bool isTelegram;
+  const _SessionRow(this.session, {required this.isTelegram});
+}
+
 /// Sub-screen showing individual executions of a cron.
 class CronExecutionsScreen extends ConsumerStatefulWidget {
   final String cronName;
@@ -363,7 +388,7 @@ class _CronExecutionsScreenState extends ConsumerState<CronExecutionsScreen> {
                   title: Text(_sessionTitle(session),
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(
-                    '${_formatDate(context, session.updated)} ${DateFormat('HH:mm').format(session.updated)}',
+                    '${_formatDate(context, session.updated)} ${_timeFormat.format(session.updated)}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   trailing: IconButton(
@@ -483,6 +508,10 @@ Future<void> runCronNow(
   navigator.pushNamedAndRemoveUntil('/chat', (route) => false);
 }
 
+// Hoisted formatters: never allocate DateFormat inside per-item builders.
+final DateFormat _timeFormat = DateFormat('HH:mm');
+final DateFormat _monthDayFormat = DateFormat('MMM d');
+
 String _sessionTitle(SessionMetadata session) {
   // Previews are pre-normalized at save time (SessionMetadata.fromSession).
   final text = session.preview ?? session.summaryPreview;
@@ -501,5 +530,5 @@ String _formatDate(BuildContext context, DateTime date) {
   if (sessionDay == today.subtract(const Duration(days: 1))) {
     return l.historyYesterday;
   }
-  return DateFormat('MMM d').format(date);
+  return _monthDayFormat.format(date);
 }

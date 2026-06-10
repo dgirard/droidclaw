@@ -40,6 +40,16 @@ class MemoryDecay {
     return exp(-t / s);
   }
 
+  /// Maximum age in seconds (since last access) at which an entity with
+  /// [accessCount] accesses can still have retention >= [threshold].
+  ///
+  /// Inverse of [retention]: R >= threshold  ⟺  t <= -ln(threshold) * S.
+  /// Used to restrict the hourly decay recompute to rows whose temperature
+  /// could actually cross a threshold (U15).
+  static double maxAgeForRetention(double threshold, int accessCount) {
+    return -log(threshold) * stability(accessCount);
+  }
+
   /// Classify retention score into temperature.
   static Temperature classify(double retentionScore) {
     if (retentionScore >= hotThreshold) return Temperature.hot;

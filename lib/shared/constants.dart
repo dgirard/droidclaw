@@ -96,6 +96,13 @@ class AppConstants {
   /// each statement far below SQLite's bind-variable limit even when the id
   /// list is bound twice (source/target sides of a relation).
   static const int knowledgeSqlInChunkSize = 1000;
+
+  /// Maximum characters per KB-snapshot chunk sent to the LLM during a
+  /// `dream` cleanup. Each chunk is a self-contained entity + relation
+  /// markdown table (~4K tokens at 16K chars), so cleanup prompts stay
+  /// within context bounds at several-thousand-entity scale. Chunk
+  /// boundaries never split an entity row.
+  static const int kbSnapshotChunkMaxChars = 16000;
   static const String cachedKnowledgeEnabledKey = 'cached_knowledge_enabled';
   static const String cachedKbLanguageKey = 'cached_kb_language';
 
