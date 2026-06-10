@@ -31,7 +31,7 @@ import '../tools/qr_generate_tool.dart';
 import '../tools/reverse_geocode_tool.dart';
 import '../tools/tool.dart';
 import '../tools/transit_tool.dart';
-import '../tools/proof_document_store.dart';
+import '../tools/proof_editor/proof_document_store.dart';
 import '../tools/proof_editor_tool.dart';
 import '../tools/weather_tool.dart';
 import '../tools/web_scrape_tool.dart';

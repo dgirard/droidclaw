@@ -46,7 +46,7 @@ import '../core/tools/speak_tool.dart';
 import '../core/tools/subagent_tool.dart';
 import '../core/tools/transit_tool.dart';
 import '../core/tools/dream_tool.dart';
-import '../core/tools/proof_document_store.dart';
+import '../core/tools/proof_editor/proof_document_store.dart';
 import '../core/tools/proof_editor_tool.dart';
 import '../core/tools/radio_tool.dart';
 import '../core/tools/volume_control_tool.dart';

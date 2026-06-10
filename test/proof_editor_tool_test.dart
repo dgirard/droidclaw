@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:droidclaw/core/tools/proof_document_store.dart';
+import 'package:droidclaw/core/tools/proof_editor/proof_document_store.dart';
 import 'package:droidclaw/core/tools/proof_editor_tool.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -699,13 +699,22 @@ void main() {
       await _seedDoc(store);
     });
 
-    test('successful append sends section and baseUpdatedAt', () async {
+    // API drift fix (U18): the legacy POST /edit append op was removed
+    // server-side. Append now reads /state, splices the content at the end
+    // of the target section locally, and applies rewrite.apply via /ops
+    // with the mutationBase baseToken.
+    test('successful append splices section and rewrites with baseToken',
+        () async {
       Map<String, dynamic>? capturedBody;
       final client = MockClient((request) async {
-        if (request.url.path.contains('/state')) {
-          return _jsonResponse({'updatedAt': '2026-01-20T00:00:00Z'});
+        if (request.method == 'GET' && request.url.path.contains('/state')) {
+          return _jsonResponse({
+            'markdown':
+                '# Introduction\n\nIntro text.\n\n# Other\n\nOther text.',
+            'mutationBase': {'token': 'mt1:abc'},
+          });
         }
-        if (request.url.path.contains('/edit')) {
+        if (request.method == 'POST' && request.url.path.contains('/ops')) {
           capturedBody = jsonDecode(request.body) as Map<String, dynamic>;
           return _jsonResponse({'ok': true});
         }
@@ -723,18 +732,28 @@ void main() {
       expect(result.isError, isFalse);
       expect(result.forLLM, contains('section "Introduction"'));
 
-      final ops = capturedBody!['operations'] as List;
-      expect(ops.first['op'], equals('append'));
-      expect(ops.first['section'], equals('Introduction'));
-      expect(capturedBody!['baseUpdatedAt'], equals('2026-01-20T00:00:00Z'));
+      expect(capturedBody!['type'], equals('rewrite.apply'));
+      expect(capturedBody!['baseToken'], equals('mt1:abc'));
+      final content = capturedBody!['content'] as String;
+      // New content lands at the end of Introduction, before # Other.
+      final introIdx = content.indexOf('Intro text.');
+      final newIdx = content.indexOf('New paragraph.');
+      final otherIdx = content.indexOf('# Other');
+      expect(introIdx, lessThan(newIdx));
+      expect(newIdx, lessThan(otherIdx));
     });
 
-    test('append 409 returns section error', () async {
+    test('append with unknown section fails without writing', () async {
+      var wrotePost = false;
       final client = MockClient((request) async {
-        if (request.url.path.contains('/state')) {
-          return _jsonResponse({'updatedAt': 'x'});
+        if (request.method == 'GET' && request.url.path.contains('/state')) {
+          return _jsonResponse({
+            'markdown': '# Introduction\n\nIntro text.',
+            'mutationBase': {'token': 'mt1:abc'},
+          });
         }
-        return http.Response('conflict', 409);
+        wrotePost = true;
+        return _jsonResponse({'ok': true});
       });
       final tool = _buildTool(store, client);
 
@@ -747,6 +766,31 @@ void main() {
 
       expect(result.isError, isTrue);
       expect(result.forLLM, contains('section may not exist'));
+      expect(wrotePost, isFalse,
+          reason: 'no mutation should be sent for a missing section');
+    });
+
+    test('append 409 returns conflict error', () async {
+      final client = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path.contains('/state')) {
+          return _jsonResponse({
+            'markdown': '# Bas\n\nContenu.',
+            'mutationBase': {'token': 'mt1:abc'},
+          });
+        }
+        return http.Response('conflict', 409);
+      });
+      final tool = _buildTool(store, client);
+
+      final result = await tool.execute({
+        'operation': 'append',
+        'slug': 'test-doc',
+        'section': 'Bas',
+        'content': 'stuff',
+      });
+
+      expect(result.isError, isTrue);
+      expect(result.forLLM, contains('Append conflict'));
     });
   });
 
@@ -833,6 +877,7 @@ void main() {
           return _jsonResponse({
             'revision': 42,
             'updatedAt': '2026-03-01T00:00:00Z',
+            'mutationBase': {'token': 'mt1:state-token'},
           });
         }
         if (request.method == 'POST' &&
@@ -857,7 +902,11 @@ void main() {
       expect(result.forLLM, contains('rewrite applied'));
       expect(capturedBody!['type'], equals('rewrite.apply'));
       expect(capturedBody!['content'], equals('# New content'));
-      expect(capturedBody!['baseRevision'], equals(42));
+      // API drift fix (U18): /ops only accepts baseToken
+      // (state.mutationBase.token) as a precondition — baseRevision is
+      // rejected by the live contract.
+      expect(capturedBody!['baseToken'], equals('mt1:state-token'));
+      expect(capturedBody!.containsKey('baseRevision'), isFalse);
     });
   });
 
