@@ -327,7 +327,7 @@ void main() {
       expect(sp.getString(AppConstants.cachedApiKeyKey), isNull);
       expect(sp.getString(AppConstants.cachedBraveApiKeyKey), isNull);
       // Sessions gone.
-      expect(sessions.getAllSessions(), isEmpty);
+      expect(sessions.getAllSessionMetadata(), isEmpty);
       // SharedPreferences config gone (crons, telegram, onboarding flag).
       expect(sp.getString(AppConstants.cronDefinitionsKey), isNull);
       expect(sp.getBool(AppConstants.telegramBotEnabledKey), isNull);

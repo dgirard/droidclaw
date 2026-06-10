@@ -116,6 +116,10 @@ class Session {
     }
   }
 
+  static bool _isStandalone(Message m) =>
+      (m.role == 'user' || m.role == 'assistant') &&
+      (m.toolCalls == null || m.toolCalls!.isEmpty);
+
   /// Truncate history, keeping only the last [keepLast] messages.
   /// Ensures at least one user or assistant message (without tool_calls)
   /// survives — prevents summarization from emptying the session.
@@ -127,12 +131,20 @@ class Session {
     int effectiveKeep = keepLast;
     while (effectiveKeep < _messages.length) {
       final kept = _messages.sublist(_messages.length - effectiveKeep);
-      if (kept.any((m) =>
-          (m.role == 'user' || m.role == 'assistant') &&
-          (m.toolCalls == null || m.toolCalls!.isEmpty))) {
-        break;
-      }
+      if (kept.any(_isStandalone)) break;
       effectiveKeep++;
+    }
+
+    // Pathological case (todos/006): a history that is ALL tool calls /
+    // tool results has no standalone message anywhere, so the guard loop
+    // above would grow to the full length and truncation would never
+    // happen — unbounded session growth. Fall back to the requested
+    // window: the caller stores a summary of the removed messages, and
+    // getMessages() strips any leading orphaned tool messages from the
+    // view, so the kept window remains a valid LLM sequence.
+    if (effectiveKeep >= _messages.length &&
+        !_messages.any(_isStandalone)) {
+      effectiveKeep = keepLast;
     }
 
     final removed = _messages.sublist(0, _messages.length - effectiveKeep);

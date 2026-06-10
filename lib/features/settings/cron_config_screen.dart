@@ -215,7 +215,7 @@ class _CronConfigScreenState extends ConsumerState<CronConfigScreen> {
     final sm = await ref.read(sessionManagerProvider.future);
 
     final prefix = '${AppConstants.cronSessionPrefix}${cron.id}';
-    final allSessions = sm.getAllSessions();
+    final allSessions = sm.getAllSessionMetadata();
     final cronSessions = allSessions
         .where((s) => s.key.startsWith(prefix))
         .toList()

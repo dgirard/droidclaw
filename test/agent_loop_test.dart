@@ -124,6 +124,43 @@ void main() {
     expect(events.whereType<ResponseEvent>(), isEmpty);
   });
 
+  group('flush cadence (U13)', () {
+    // Policy assertion via the instrumented SessionManager.flushCount — a
+    // true SIGKILL cannot be simulated in-process (see
+    // test/session/lazy_load_and_flush_policy_test.dart for the caveat).
+    test(
+        'mid-turn tool-batch saves do not fsync; only the final response '
+        'save does', () async {
+      final provider = FakeLLMProvider([
+        toolCallResponse('echo', {'msg': 'a'}),
+        toolCallResponse('echo', {'msg': 'b'}, id: 'call_2'),
+        textResponse('done'),
+      ]);
+      final loop = await buildLoop(provider);
+      final baseline = sessions.flushCount;
+
+      await loop.processMessage('hello', 'cadence-session').toList();
+
+      expect(sessions.flushCount, baseline + 1,
+          reason: 'two tool batches save without fsync; the turn-ending '
+              'final-response save fsyncs exactly once');
+      // The mid-turn writes still happened: tool results are persisted.
+      final session = sessions.get('cadence-session')!;
+      expect(session.messages.where((m) => m.role == 'tool'), hasLength(2));
+    });
+
+    test('an LLM error still ends the turn with a flushed save', () async {
+      final loop = await buildLoop(_ThrowingProvider());
+      final baseline = sessions.flushCount;
+
+      await loop.processMessage('hello', 'err-flush-session').toList();
+
+      expect(sessions.flushCount, baseline + 1,
+          reason: 'the user message just added must be durable when the '
+              'turn aborts');
+    });
+  });
+
   group('KG pre-query LLM cost (U12)', () {
     test(
         'with KG enabled and an embedder, a simple turn makes exactly ONE '

@@ -11,6 +11,7 @@ import '../../core/knowledge/services/knowledge_service.dart';
 import '../../core/services/app_logger.dart';
 import '../../core/services/data_wiper.dart';
 import '../../core/services/llm_trace_logger.dart';
+import '../../core/session/session.dart';
 import '../../core/session/session_manager.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
@@ -302,7 +303,13 @@ Future<void> _exportConversations(BuildContext context, WidgetRef ref) async {
 
   try {
     final sessions = await ref.read(sessionManagerProvider.future);
-    final allSessions = sessions.getAllSessions();
+    // Export needs full histories: decode each session via get() (lazy
+    // manager only indexes metadata at startup).
+    final allSessions = sessions
+        .getAllSessionMetadata()
+        .map((m) => sessions.get(m.key))
+        .whereType<Session>()
+        .toList();
 
     if (allSessions.isEmpty) {
       messenger.hideCurrentSnackBar();

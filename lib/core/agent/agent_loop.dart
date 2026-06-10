@@ -86,7 +86,10 @@ class AgentLoop {
     if (_needsSummarization(session)) {
       yield const SummarizingEvent();
       await _summarize(session, sessionKey);
-      await sessions.save(session);
+      // No fsync: if this write is lost, the on-disk session still holds the
+      // full pre-summarization history (a superset) — summarization simply
+      // re-runs. The turn-ending save below flushes everything anyway.
+      await sessions.save(session, flush: false);
     }
 
     // Pre-query: inject Knowledge Graph context if available
@@ -268,8 +271,13 @@ class AgentLoop {
           name: toolCall.name,
         ));
       }
-      // Persist once after all tool results (flush is ~10-50ms on Android)
-      await sessions.save(session);
+      // Persist once after the tool batch, WITHOUT fsync (~10-50ms each on
+      // Android): the awaited Hive put survives a process kill via the OS
+      // page cache; the residual power-loss window is accepted for
+      // reproducible tool results. The turn always ends in a flushed save
+      // (final response / error / max-iterations). See the flush policy on
+      // SessionManager.
+      await sessions.save(session, flush: false);
     }
 
     // Max iterations reached

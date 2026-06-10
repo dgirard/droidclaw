@@ -315,7 +315,13 @@ class _KnowledgeConfigScreenState
       default:
         return; // Not loaded yet
     }
-    final allSessions = sessionManager.getAllSessions();
+    // KG rebuild needs full histories: decode each session via get() (lazy
+    // manager only indexes metadata at startup).
+    final allSessions = sessionManager
+        .getAllSessionMetadata()
+        .map((m) => sessionManager.get(m.key))
+        .whereType<Session>()
+        .toList();
 
     // Count pairs across all sessions
     int totalPairs = 0;

@@ -26,6 +26,15 @@ class AppConstants {
   // Session
   static const String defaultSessionKey = 'default';
 
+  /// Reserved Hive key prefix for per-session metadata records in the
+  /// `sessions` box (lazy load: list/history screens read these instead of
+  /// decoding full message histories). Session keys must never start with it.
+  static const String sessionMetaKeyPrefix = '__meta__:';
+
+  /// Max characters of message/summary text kept in a session metadata
+  /// preview (the History screen itself truncates further for display).
+  static const int sessionPreviewMaxChars = 120;
+
   // Memory
   static const int recentDailyNoteDays = 3;
 

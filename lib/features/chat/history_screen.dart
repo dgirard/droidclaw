@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/session/session.dart';
+import '../../core/session/session_metadata.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/background_service_provider.dart';
@@ -35,7 +35,7 @@ class HistoryScreen extends ConsumerWidget {
         ),
         body: sessionManagerAsync.when(
           data: (sm) {
-            final allSessions = sm.getAllSessions();
+            final allSessions = sm.getAllSessionMetadata();
             final chatSessions = allSessions
                 .where((s) =>
                     !s.key.startsWith(AppConstants.telegramSessionPrefix) &&
@@ -85,8 +85,8 @@ class HistoryScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     AppLocalizations l,
-    List<Session> chatSessions,
-    List<Session> telegramSessions,
+    List<SessionMetadata> chatSessions,
+    List<SessionMetadata> telegramSessions,
     String currentSessionKey,
   ) {
     if (chatSessions.isEmpty && telegramSessions.isEmpty) {
@@ -194,7 +194,7 @@ class HistoryScreen extends ConsumerWidget {
 
   /// Group cron sessions by cron ID, with name and prompt from config.
   Map<String, _CronGroup> _groupCronSessions(
-      List<Session> sessions, WidgetRef ref) {
+      List<SessionMetadata> sessions, WidgetRef ref) {
     final configStorage = ref.read(configStorageProvider);
     final cronDefs = configStorage.getCronDefinitions();
     final cronNameMap = {for (final c in cronDefs) c.id: c.name};
@@ -240,7 +240,7 @@ class HistoryScreen extends ConsumerWidget {
   }
 
   Future<void> _confirmDelete(
-      BuildContext context, WidgetRef ref, Session session) async {
+      BuildContext context, WidgetRef ref, SessionMetadata session) async {
     final l = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -263,7 +263,7 @@ class HistoryScreen extends ConsumerWidget {
   }
 
   Future<void> _confirmDeleteCronGroup(BuildContext context, WidgetRef ref,
-      String cronName, List<Session> sessions) async {
+      String cronName, List<SessionMetadata> sessions) async {
     final l = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -311,14 +311,14 @@ class HistoryScreen extends ConsumerWidget {
 class _CronGroup {
   final String name;
   final String? prompt;
-  final List<Session> sessions;
+  final List<SessionMetadata> sessions;
   _CronGroup({required this.name, this.prompt, required this.sessions});
 }
 
 /// Sub-screen showing individual executions of a cron.
 class CronExecutionsScreen extends ConsumerStatefulWidget {
   final String cronName;
-  final List<Session> sessions;
+  final List<SessionMetadata> sessions;
   final int popCount;
 
   const CronExecutionsScreen({
@@ -334,7 +334,7 @@ class CronExecutionsScreen extends ConsumerStatefulWidget {
 }
 
 class _CronExecutionsScreenState extends ConsumerState<CronExecutionsScreen> {
-  late final List<Session> _sessions;
+  late final List<SessionMetadata> _sessions;
 
   @override
   void initState() {
@@ -386,7 +386,7 @@ class _CronExecutionsScreenState extends ConsumerState<CronExecutionsScreen> {
   }
 
   Future<void> _confirmDeleteExecution(
-      BuildContext context, Session session) async {
+      BuildContext context, SessionMetadata session) async {
     final l = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -429,7 +429,7 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _SessionTile extends StatelessWidget {
-  final Session session;
+  final SessionMetadata session;
   final bool isCurrent;
   final bool isTelegram;
   final VoidCallback onTap;
@@ -446,9 +446,7 @@ class _SessionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final userMessageCount = session.messages
-        .where((m) => m.role == 'user' || m.role == 'assistant')
-        .length;
+    final userMessageCount = session.conversationMessageCount;
 
     return ListTile(
       selected: isCurrent,
@@ -485,16 +483,10 @@ Future<void> runCronNow(
   navigator.pushNamedAndRemoveUntil('/chat', (route) => false);
 }
 
-String _sessionTitle(Session session) {
-  final firstUserMsg =
-      session.messages.where((m) => m.role == 'user').firstOrNull;
-  if (firstUserMsg != null) {
-    final text = firstUserMsg.content.replaceAll('\n', ' ').trim();
-    return text.length > 60 ? '${text.substring(0, 60)}...' : text;
-  }
-  // Fallback: show truncated summary if available, otherwise session key.
-  if (session.summary != null && session.summary!.isNotEmpty) {
-    final text = session.summary!.replaceAll('\n', ' ').trim();
+String _sessionTitle(SessionMetadata session) {
+  // Previews are pre-normalized at save time (SessionMetadata.fromSession).
+  final text = session.preview ?? session.summaryPreview;
+  if (text != null) {
     return text.length > 60 ? '${text.substring(0, 60)}...' : text;
   }
   return session.key;

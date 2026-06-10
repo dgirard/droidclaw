@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:hive/hive.dart';
 
 /// The explicit cache-reload protocol for cross-isolate Hive visibility.
@@ -11,9 +13,10 @@ import 'package:hive/hive.dart';
 /// `Hive.initFlutter()` / `HivePathResolver`) → rebuild-cache sequence so the
 /// visibility semantics live in one place.
 ///
-/// Decode failures are tolerated entry-by-entry: a corrupted record is
-/// skipped and reported via `onCorrupt`, never aborting the whole rebuild —
-/// one bad session must not take down the rest.
+/// The [rebuild] callback owns what "rebuild the cache" means (since U13:
+/// rebuilding the lightweight metadata index, NOT decoding every session).
+/// Whatever it does, it must tolerate corrupted records entry-by-entry — one
+/// bad session must not take down the rest.
 ///
 /// ## Cross-isolate compaction constraint (todos/001)
 ///
@@ -29,50 +32,24 @@ import 'package:hive/hive.dart';
 /// - Hive's built-in write-time auto-compaction (default strategy: >60
 ///   deleted/overwritten frames AND >15% of entries) remains unchanged; the
 ///   residual risk is accepted and documented here until a real cross-isolate
-///   lock exists. U13's save batching will reduce the frame churn (each
+///   lock exists. U13's save batching reduces the frame churn (each
 ///   overwrite of a session counts as one deleted frame) that drives it.
 /// - Do NOT add `compact()` calls anywhere in this subsystem.
 class CacheReload {
   const CacheReload._();
 
-  /// Populate [cache] from every entry of an (already open) [box].
-  ///
-  /// Used at first open (init): no close/reopen is needed because the box was
-  /// just read from disk. Entries that fail [decode] are skipped and reported
-  /// via [onCorrupt].
-  static void populate<T>({
-    required Box<String> box,
-    required Map<String, T> cache,
-    required T Function(String raw) decode,
-    required void Function(String key, Object error) onCorrupt,
-  }) {
-    for (final key in box.keys) {
-      final raw = box.get(key);
-      if (raw != null) {
-        try {
-          cache[key as String] = decode(raw);
-        } catch (e) {
-          onCorrupt(key as String, e);
-        }
-      }
-    }
-  }
-
   /// Close [box], reopen it by name from the ambient Hive home directory
-  /// (forcing a disk re-read), clear [cache], and rebuild it from the
-  /// reopened box. Returns the reopened box — the caller must replace its
-  /// stale handle with it.
-  static Future<Box<String>> reload<T>({
+  /// (forcing a disk re-read), then run [rebuild] against the reopened box.
+  /// Returns the reopened box — the caller must replace its stale handle
+  /// with it.
+  static Future<Box<String>> reload({
     required Box<String> box,
-    required Map<String, T> cache,
-    required T Function(String raw) decode,
-    required void Function(String key, Object error) onCorrupt,
+    required FutureOr<void> Function(Box<String> reopened) rebuild,
   }) async {
     final boxName = box.name;
     await box.close();
     final reopened = await Hive.openBox<String>(boxName);
-    cache.clear();
-    populate(box: reopened, cache: cache, decode: decode, onCorrupt: onCorrupt);
+    await rebuild(reopened);
     return reopened;
   }
 }
