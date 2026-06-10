@@ -1,5 +1,5 @@
 ---
-status: pending
+status: resolved
 priority: p2
 issue_id: "003"
 tags: [code-review, riverpod, correctness]
@@ -47,14 +47,15 @@ Option A.
 
 ## Acceptance Criteria
 
-- [ ] `ref.onDispose` uses `() => manager.flush()` (not async)
-- [ ] No behavior change (still fire-and-forget)
+- [x] `ref.onDispose` uses `() => manager.flush()` (not async)
+- [x] No behavior change (still fire-and-forget)
 
 ## Work Log
 
 | Date | Action | Learnings |
 |------|--------|-----------|
 | 2026-03-13 | Created from code review | ref.onDispose does not await async closures |
+| 2026-06-10 | Resolved (verified during U20) | `sessionManagerProvider` now uses the synchronous closure `ref.onDispose(() => manager.flush())` (lib/providers/app_providers.dart); the fix landed with the U13 session-persistence work. All other `ref.onDispose` sites in app_providers.dart are synchronous too. |
 
 ## Resources
 

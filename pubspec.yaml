@@ -84,7 +84,6 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.3
   build_runner: ^2.4.13
-  json_serializable: ^6.8.0
   drift_dev: ^2.31.0
 
 # For information on the generic Dart part of this file, see the

@@ -8,6 +8,8 @@ dependencies: []
 
 # Sanitize Exception Details in Logs
 
+> Note (2026-06-10): explicitly deferred by the improvement roadmap (docs/plans/2026-05-31-refactor-project-improvement-roadmap-plan.md) — out of U20's scope; status stays pending.
+
 ## Problem Statement
 
 The session manager logs exception details with `$e` which could include corrupted session JSON containing user conversation data. On-device logs are lower risk than server logs, but still worth sanitizing.

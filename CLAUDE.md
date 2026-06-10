@@ -4,7 +4,7 @@
 
 DroidClaw is a personal AI assistant Android app, ported from [PicoClaw](https://github.com/sipeed/picoclaw) (Go). Everything runs on-device: agent loop, LLM API calls, tool execution, session management. No external server.
 
-- **Language**: Dart 3.10 / Flutter 3.38
+- **Language**: Dart 3.11 / Flutter 3.41 (pubspec SDK constraint `^3.10.7`, i.e. Flutter 3.38+)
 - **Platform**: Android only (minSdk 24, targetSdk 34)
 - **Package**: `com.droidclaw.app`
 - **State management**: Riverpod 3.x
@@ -203,7 +203,7 @@ For tools needing an API key that must work in both isolates:
 - **Telegram**: long polling (not webhook) via foreground service with `remoteMessaging|location` types (no 6h limit). Dual-isolate architecture.
 - **API keys**: stored in `FlutterSecureStorage`, never in `SharedPreferences` or config JSON
 - **File tool**: sandboxed to app workspace directory, path validation prevents traversal
-- **Flutter 3.38**: `DropdownButtonFormField` uses `initialValue` (not `value`)
+- **Flutter 3.38+**: `DropdownButtonFormField` uses `initialValue` (not `value`)
 
 ## Conventions
 

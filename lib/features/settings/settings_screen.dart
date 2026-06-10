@@ -246,19 +246,27 @@ Future<void> _resetAllData(BuildContext context, WidgetRef ref) async {
     // re-cache secrets or write sessions/KB data mid-wipe.
     try {
       await FlutterForegroundTask.stopService();
-    } catch (_) {}
+    } catch (_) {
+      // Best-effort: the service may not be running. The wipe must proceed
+      // even if stopping fails — DataWiper deletes the underlying files.
+    }
 
     final storage = ref.read(storageServiceProvider);
 
     SessionManager? sessions;
     try {
       sessions = await ref.read(sessionManagerProvider.future);
-    } catch (_) {}
+    } catch (_) {
+      // If sessions can't be opened (e.g. corrupt Hive box), wipe proceeds
+      // without graceful close; DataWiper removes the files directly.
+    }
 
     KnowledgeService? knowledge;
     try {
       knowledge = await ref.read(knowledgeServiceProvider.future);
-    } catch (_) {}
+    } catch (_) {
+      // Same as above: a KB that fails to open is wiped at the file level.
+    }
 
     final workspacePath = await storage.workspacePath;
     final wiper = DataWiper(

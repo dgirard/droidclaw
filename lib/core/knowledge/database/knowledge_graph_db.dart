@@ -27,7 +27,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   /// Test-only: construct against a caller-provided executor (e.g. an
   /// in-memory database) so the knowledge graph can be exercised without a
   /// real file or device.
-  KnowledgeGraphDB.forExecutor(QueryExecutor executor) : super(executor);
+  KnowledgeGraphDB.forExecutor(super.executor);
 
   @override
   int get schemaVersion => 3;
@@ -766,7 +766,10 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
           'VALUES (?, ?, \'name\', 1.0)',
           [primaryId, secondaryName],
         );
-      } catch (_) {}
+      } catch (_) {
+        // Best-effort: the alias is a redundant lookup aid. A constraint
+        // failure here must not abort the surrounding merge transaction.
+      }
 
       // Delete secondary's aliases (they've been transferred)
       await customStatement(
@@ -875,7 +878,10 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
             'UPDATE summary_nodes SET member_ids = ? WHERE id = ?',
             [jsonEncode(updated), node.read<int>('id')],
           );
-        } catch (_) {}
+        } catch (_) {
+          // Skip summary nodes with malformed member_ids JSON: a stale
+          // member reference is cosmetic and must not abort the merge.
+        }
       }
 
       // Count expired relations (step 2 + 3)

@@ -2,8 +2,8 @@
 
 > Personal AI assistant on Android — agent loop + tool calling + dual Chat & Telegram interface
 
-![Flutter](https://img.shields.io/badge/Flutter-3.38-02569B?logo=flutter)
-![Dart](https://img.shields.io/badge/Dart-3.10-0175C2?logo=dart)
+![Flutter](https://img.shields.io/badge/Flutter-3.41-02569B?logo=flutter)
+![Dart](https://img.shields.io/badge/Dart-3.11-0175C2?logo=dart)
 ![Android](https://img.shields.io/badge/Android-API_24+-3DDC84?logo=android)
 ![i18n](https://img.shields.io/badge/i18n-EN_|_FR_|_ES_|_DE_|_IT-blueviolet)
 

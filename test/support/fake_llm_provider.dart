@@ -16,7 +16,7 @@ class FakeLLMProvider implements LLMProvider {
   int callCount = 0;
 
   FakeLLMProvider(this._responses)
-      : assert(_responses.length > 0, 'provide at least one response');
+      : assert(_responses.isNotEmpty, 'provide at least one response');
 
   /// Always returns a single text response.
   factory FakeLLMProvider.text(String content) =>

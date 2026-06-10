@@ -240,7 +240,12 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
         storage.setString(AppConstants.cronPendingTriggersKey,
             DurableTriggerQueue.encode(pending));
       }
-    } catch (_) {}
+    } catch (e) {
+      // A corrupt queue blob is not recoverable here; the trigger already
+      // ran, so leaving the stale entry only risks one duplicate execution.
+      AppLogger.instance.warning(LogSource.cron,
+          'Failed to remove pending trigger $cronId: ${e.runtimeType}');
+    }
   }
 
   /// Process pending cron triggers that were queued while the main isolate

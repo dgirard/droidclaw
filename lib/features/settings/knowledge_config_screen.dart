@@ -8,7 +8,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/config/log_entry.dart';
 import '../../core/knowledge/services/ingestion_pipeline.dart';
+import '../../core/services/app_logger.dart';
 import '../../core/session/session.dart';
 import '../../core/session/session_manager.dart';
 import '../../l10n/l10n.dart';
@@ -294,7 +296,7 @@ class _KnowledgeConfigScreenState
           _loadStats();
         }
       } catch (e) {
-        print('[KG] deleteAll error: $e');
+        AppLogger.instance.error(LogSource.app, 'KG deleteAll error: $e');
         if (mounted) {
           messenger.showSnackBar(
             SnackBar(content: Text('Error: $e')),
