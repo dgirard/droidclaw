@@ -39,13 +39,19 @@ abstract class BaseCloudEmbeddingProvider implements EmbeddingProvider {
   final String apiKey;
   final String apiBase;
   final int _dimensions;
-  final http.Client _client = http.Client();
+  final http.Client _client;
 
+  /// [client] is a test seam (U16): inject a mock instead of relying on
+  /// `http.runWithClient`. The retry loop here intentionally stays local —
+  /// it mirrors, not reuses, `RetryingHttpClient` (timeout + exception-based
+  /// flow differ; see U16 exclusion note in the roadmap plan).
   BaseCloudEmbeddingProvider({
     required this.apiKey,
     required this.apiBase,
     required int dimensions,
-  }) : _dimensions = dimensions;
+    http.Client? client,
+  })  : _dimensions = dimensions,
+        _client = client ?? http.Client();
 
   @override
   int get outputDimensions => _dimensions;

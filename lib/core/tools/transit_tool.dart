@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../l10n/l10n.dart';
+import '../net/retrying_http_client.dart';
 import 'tool.dart';
 
 /// Tool that finds public transit routes via SNCF and PRIM/IDFM APIs.
@@ -13,8 +14,14 @@ class TransitTool extends Tool {
   final String? sncfApiKey;
   final String? primApiKey;
   final String locale;
+  final http.Client? _client;
 
-  TransitTool({this.sncfApiKey, this.primApiKey, this.locale = 'en'});
+  TransitTool({
+    this.sncfApiKey,
+    this.primApiKey,
+    this.locale = 'en',
+    http.Client? client,
+  }) : _client = client;
 
   // Ile-de-France bounding box (generous, includes suburban rail endpoints).
   static const _idfMinLat = 48.1;
@@ -213,10 +220,16 @@ class TransitTool extends Tool {
 
     final uri = Uri.parse(api.baseUrl).replace(queryParameters: queryParams);
 
-    final response = await http.get(uri, headers: {
-      ...api.headers,
-      'Accept': 'application/json',
-    });
+    final client = RetryingHttpClient(inner: _client);
+    final http.Response response;
+    try {
+      response = await client.get(uri, headers: {
+        ...api.headers,
+        'Accept': 'application/json',
+      });
+    } finally {
+      client.close();
+    }
 
     if (response.statusCode == 429) {
       return ToolResult.error(l.transitRateLimit);

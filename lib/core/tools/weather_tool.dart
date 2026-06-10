@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../l10n/l10n.dart';
+import '../net/retrying_http_client.dart';
 import 'tool.dart';
 
 /// Weather forecast tool using Open-Meteo API with Météo-France models
@@ -11,8 +12,9 @@ class WeatherTool extends Tool {
   static const _baseUrl = 'https://api.open-meteo.com/v1/meteofrance';
 
   final String locale;
+  final http.Client? _client;
 
-  WeatherTool({this.locale = 'en'});
+  WeatherTool({this.locale = 'en', http.Client? client}) : _client = client;
 
   @override
   String get name => 'weather';
@@ -66,9 +68,15 @@ class WeatherTool extends Tool {
         '&timezone=auto&forecast_days=$days',
       );
 
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'DroidClaw/1.0',
-      });
+      final client = RetryingHttpClient(inner: _client);
+      final http.Response response;
+      try {
+        response = await client.get(uri, headers: {
+          'User-Agent': 'DroidClaw/1.0',
+        });
+      } finally {
+        client.close();
+      }
 
       if (response.statusCode != 200) {
         return ToolResult.error(

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../l10n/l10n.dart';
+import '../net/retrying_http_client.dart';
 import 'proof_document_store.dart';
 import 'tool.dart';
 
@@ -1080,25 +1081,17 @@ class ProofEditorTool extends Tool {
   String _idempotencyKey() =>
       DateTime.now().microsecondsSinceEpoch.toString();
 
-  /// GET with retry on 429/5xx (exponential backoff).
+  /// GET with retry on 429/5xx — delegates to the shared policy (U16),
+  /// which matches the previous inline loop (2 retries, 500ms·2^attempt).
   Future<http.Response> _getWithRetry(
     http.Client client,
     Uri uri, {
     Map<String, String>? headers,
-  }) async {
-    final mergedHeaders = {..._baseHeaders, ...?headers};
-    for (var attempt = 0; attempt <= _maxRetries; attempt++) {
-      final response = await client.get(uri, headers: mergedHeaders);
-      if (attempt < _maxRetries &&
-          (response.statusCode == 429 || response.statusCode >= 500)) {
-        await Future.delayed(
-            Duration(milliseconds: 500 * (1 << attempt)));
-        continue;
-      }
-      return response;
-    }
-    // Unreachable, but Dart requires a return.
-    return client.get(uri, headers: mergedHeaders);
+  }) {
+    // Injected inner client → close() is a no-op; the per-operation client
+    // lifecycle stays with the call sites.
+    return RetryingHttpClient(inner: client, maxRetries: _maxRetries)
+        .get(uri, headers: {..._baseHeaders, ...?headers});
   }
 
   /// Check HTTP response for common errors. Returns null if OK.

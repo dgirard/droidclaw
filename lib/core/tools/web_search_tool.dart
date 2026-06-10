@@ -3,17 +3,20 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../shared/constants.dart';
+import '../net/retrying_http_client.dart';
 import 'tool.dart';
 
 /// Web search tool using Brave Search API (primary) or DuckDuckGo (fallback).
 class WebSearchTool extends Tool {
   final String? braveApiKey;
   final int maxResults;
+  final http.Client? _client;
 
   WebSearchTool({
     this.braveApiKey,
     this.maxResults = AppConstants.webSearchMaxResults,
-  });
+    http.Client? client,
+  }) : _client = client;
 
   @override
   String get name => 'web_search';
@@ -55,10 +58,16 @@ class WebSearchTool extends Tool {
     final uri = Uri.parse('https://api.search.brave.com/res/v1/web/search')
         .replace(queryParameters: {'q': query, 'count': '$maxResults'});
 
-    final response = await http.get(uri, headers: {
-      'X-Subscription-Token': braveApiKey!,
-      'Accept': 'application/json',
-    });
+    final client = RetryingHttpClient(inner: _client);
+    final http.Response response;
+    try {
+      response = await client.get(uri, headers: {
+        'X-Subscription-Token': braveApiKey!,
+        'Accept': 'application/json',
+      });
+    } finally {
+      client.close();
+    }
 
     if (response.statusCode != 200) {
       return ToolResult.error('Brave search error: ${response.statusCode}');
@@ -101,9 +110,15 @@ class WebSearchTool extends Tool {
     // only returns results for well-known entities, not general queries).
     final uri = Uri.parse('https://html.duckduckgo.com/html/');
 
-    final response = await http.post(uri, body: {'q': query}, headers: {
-      'User-Agent': 'DroidClaw/1.0',
-    });
+    final client = RetryingHttpClient(inner: _client);
+    final http.Response response;
+    try {
+      response = await client.post(uri, body: {'q': query}, headers: {
+        'User-Agent': 'DroidClaw/1.0',
+      });
+    } finally {
+      client.close();
+    }
 
     if (response.statusCode != 200) {
       return ToolResult.error(

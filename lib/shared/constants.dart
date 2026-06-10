@@ -16,6 +16,14 @@ class AppConstants {
   static const int summarizationMessageCount = 20;
   static const int keepLastMessages = 4;
 
+  // Shared HTTP retry policy (RetryingHttpClient)
+  static const int httpMaxRetries = 2;
+  static const int httpRetryBaseDelayMs = 500;
+
+  /// Upper bound applied to a server-sent `Retry-After` header so a
+  /// misbehaving server cannot stall a tool call for minutes.
+  static const int httpRetryAfterCapSeconds = 30;
+
   // Web tools
   static const int webSearchMaxResults = 5;
   static const int webFetchMaxChars = 50000;

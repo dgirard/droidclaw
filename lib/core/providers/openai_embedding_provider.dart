@@ -13,6 +13,7 @@ class OpenAIEmbeddingProvider extends BaseCloudEmbeddingProvider {
     required super.apiBase,
     required super.dimensions,
     required String providerId,
+    super.client,
   }) : _providerId = providerId;
 
   @override
