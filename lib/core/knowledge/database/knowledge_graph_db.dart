@@ -7,6 +7,16 @@ import 'package:drift_flutter/drift_flutter.dart';
 
 part 'knowledge_graph_db.g.dart';
 
+/// One edge from a batched neighbor lookup ([KnowledgeGraphDB.findNeighborsBatch]).
+/// [anchorId] is the queried entity; [neighborId] the connected entity.
+typedef NeighborEdge = ({
+  int anchorId,
+  int neighborId,
+  String predicate,
+  double weight,
+  double relConfidence,
+});
+
 @DriftDatabase(include: {'schema.drift'})
 class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   KnowledgeGraphDB(String dbPath)
@@ -189,6 +199,71 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
       final entityId = r.read<int>('entity_id');
       final aliasName = r.read<String>('alias_name');
       (map[entityId] ??= []).add(aliasName);
+    }
+    return map;
+  }
+
+  /// Batch-load entities by id in a single `IN (...)` query.
+  ///
+  /// Replaces per-id [getEntityById] loops in hot retrieval paths (U12).
+  Future<List<Entity>> getEntitiesByIds(List<int> ids) async {
+    if (ids.isEmpty) return [];
+    return (select(entities)..where((e) => e.id.isIn(ids))).get();
+  }
+
+  /// Batch-load active (non-expired) facts for a set of entities in a single
+  /// `IN (...)` query, ordered by entity then fact key (mirrors
+  /// [getEntityFacts] per-entity ordering).
+  Future<List<Fact>> getFactsForEntityIds(List<int> ids) async {
+    if (ids.isEmpty) return [];
+    return (select(facts)
+          ..where((f) => f.entityId.isIn(ids) & f.expiredAt.isNull())
+          ..orderBy([
+            (f) => OrderingTerm.asc(f.entityId),
+            (f) => OrderingTerm.asc(f.factKey),
+          ]))
+        .get();
+  }
+
+  /// Batch [findNeighbors] for a set of entity ids in a single query.
+  ///
+  /// Returns edges grouped by the queried (anchor) entity id, preserving the
+  /// per-id semantics: active, non-expired relations to active entities,
+  /// weight-descending within each anchor. Anchors with no neighbors are
+  /// absent from the map.
+  Future<Map<int, List<NeighborEdge>>> findNeighborsBatch(
+      List<int> ids) async {
+    if (ids.isEmpty) return {};
+    final placeholders = List.filled(ids.length, '?').join(', ');
+    final vars = [for (final id in ids) Variable.withInt(id)];
+    final rows = await customSelect(
+      'SELECT r.source_id AS anchor_id, e.id AS neighbor_id, '
+      'r.predicate AS predicate, r.weight AS weight, '
+      'r.confidence AS rel_confidence '
+      'FROM relations r JOIN entities e ON e.id = r.target_id '
+      'WHERE r.source_id IN ($placeholders) '
+      'AND r.is_active = 1 AND r.expired_at IS NULL AND e.is_active = 1 '
+      'UNION ALL '
+      'SELECT r.target_id AS anchor_id, e.id AS neighbor_id, '
+      'r.predicate AS predicate, r.weight AS weight, '
+      'r.confidence AS rel_confidence '
+      'FROM relations r JOIN entities e ON e.id = r.source_id '
+      'WHERE r.target_id IN ($placeholders) '
+      'AND r.is_active = 1 AND r.expired_at IS NULL AND e.is_active = 1 '
+      'ORDER BY anchor_id, weight DESC',
+      variables: [...vars, ...vars],
+    ).get();
+
+    final map = <int, List<NeighborEdge>>{};
+    for (final r in rows) {
+      final edge = (
+        anchorId: r.read<int>('anchor_id'),
+        neighborId: r.read<int>('neighbor_id'),
+        predicate: r.read<String>('predicate'),
+        weight: r.read<double>('weight'),
+        relConfidence: r.read<double>('rel_confidence'),
+      );
+      (map[edge.anchorId] ??= []).add(edge);
     }
     return map;
   }

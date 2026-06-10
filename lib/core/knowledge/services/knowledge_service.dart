@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../../../shared/constants.dart';
 import '../../config/log_entry.dart';
 import '../../providers/embedding_provider.dart';
 import '../../services/app_logger.dart';
@@ -46,24 +47,26 @@ class KnowledgeService {
   ///
   /// Returns ranked entities with attached facts and relations,
   /// sorted by fused score (descending).
+  ///
+  /// The vector path runs even when FTS finds zero lexical candidates, so a
+  /// configured embedder bridges the semantic gap (paraphrased queries with
+  /// no token overlap with stored entities/facts) without any LLM query
+  /// expansion. See docs/solutions/logic-errors/
+  /// knowledge-graph-retrieval-fts5-tokenization-and-semantic-gap.md.
   Future<List<RankedEntity>> queryRelevant(
     String query, {
     int limit = 10,
   }) async {
     if (query.trim().isEmpty) return [];
 
-    // 1. FTS5 BM25 search (3x limit for candidate pool)
+    // 1. FTS5 BM25 search on entities + facts (3x limit for candidate pool)
     final ftsQuery = _buildFtsQuery(query);
-    if (ftsQuery.isEmpty) return [];
-
-    final ftsResults =
-        await db.searchEntities(ftsQuery, limit * 3).get();
-
-    // 1b. FTS5 BM25 search on facts (fact_key + fact_value)
-    final factResults =
-        await db.searchFacts(ftsQuery, limit * 3).get();
-
-    if (ftsResults.isEmpty && factResults.isEmpty) return [];
+    var ftsResults = <SearchEntitiesResult>[];
+    var factResults = <SearchFactsResult>[];
+    if (ftsQuery.isNotEmpty) {
+      ftsResults = await db.searchEntities(ftsQuery, limit * 3).get();
+      factResults = await db.searchFacts(ftsQuery, limit * 3).get();
+    }
 
     // Collect BM25 scores (rank is negative in FTS5, more negative = better)
     final bm25Scores = <int, double>{};
@@ -86,7 +89,8 @@ class KnowledgeService {
       }
     }
 
-    // 2. Vector similarity search (if embedder is available)
+    // 2. Vector similarity search (if embedder is available). Runs regardless
+    // of FTS results: this is the semantic-gap bridge.
     final vectorScores = <int, double>{};
     if (hasEmbedder) {
       try {
@@ -107,7 +111,7 @@ class KnowledgeService {
             );
             if (entVec.length != queryVec.length) continue;
             final sim = MemoryClusterer.cosineSimilarity(queryVec, entVec);
-            if (sim > 0.5) {
+            if (sim > AppConstants.knowledgeVectorSimilarityThreshold) {
               vectorScores[entry.id] = sim;
             }
           }
@@ -122,67 +126,70 @@ class KnowledgeService {
 
     // 3. Union candidates (FTS + vector)
     final candidateIds = <int>{...bm25Scores.keys, ...vectorScores.keys};
+    if (candidateIds.isEmpty) return [];
 
-    // 4. Load 2-hop subgraph neighbors
-    final neighborMap = <int, List<({int entityId, double weight})>>{};
+    // 4. Load 2-hop subgraph neighbors — one batched query per hop.
+    final neighborEdges = await db.findNeighborsBatch(candidateIds.toList());
     final expandedIds = Set<int>.from(candidateIds);
-
-    for (final id in candidateIds) {
-      final neighbors = await db.findNeighbors(id).get();
-      final neighborList = <({int entityId, double weight})>[];
-      for (final n in neighbors) {
-        neighborList.add((entityId: n.id, weight: n.weight));
-        expandedIds.add(n.id);
+    for (final edges in neighborEdges.values) {
+      for (final e in edges) {
+        expandedIds.add(e.neighborId);
       }
-      neighborMap[id] = neighborList;
     }
 
-    // Load 2nd hop neighbors
     final hop1Ids = expandedIds.difference(candidateIds);
-    for (final id in hop1Ids) {
-      final neighbors = await db.findNeighbors(id).get();
-      neighborMap[id] = neighbors
-          .map((n) => (entityId: n.id, weight: n.weight))
-          .toList();
-      for (final n in neighbors) {
-        expandedIds.add(n.id);
+    final hop2Edges = await db.findNeighborsBatch(hop1Ids.toList());
+    neighborEdges.addAll(hop2Edges);
+    for (final edges in hop2Edges.values) {
+      for (final e in edges) {
+        expandedIds.add(e.neighborId);
       }
     }
+    // Ids whose neighbors have been loaded (an anchor with zero edges has no
+    // map entry, but must not be re-queried during hydration).
+    final neighborsLoaded = <int>{...candidateIds, ...hop1Ids};
 
-    // 5. Spreading activation
-    // Seed from top BM25 results (entity + fact combined)
+    // 5. Spreading activation.
+    // Seed from top BM25 results (entity + fact combined); when there is no
+    // lexical match at all, seed from the best vector candidates instead so
+    // graph context still spreads from semantic hits.
     final seeds = <int, double>{};
-    final topCandidates = bm25Scores.entries.toList()
-      ..sort((a, b) => a.value.compareTo(b.value)); // more negative = better
-    for (final entry in topCandidates.take(5)) {
-      seeds[entry.key] = 1.0;
+    if (bm25Scores.isNotEmpty) {
+      final topCandidates = bm25Scores.entries.toList()
+        ..sort((a, b) => a.value.compareTo(b.value)); // more negative = better
+      for (final entry
+          in topCandidates.take(AppConstants.knowledgeActivationSeedCount)) {
+        seeds[entry.key] = 1.0;
+      }
+    } else {
+      final topVector = vectorScores.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value)); // higher = better
+      for (final entry
+          in topVector.take(AppConstants.knowledgeActivationSeedCount)) {
+        seeds[entry.key] = 1.0;
+      }
     }
 
     final activationScores = _spreading.activate(
       seeds: seeds,
-      neighborFn: (id) => neighborMap[id] ?? [],
+      neighborFn: (id) => [
+        for (final e in neighborEdges[id] ?? const <NeighborEdge>[])
+          (entityId: e.neighborId, weight: e.weight),
+      ],
     );
 
-    // 6. Compute decay scores for all candidates
-    // Use entity FTS results for direct data, load remaining from DB.
-    final decayScores = <int, double>{};
-    for (final r in ftsResults) {
-      final decay = MemoryDecay.retention(
-        lastAccessedEpoch: r.lastAccessed,
-        accessCount: r.accessCount,
-      );
-      decayScores[r.id] = decay;
-    }
-    // Compute decay for candidates not already covered (fact-sourced + expanded)
-    for (final id in expandedIds.difference(decayScores.keys.toSet())) {
-      final entity = await db.getEntityById(id).getSingleOrNull();
-      if (entity != null) {
-        decayScores[id] = MemoryDecay.retention(
-          lastAccessedEpoch: entity.lastAccessed,
-          accessCount: entity.accessCount,
-        );
-      }
-    }
+    // 6. Load all expanded entities in one batch: used for both decay
+    // computation and top-K hydration (no per-id re-fetch).
+    final entityRows = {
+      for (final e in await db.getEntitiesByIds(expandedIds.toList())) e.id: e,
+    };
+    final decayScores = <int, double>{
+      for (final e in entityRows.values)
+        e.id: MemoryDecay.retention(
+          lastAccessedEpoch: e.lastAccessed,
+          accessCount: e.accessCount,
+        ),
+    };
 
     // 7. Score fusion (full mode if vectorScores available, degraded otherwise)
     final scored = HybridScorer.fuse(
@@ -193,45 +200,57 @@ class KnowledgeService {
       decayScores: decayScores,
     );
 
-    // 8. Take top-K and hydrate with facts + relations
+    // 8. Take top-K and hydrate with facts + relations (batched).
     final topK = scored.take(limit).toList();
-    final results = <RankedEntity>[];
 
+    // Skip deactivated entities as defense-in-depth.
+    final topIds = [
+      for (final s in topK)
+        if (entityRows[s.entityId] case final e? when e.isActive == 1)
+          s.entityId,
+    ];
+
+    // One batched facts query for all top-K entities.
+    final factsByEntity = <int, List<KnowledgeFact>>{};
+    for (final f in await db.getFactsForEntityIds(topIds)) {
+      (factsByEntity[f.entityId] ??= []).add(KnowledgeFact(
+        id: f.id,
+        entityId: f.entityId,
+        key: f.factKey,
+        value: f.factValue,
+        valueType: f.valueType,
+        validAt: f.validAt,
+        invalidAt: f.invalidAt,
+        ingestedAt: f.ingestedAt,
+        expiredAt: f.expiredAt,
+        confidence: f.confidence,
+        sourceText: f.sourceText,
+      ));
+    }
+
+    // Relations come from the neighbor edges already loaded; only hop-2
+    // entities that made the top-K need one extra batched lookup.
+    final missingNeighborIds =
+        topIds.where((id) => !neighborsLoaded.contains(id)).toList();
+    if (missingNeighborIds.isNotEmpty) {
+      neighborEdges.addAll(await db.findNeighborsBatch(missingNeighborIds));
+    }
+
+    final results = <RankedEntity>[];
     for (final s in topK) {
-      // Load entity (skip deactivated as defense-in-depth)
-      final entity = await db.getEntityById(s.entityId).getSingleOrNull();
+      final entity = entityRows[s.entityId];
       if (entity == null || entity.isActive == 0) continue;
 
-      // Load active facts
-      final facts = await db.getEntityFacts(s.entityId).get();
-      final knowledgeFacts = facts
-          .map((f) => KnowledgeFact(
-                id: f.id,
-                entityId: f.entityId,
-                key: f.factKey,
-                value: f.factValue,
-                valueType: f.valueType,
-                validAt: f.validAt,
-                invalidAt: f.invalidAt,
-                ingestedAt: f.ingestedAt,
-                expiredAt: f.expiredAt,
-                confidence: f.confidence,
-                sourceText: f.sourceText,
-              ))
-          .toList();
-
-      // Load relations (from neighbors already loaded)
-      final neighborResults =
-          await db.findNeighbors(s.entityId).get();
-      final knowledgeRelations = neighborResults
-          .map((n) => KnowledgeRelation(
-                sourceId: s.entityId,
-                targetId: n.id,
-                predicate: n.predicate,
-                weight: n.weight,
-                confidence: n.relConfidence,
-              ))
-          .toList();
+      final knowledgeRelations = [
+        for (final e in neighborEdges[s.entityId] ?? const <NeighborEdge>[])
+          KnowledgeRelation(
+            sourceId: s.entityId,
+            targetId: e.neighborId,
+            predicate: e.predicate,
+            weight: e.weight,
+            confidence: e.relConfidence,
+          ),
+      ];
 
       results.add(RankedEntity(
         entity: KnowledgeEntity(
@@ -246,7 +265,7 @@ class KnowledgeService {
           baseScore: entity.baseScore,
           isActive: entity.isActive == 1,
         ),
-        facts: knowledgeFacts,
+        facts: factsByEntity[s.entityId] ?? const [],
         relations: knowledgeRelations,
         score: s.score,
         bm25Score: s.bm25Score,

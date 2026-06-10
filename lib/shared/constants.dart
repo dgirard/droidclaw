@@ -66,6 +66,13 @@ class AppConstants {
   static const String knowledgeDbFilename = 'knowledge_graph.db';
   static const int knowledgeDecayHalfLifeDays = 30;
   static const int knowledgeMaxContextChars = 2000;
+
+  /// Minimum cosine similarity for an entity embedding to enter the
+  /// retrieval candidate pool (vector path of [queryRelevant]).
+  static const double knowledgeVectorSimilarityThreshold = 0.5;
+
+  /// Number of top-ranked candidates used to seed spreading activation.
+  static const int knowledgeActivationSeedCount = 5;
   static const String cachedKnowledgeEnabledKey = 'cached_knowledge_enabled';
   static const String cachedKbLanguageKey = 'cached_kb_language';
 

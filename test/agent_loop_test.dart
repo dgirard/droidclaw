@@ -7,6 +7,7 @@ import 'package:droidclaw/core/agent/agent_loop.dart';
 import 'package:droidclaw/core/agent/context_builder.dart';
 import 'package:droidclaw/core/agent/memory_manager.dart';
 import 'package:droidclaw/core/config/app_config.dart';
+import 'package:droidclaw/core/knowledge/services/knowledge_service.dart';
 import 'package:droidclaw/core/providers/http_provider.dart' show LLMException;
 import 'package:droidclaw/core/providers/llm_provider.dart';
 import 'package:droidclaw/core/providers/llm_response.dart';
@@ -15,8 +16,10 @@ import 'package:droidclaw/core/skills/skill_loader.dart';
 import 'package:droidclaw/core/tools/tool.dart';
 import 'package:droidclaw/data/local/storage_service.dart';
 
+import 'support/fake_embedding_provider.dart';
 import 'support/fake_llm_provider.dart';
 import 'support/hive_test_harness.dart';
+import 'support/in_memory_kg.dart';
 
 class _EchoTool extends Tool {
   @override
@@ -55,7 +58,8 @@ void main() {
   late Directory workspace;
   late SessionManager sessions;
 
-  Future<AgentLoop> buildLoop(LLMProvider provider) async {
+  Future<AgentLoop> buildLoop(LLMProvider provider,
+      {KnowledgeService? knowledgeService}) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final storage =
@@ -73,6 +77,7 @@ void main() {
       sessions: sessions,
       tools: registry,
       contextBuilder: contextBuilder,
+      knowledgeService: knowledgeService,
     );
   }
 
@@ -117,6 +122,62 @@ void main() {
 
     expect(events.whereType<ErrorEvent>(), isNotEmpty);
     expect(events.whereType<ResponseEvent>(), isEmpty);
+  });
+
+  group('KG pre-query LLM cost (U12)', () {
+    test(
+        'with KG enabled and an embedder, a simple turn makes exactly ONE '
+        'chat call — no pre-turn LLM query expansion', () async {
+      final kgDb = inMemoryKnowledgeGraphDB();
+      addTearDown(kgDb.close);
+      final knowledgeService = KnowledgeService(
+        db: kgDb,
+        embeddingProvider: FakeEmbeddingProvider(const {}),
+        embeddingModel: 'fake-model',
+        embeddingDimensions: 4,
+      );
+
+      final provider = FakeLLMProvider([textResponse('hello back')]);
+      final loop =
+          await buildLoop(provider, knowledgeService: knowledgeService);
+
+      final events =
+          await loop.processMessage('hello', 'kg-session').toList();
+
+      expect(events.whereType<ResponseEvent>().single.content, 'hello back');
+      expect(provider.callCount, 1,
+          reason: 'the unconditional pre-turn expansion call must be gone');
+      // The semantic-gap bridge moved into queryRelevant's vector path.
+      expect(
+        (knowledgeService.embeddingProvider as FakeEmbeddingProvider)
+            .embedCallCount,
+        1,
+      );
+    });
+
+    test(
+        'without an embedder (degraded mode), the LLM keyword expansion '
+        'remains the semantic-gap bridge', () async {
+      final kgDb = inMemoryKnowledgeGraphDB();
+      addTearDown(kgDb.close);
+      final knowledgeService = KnowledgeService(db: kgDb);
+
+      final provider = FakeLLMProvider([
+        textResponse('keyword keywords'), // expansion call
+        textResponse('hello back'), // main chat call
+      ]);
+      final loop =
+          await buildLoop(provider, knowledgeService: knowledgeService);
+
+      await loop.processMessage('hello', 'kg-degraded-session').toList();
+
+      expect(provider.callCount, 2);
+      expect(
+        provider.receivedMessages.first.first.content,
+        contains('keyword extractor'),
+        reason: 'the first call must be the query-expansion prompt',
+      );
+    });
   });
 
   test('the tool result is persisted to the session', () async {

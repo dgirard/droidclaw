@@ -93,18 +93,25 @@ class AgentLoop {
     String? kgContext;
     if (knowledgeService != null) {
       try {
-        // LLM query expansion: extract search keywords from user message
-        final expandedQuery = await _expandQueryForKG(userMessage);
+        // With an embedder configured, queryRelevant's vector path bridges
+        // the semantic gap directly — no extra LLM round-trip per turn.
+        // Without one, LLM keyword expansion remains the only bridge between
+        // paraphrased questions and stored fact tokens (see docs/solutions/
+        // logic-errors/knowledge-graph-retrieval-fts5-tokenization-and-
+        // semantic-gap.md), so it stays on in that degraded mode.
+        final kgQuery = knowledgeService!.hasEmbedder
+            ? userMessage
+            : await _expandQueryForKG(userMessage);
 
         final results = await knowledgeService!.queryRelevant(
-          expandedQuery,
+          kgQuery,
           limit: 10,
         );
         if (results.isNotEmpty) {
           kgContext = formatKnowledgeContext(results);
           AppLogger.instance.debug(LogSource.agent,
               'KG pre-query: ${results.length} results '
-              '(expanded: "${expandedQuery.substring(0, min(100, expandedQuery.length))}...")');
+              '(query: "${kgQuery.substring(0, min(100, kgQuery.length))}")');
         }
       } catch (e) {
         AppLogger.instance.warning(LogSource.agent,
@@ -272,8 +279,12 @@ class AgentLoop {
 
   /// Expand a user query into search keywords for Knowledge Graph retrieval.
   ///
-  /// Uses a fast LLM call (max_tokens: 50) to bridge the semantic gap between
-  /// natural language questions and stored entity/fact tokens.
+  /// Degraded-mode fallback only: called when no embedding provider is
+  /// configured, so lexical FTS is the sole retrieval signal. Uses a fast
+  /// LLM call (max_tokens: 50) to bridge the semantic gap between natural
+  /// language questions and stored entity/fact tokens. When an embedder is
+  /// available, the vector path in [KnowledgeService.queryRelevant] does
+  /// this without an extra LLM round-trip.
   /// When the KG has a fixed language, translates keywords to that language.
   Future<String> _expandQueryForKG(String userMessage) async {
     try {

@@ -3,44 +3,15 @@
 import 'dart:typed_data';
 
 import 'package:drift/drift.dart' hide isNull;
+import 'package:drift/native.dart';
 import 'package:test/test.dart';
 
 import 'package:droidclaw/core/knowledge/database/knowledge_graph_db.dart';
 import 'package:droidclaw/core/knowledge/services/knowledge_service.dart';
-import 'package:droidclaw/core/providers/embedding_provider.dart';
 
+import '../support/counting_interceptor.dart';
+import '../support/fake_embedding_provider.dart';
 import '../support/in_memory_kg.dart';
-
-/// Deterministic embedder: fixed vector per known input string, zero vector
-/// otherwise (cosine similarity with the zero vector is 0 → never a match).
-class FakeEmbeddingProvider implements EmbeddingProvider {
-  final Map<String, List<double>> vectors;
-
-  FakeEmbeddingProvider(this.vectors);
-
-  @override
-  Future<EmbeddingResult> embed({
-    required List<String> texts,
-    required String model,
-    int? dimensions,
-    String? taskType,
-  }) async =>
-      EmbeddingResult(embeddings: [
-        for (final t in texts) vectors[t] ?? const [0.0, 0.0, 0.0, 0.0],
-      ]);
-
-  @override
-  String get providerName => 'fake';
-
-  @override
-  String get providerId => 'fake';
-
-  @override
-  int get outputDimensions => 4;
-
-  @override
-  Future<void> dispose() async {}
-}
 
 Uint8List _blob(List<double> v) =>
     Float32List.fromList(v).buffer.asUint8List();
@@ -233,11 +204,13 @@ void main() {
     });
 
     test(
-        'CURRENT LIMITATION: zero lexical match short-circuits before the '
-        'vector path runs (why AgentLoop._expandQueryForKG exists)', () async {
-      // Characterization, not a requirement: today queryRelevant returns []
-      // when FTS finds nothing at all, even though the embedder could bridge.
-      // U12 may deliberately relax this — update this test if it does.
+        'zero lexical match: the vector path still bridges (U12 removed the '
+        'FTS short-circuit, so no LLM query expansion is needed)', () async {
+      // Pre-U12 this returned [] because queryRelevant short-circuited when
+      // FTS found nothing, even though the embedder could bridge. The
+      // short-circuit was why AgentLoop._expandQueryForKG ran an extra LLM
+      // call before every turn. Now the embedder alone retrieves the entity
+      // and its facts.
       await seedGraph();
       final service = KnowledgeService(
         db: db,
@@ -249,7 +222,84 @@ void main() {
       );
 
       final results = await service.queryRelevant('quantum banana smoothie');
-      expect(results, isEmpty);
+      expect(results, isNotEmpty);
+      expect(results.first.entity.name, 'Home');
+      expect(results.first.bm25Score, 0.0); // vector-only bridge
+      expect(
+        results.first.facts.map((f) => '${f.key}=${f.value}'),
+        contains('address=9 rue de la Paix, Paris'),
+      );
+    });
+
+    test('no lexical and no vector match returns empty', () async {
+      await seedGraph();
+      final results =
+          await serviceWithEmbedder().queryRelevant('quantum banana smoothie');
+      expect(results, isEmpty); // unknown text embeds to the zero vector
+    });
+  });
+
+  group('KnowledgeService.queryRelevant — bounded DB round-trips (U12)', () {
+    // Seeds [n] entities, each with one fact and a relation chain
+    // (Gadget i → Gadget i+1), all matching the FTS token "gadget".
+    Future<void> seedChain(KnowledgeGraphDB cdb, int n) async {
+      final ids = <int>[];
+      for (var i = 0; i < n; i++) {
+        final id = await cdb.into(cdb.entities).insert(
+              EntitiesCompanion.insert(
+                name: 'Gadget $i',
+                entityType: const Value('CONCEPT'),
+                summary: Value('test gadget number $i'),
+              ),
+            );
+        ids.add(id);
+        await cdb.into(cdb.facts).insert(FactsCompanion.insert(
+              entityId: id,
+              factKey: 'serial',
+              factValue: 'gadget-sn-$i',
+            ));
+      }
+      for (var i = 0; i + 1 < n; i++) {
+        await cdb.into(cdb.relations).insert(RelationsCompanion.insert(
+              sourceId: ids[i],
+              targetId: ids[i + 1],
+              predicate: 'next_to',
+            ));
+      }
+    }
+
+    Future<int> selectsForQuery(int entityCount) async {
+      final counter = SelectCountingInterceptor();
+      final cdb = KnowledgeGraphDB.forExecutor(
+        NativeDatabase.memory().interceptWith(counter),
+      );
+      try {
+        await seedChain(cdb, entityCount);
+        counter.reset();
+        final results =
+            await KnowledgeService(db: cdb).queryRelevant('gadget serial');
+        expect(results, isNotEmpty); // sanity: the query actually retrieves
+        return counter.selectCount;
+      } finally {
+        await cdb.close();
+      }
+    }
+
+    test(
+        'SELECT count is constant in candidate count — batched loaders, '
+        'no per-candidate N+1 loops', () async {
+      final smallKg = await selectsForQuery(4);
+      final largeKg = await selectsForQuery(16);
+
+      // Pre-U12 this scaled with candidates: per-candidate findNeighbors
+      // (2 hops), per-id getEntityById for decay, and per-result
+      // entity+facts+neighbors re-fetches (30+ SELECTs at 16 entities).
+      // Now: searchEntities, searchFacts, 2x findNeighborsBatch,
+      // getEntitiesByIds, getFactsForEntityIds (+1 optional hop-2 top-K
+      // neighbor batch) = at most 7 in degraded mode.
+      expect(largeKg, equals(smallKg),
+          reason: 'DB round-trips must not scale with candidate count');
+      expect(largeKg, lessThanOrEqualTo(7));
     });
   });
 }
