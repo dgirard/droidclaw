@@ -11,6 +11,7 @@ tags:
   - url-handling
   - pii-leak
 date: 2026-03-13
+last_updated: 2026-06-10
 component:
   - lib/core/tools/proof_editor_tool.dart
   - lib/features/chat/message_bubble.dart
@@ -122,9 +123,13 @@ if (response.statusCode == 409) {
 }
 ```
 
+> **Correction (2026-06-10):** the live public agent contract accepts ONLY `baseToken` (`state.contract.supportedPreconditions == ["baseToken"]`, schema `mt1:...` from `state.mutationBase.token`); `baseRevision` is rejected by the server. The snippet above reflects the original fix, not the current code — see `lib/core/tools/proof_editor/proof_editor_client.dart` and [proof-editor-api-drift-basetoken-and-removed-edit-route](../integration-issues/proof-editor-api-drift-basetoken-and-removed-edit-route.md).
+
 #### P3-7: fetchBaseUpdatedAt doc comment
 
 Added clarifying comment that `_fetchBaseUpdatedAt` is scoped to the `/edit` endpoint only (not `/ops`).
+
+> **Note (2026-06-10):** the `/edit` route was since removed server-side (404 "Unsupported agent route"); the edit/insert operations that used it are deprecated. See [proof-editor-api-drift-basetoken-and-removed-edit-route](../integration-issues/proof-editor-api-drift-basetoken-and-removed-edit-route.md).
 
 ### Test update
 
@@ -169,3 +174,5 @@ Added clarifying comment that `_fetchBaseUpdatedAt` is scoped to the `/edit` end
 - `lib/features/chat/message_bubble.dart` — P2-2, P2-3, P3-6
 - `lib/providers/chat_provider.dart` — P3-5
 - `test/proof_editor_tool_test.dart` — P3-8 test update
+
+> **Note (2026-06-10):** the HTTP transport (including the 409/concurrency handling above) now lives in `lib/core/tools/proof_editor/proof_editor_client.dart`, extracted from `proof_editor_tool.dart`.

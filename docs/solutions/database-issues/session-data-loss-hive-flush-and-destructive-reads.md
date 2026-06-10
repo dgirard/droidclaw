@@ -1,6 +1,7 @@
 ---
 title: "Sessions disappearing from history after app restart"
 category: database-issues
+last_updated: 2026-06-10
 tags: [hive, persistence, session-manager, data-integrity, app-lifecycle, flush, dual-isolate]
 module: core/session
 symptom: "Some conversation sessions vanish from the History screen after app restart, particularly those with heavy tool use or interrupted mid-conversation"
@@ -20,6 +21,8 @@ Four independent bugs conspired to lose session data:
 ### 1. Hive writes not flushed to disk
 
 `SessionManager.save()` called `box.put()`, which writes to the OS page cache but does not issue `fsync`. When Android kills the process via SIGKILL (OOM, task swipe, battery optimization), unflushed pages are discarded. Sessions saved seconds before death vanish on next launch.
+
+> **Correction (2026-06-10):** the SIGKILL claim overstates the exposure — an *awaited* `box.put()` survives process SIGKILL via kernel page-cache writeback; the actual unflushed-write exposure window is power loss / kernel panic. The flush layers below remain as defense-in-depth, and the cadence is now tiered: fsync on final response, app pause, deletes, and cross-isolate handoffs — NOT on mid-turn tool batches. See the flush-policy doc table in `lib/core/session/session_manager.dart` and `test/session/lazy_load_and_flush_policy_test.dart`.
 
 ### 2. `getMessages()` destructively mutating internal state
 
@@ -157,7 +160,7 @@ ref.onDispose(() => manager.flush());  // fire-and-forget (Riverpod won't await)
 
 Applied after initial implementation, based on 6-agent code review:
 
-- **compact() guarded**: `_box!.compact()` on startup wrapped in try-catch — Hive compact is unsafe across isolates (advisory locks are per-process, not per-isolate).
+- **compact() guarded**: `_box!.compact()` on startup wrapped in try-catch — Hive compact is unsafe across isolates (advisory locks are per-process, not per-isolate). *Superseded (2026-06-10): the startup `compact()` was REMOVED entirely — both isolates hold the box open in one process, and compact's temp-file + inode-swap silently loses the other isolate's writes. See the doc comment in `lib/core/session/isolate_persistence/cache_reload.dart` and `todos/001-pending-p2-compact-cross-isolate-corruption-risk.md` (resolved).*
 - **Per-tool save batched**: Moved `sessions.save()` from inside the tool-call for-loop to after it. Saves 10-50ms per tool call on Android eMMC/UFS.
 - **ref.onDispose corrected**: Changed from `() async { await manager.flush(); }` to `() => manager.flush()` — `ref.onDispose` does not await async closures.
 - **Exception logs sanitized**: `$e` replaced with `${e.runtimeType}` in catch blocks to prevent leaking corrupted session content into logcat.
@@ -188,6 +191,7 @@ Ask "if the app is killed right after this line, what is lost?" If the answer is
 
 ## Related Documentation
 
+- [Hive reload race: empty-session overwrite](hive-reload-race-empty-session-overwrite.md) — later data-loss race in the cross-isolate reload path, and the serialized/lazy reload that replaced the original mechanism
 - [Cron sessions Hive path mismatch between isolates](../architecture/cron-sessions-hive-path-mismatch-between-isolates.md) — prior fix for Hive path error, save-before-notify race, and cross-isolate reload
 - [Cron triggers lost when main isolate dead](../runtime-errors/cron-triggers-lost-when-main-isolate-dead.md) — data loss from silent inter-isolate communication failures
 - [Decouple cron from Telegram autonomous service](../architecture/decouple-cron-from-telegram-autonomous-service.md) — dual-isolate architecture context

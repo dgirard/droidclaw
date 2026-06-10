@@ -2,6 +2,7 @@
 title: "Decouple cron scheduling from Telegram + autonomous service isolate AgentLoop"
 type: architecture-refactor
 date: 2026-02-17
+last_updated: 2026-06-10
 tags: [cron, telegram, foreground-service, isolate, riverpod, decoupling]
 files:
   - lib/providers/background_service_provider.dart (NEW)
@@ -94,7 +95,10 @@ Both notifiers register their own `addTaskDataCallback` and ignore irrelevant me
 ## Key Constraints
 
 ### Service isolate limitations (no Flutter engine)
-- No `FlutterSecureStorage` (platform channel) → must cache secrets in `SharedPreferences`
+
+> **Correction (2026-06-10):** the "no Flutter engine" framing is superseded — the service isolate IS a full FlutterEngine (FlutterForegroundTask), so platform channels work. Secure-storage availability is now runtime-probed at service init: when the probe succeeds, secrets are read directly from `FlutterSecureStorage` and the SharedPreferences mirrors are a fallback only, auto-wiped by the main isolate. See `lib/core/services/service_secret_reader.dart`, `lib/core/config/service_secret_cache.dart`, and [secure-storage-capability-probe-dual-isolate](../architecture-patterns/secure-storage-capability-probe-dual-isolate.md).
+
+- No `FlutterSecureStorage` (platform channel) → must cache secrets in `SharedPreferences` *(superseded — see correction above)*
 - No `rootBundle` (Flutter assets) → builtin skills not available
 - No `getApplicationDocumentsDirectory()` → workspace path pre-resolved, passed via `StorageService.overrideWorkspacePath`
 - No `WebView` → `WebScrapeJsTool` excluded

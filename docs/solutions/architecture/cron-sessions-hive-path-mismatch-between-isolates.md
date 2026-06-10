@@ -1,6 +1,7 @@
 ---
 title: "Fix: Cron Sessions Not Visible in Conversations Screen"
 date: 2026-02-22
+last_updated: 2026-06-10
 category: architecture
 component: "Dual-Isolate Session Management (Hive + FlutterForegroundTask)"
 severity: high
@@ -134,6 +135,8 @@ Future<void> reload() async {
 }
 ```
 
+> **Superseded (2026-06-10):** this snippet no longer matches the code. Reload now goes through `CacheReload` (`lib/core/session/isolate_persistence/cache_reload.dart`), is serialized via an in-flight `_reloading` Future, rebuilds only a metadata sidecar index (sessions are lazy-loaded, not eagerly decoded into full `Session` objects), and a rehydration queue prevents empty-session overwrites. See [hive-reload-race-empty-session-overwrite](../database-issues/hive-reload-race-empty-session-overwrite.md).
+
 **File**: `lib/providers/background_service_provider.dart` — added `cronCompletionCount` to state and reload handler:
 
 ```dart
@@ -173,9 +176,9 @@ All three bugs had to be fixed together. Fixing any one or two alone would not m
 
 ## Prevention Rules
 
-1. **Never nest `getApplicationDocumentsDirectory()`**: It already returns `app_flutter`. Don't add `/app_flutter` again.
+1. **Never nest `getApplicationDocumentsDirectory()`**: It already returns `app_flutter`. Don't add `/app_flutter` again. *(Path derivation is now single-sourced in `lib/core/session/isolate_persistence/hive_path_resolver.dart`.)*
 2. **Save-then-notify**: Always `await save()` before `sendDataToMain()`. The receiver will try to read immediately.
-3. **Explicit reload for cross-isolate Hive**: Hive boxes are NOT shared between Dart engines. Close + reopen to re-read from disk.
+3. **Explicit reload for cross-isolate Hive**: Hive boxes are NOT shared between Dart engines. Close + reopen to re-read from disk. **Caveat (2026-06-10):** the reload must be SERIALIZED against live agent turns, or it introduces a data-loss race (a reload mid-turn can overwrite an in-progress session with an empty one) — see [hive-reload-race-empty-session-overwrite](../database-issues/hive-reload-race-empty-session-overwrite.md).
 4. **Use Riverpod signals for cache invalidation**: Bump a counter in state, watch it in UI widgets — don't rely on manual refresh.
 
 ## Debugging Technique

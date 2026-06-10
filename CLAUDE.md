@@ -143,7 +143,7 @@ Multi-provider embedding abstraction mirroring the LLM provider pattern:
 
 - **Ingestion**: `IngestionPipeline.extractAndStore()` → LLM extraction → entity resolution → bi-temporal storage → embedding computation
 - **Retrieval**: `KnowledgeService.queryRelevant()` → FTS5 BM25 + vector cosine similarity + spreading activation + Ebbinghaus decay → `HybridScorer.fuse()`
-- `KnowledgeService` receives `EmbeddingProvider?` — when non-null, embeds query and does brute-force cosine similarity over all active entity embeddings
+- `KnowledgeService` receives `EmbeddingProvider?` — when non-null, embeds the query and scores entity embeddings via a keyset-paged cosine scan (bounded memory, no entity cap, running top-`limit*3` candidate selection)
 - `hasEmbedder` is a getter (`embeddingProvider != null`), not a constructor parameter
 - Embeddings stored as Float32 little-endian BLOBs in `entities.embedding` column
 - Serialization: `Float32List.fromList(doubles).buffer.asUint8List()` → BLOB
@@ -213,4 +213,5 @@ For tools needing an API key that must work in both isolates:
 - `AppConstants` in `lib/shared/constants.dart` for all magic values
 - `AppLogger.instance.debug/info/warning/error(LogSource.xxx, ...)` for logging (`lib/core/services/app_logger.dart`) — `print` only inside the logger sinks, with `// ignore: avoid_print`
 - Config persisted in `SharedPreferences`, secrets in `FlutterSecureStorage`, sessions in Hive
+- `docs/solutions/` — documented solutions to past problems (bugs, architecture patterns, design decisions), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
 - All tool names are snake_case: `web_search`, `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`, `get_directions`, `geocode`, `get_transit`, `weather`, `get_datetime`, `knowledge_search`, `knowledge_store`, `kb_query`, `radio`, `proof_editor`, `dream`
