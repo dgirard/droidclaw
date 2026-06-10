@@ -389,8 +389,8 @@ class ProofEditorTool extends Tool {
         updatedAt = stateData['updatedAt'] as String?;
       }
 
-      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops')
-          .replace(queryParameters: {'token': doc.token});
+      // SECURITY: token goes in the Authorization header, never in the URL.
+      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops');
       final rewriteBody = <String, dynamic>{
         'type': 'rewrite.apply',
         'by': _agentBy,
@@ -404,7 +404,7 @@ class ProofEditorTool extends Tool {
       final response = await _postJson(
         client,
         uri,
-        headers: {'X-Agent-Id': _agentId},
+        headers: _bearerHeaders(doc.token),
         body: rewriteBody,
       );
 
@@ -446,12 +446,12 @@ class ProofEditorTool extends Tool {
 
     final client = _clientFactory();
     try {
-      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops')
-          .replace(queryParameters: {'token': doc.token});
+      // SECURITY: token goes in the Authorization header, never in the URL.
+      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops');
       final response = await _postJson(
         client,
         uri,
-        headers: {'X-Agent-Id': _agentId},
+        headers: _bearerHeaders(doc.token),
         body: {
           'type': 'comment.add',
           'by': _agentBy,
@@ -493,12 +493,12 @@ class ProofEditorTool extends Tool {
 
     final client = _clientFactory();
     try {
-      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops')
-          .replace(queryParameters: {'token': doc.token});
+      // SECURITY: token goes in the Authorization header, never in the URL.
+      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops');
       final response = await _postJson(
         client,
         uri,
-        headers: {'X-Agent-Id': _agentId},
+        headers: _bearerHeaders(doc.token),
         body: {
           'type': 'suggestion.add',
           'kind': 'replace',
@@ -561,8 +561,8 @@ class ProofEditorTool extends Tool {
       // 2. Prepend new content and rewrite the whole document.
       final newMarkdown = '$content\n\n$currentMarkdown';
 
-      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops')
-          .replace(queryParameters: {'token': doc.token});
+      // SECURITY: token goes in the Authorization header, never in the URL.
+      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops');
       final rewriteBody = <String, dynamic>{
         'type': 'rewrite.apply',
         'by': _agentBy,
@@ -576,7 +576,7 @@ class ProofEditorTool extends Tool {
       final response = await _postJson(
         client,
         uri,
-        headers: {'X-Agent-Id': _agentId},
+        headers: _bearerHeaders(doc.token),
         body: rewriteBody,
       );
 

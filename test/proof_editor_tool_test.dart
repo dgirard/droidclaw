@@ -837,7 +837,9 @@ void main() {
         }
         if (request.method == 'POST' &&
             request.url.path.contains('/ops')) {
-          expect(request.url.queryParameters['token'], equals('tok_123'));
+          // SECURITY: token must be in the Authorization header, not the URL.
+          expect(request.headers['Authorization'], equals('Bearer tok_123'));
+          expect(request.url.queryParameters.containsKey('token'), isFalse);
           capturedBody = jsonDecode(request.body) as Map<String, dynamic>;
           return _jsonResponse({'ok': true});
         }
@@ -1277,5 +1279,88 @@ void main() {
         'append', 'insert', 'rename', 'snapshot', 'edit_v2', 'list', 'delete',
       ]));
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // Security: auth token never appears in a request URL (U6)
+  // -------------------------------------------------------------------------
+  group('Security — token never in URL', () {
+    late ProofDocumentStore store;
+    late List<Uri> capturedUrls;
+    late MockClient client;
+
+    setUp(() async {
+      store = await _createTempStore();
+      await _seedDoc(store);
+      capturedUrls = [];
+      // Catch-all mock: records every request URL, asserts /ops calls carry
+      // the bearer header, and returns a plausible success payload.
+      client = MockClient((request) async {
+        capturedUrls.add(request.url);
+        if (request.url.path.contains('/ops')) {
+          expect(request.headers['Authorization'], equals('Bearer tok_123'),
+              reason: '/ops must authenticate via Authorization header');
+        }
+        if (request.url.path.contains('/state')) {
+          return _jsonResponse({
+            'markdown': '# Doc\n\nBody',
+            'revision': 1,
+            'updatedAt': '2026-01-01T00:00:00Z',
+            'marks': [],
+          });
+        }
+        if (request.url.path.contains('/snapshot')) {
+          return _jsonResponse({
+            'blocks': [
+              {'ref': 'b1', 'content': '# Doc'},
+            ],
+            'mutationBase': {'token': 'mut_1'},
+          });
+        }
+        return _jsonResponse({'ok': true});
+      });
+    });
+
+    /// Operations that hit the network, with minimal valid arguments.
+    final networkOperations = <Map<String, dynamic>>[
+      {'operation': 'read', 'slug': 'test-doc'},
+      {'operation': 'edit', 'slug': 'test-doc', 'search': 'Body', 'replace': 'B'},
+      {'operation': 'rewrite', 'slug': 'test-doc', 'content': '# New'},
+      {'operation': 'comment', 'slug': 'test-doc', 'quote': 'Body', 'text': 'hi'},
+      {'operation': 'suggest', 'slug': 'test-doc', 'quote': 'Body', 'content': 'B'},
+      {'operation': 'prepend', 'slug': 'test-doc', 'content': 'Top'},
+      {'operation': 'append', 'slug': 'test-doc', 'section': 'Doc', 'content': 'X'},
+      {'operation': 'insert', 'slug': 'test-doc', 'quote': 'Body', 'content': 'X'},
+      {'operation': 'rename', 'slug': 'test-doc', 'title': 'New Title'},
+      {'operation': 'snapshot', 'slug': 'test-doc'},
+      {
+        'operation': 'edit_v2',
+        'slug': 'test-doc',
+        'base_token': 'mut_1',
+        'ops': [
+          {'op': 'replace_block', 'ref': 'b1', 'markdown': '# Doc2'},
+        ],
+      },
+    ];
+
+    for (final args in networkOperations) {
+      final op = args['operation'] as String;
+      test('$op sends no token in any request URL', () async {
+        final tool = _buildTool(store, client);
+
+        final result = await tool.execute(Map<String, dynamic>.from(args));
+
+        expect(result.isError, isFalse,
+            reason: '$op failed: ${result.forLLM}');
+        expect(capturedUrls, isNotEmpty,
+            reason: '$op should have made at least one HTTP request');
+        for (final url in capturedUrls) {
+          expect(url.queryParameters.containsKey('token'), isFalse,
+              reason: 'token leaked in URL: $url');
+          expect(url.toString(), isNot(contains('tok_123')),
+              reason: 'token value leaked in URL: $url');
+        }
+      });
+    }
   });
 }

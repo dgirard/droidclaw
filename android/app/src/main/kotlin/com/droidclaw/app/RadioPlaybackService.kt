@@ -2,6 +2,7 @@ package com.droidclaw.app
 
 import android.content.Intent
 import android.os.IBinder
+import android.os.Process
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -22,6 +23,19 @@ import androidx.media3.session.MediaSessionService
 class RadioPlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
+
+    companion object {
+        /**
+         * System packages allowed to obtain the session in addition to the
+         * app's own process and the system server:
+         * - System UI renders the media notification / output switcher.
+         * - The Bluetooth stack relays AVRCP (headset/car) media commands.
+         */
+        private val TRUSTED_SYSTEM_PACKAGES = setOf(
+            "com.android.systemui",
+            "com.android.bluetooth",
+        )
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -62,8 +76,24 @@ class RadioPlaybackService : MediaSessionService() {
             .build()
     }
 
+    /**
+     * SECURITY: the service is exported (required for MediaSessionService —
+     * the system binds to it for media notifications and media-button
+     * routing), so gate session access here. Returning null rejects the
+     * caller's connection. Allowed callers:
+     * - this app itself (UID check — covers the media3 notification controller),
+     * - the system server (UID 1000 — framework media-button / headset dispatch),
+     * - System UI and the Bluetooth stack (package allowlist).
+     */
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
-        return mediaSession
+        return if (isTrustedCaller(controllerInfo)) mediaSession else null
+    }
+
+    private fun isTrustedCaller(controllerInfo: MediaSession.ControllerInfo): Boolean {
+        return controllerInfo.uid == Process.myUid() ||
+            controllerInfo.uid == Process.SYSTEM_UID ||
+            controllerInfo.packageName == packageName ||
+            controllerInfo.packageName in TRUSTED_SYSTEM_PACKAGES
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {

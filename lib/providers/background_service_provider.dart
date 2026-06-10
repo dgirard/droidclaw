@@ -110,6 +110,9 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
 
     final result = await FlutterForegroundTask.startService(
       serviceId: 256,
+      // Both types are genuinely used by the service isolate (U6 review):
+      // remoteMessaging = Telegram long-polling; location = get_location /
+      // get_address tools registered in ServiceAgentFactory for cron tasks.
       serviceTypes: [
         ForegroundServiceTypes.remoteMessaging,
         ForegroundServiceTypes.location,
