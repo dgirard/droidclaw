@@ -1,7 +1,7 @@
 ---
 title: "refactor: DroidClaw project improvement roadmap"
 type: refactor
-status: active
+status: completed
 date: 2026-05-31
 revised: 2026-06-10
 ---
