@@ -397,8 +397,8 @@ class _SessionGroupTile extends StatelessWidget {
     return Colors.green;
   }
 
-  String _formatTime(DateTime ts) =>
-      DateFormat('HH:mm').format(ts);
+  /// Hoisted formatter — never allocate DateFormat per tile build.
+  static final _timeFormat = DateFormat('HH:mm');
 
   @override
   Widget build(BuildContext context) {
@@ -445,7 +445,7 @@ class _SessionGroupTile extends StatelessWidget {
                   Row(
                     children: [
                       Text(
-                        _formatTime(group.firstCall),
+                        _timeFormat.format(group.firstCall),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w500,
                         ),

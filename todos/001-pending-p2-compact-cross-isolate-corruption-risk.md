@@ -1,5 +1,5 @@
 ---
-status: pending
+status: resolved
 priority: p2
 issue_id: "001"
 tags: [code-review, data-integrity, hive, dual-isolate]
@@ -60,6 +60,22 @@ Option A — wrap in try-catch with AppLogger warning. Minimal change, maximum s
 | Date | Action | Learnings |
 |------|--------|-----------|
 | 2026-03-13 | Created from code review | Cross-isolate Hive operations are unsafe |
+| 2026-06-10 | U10: removed startup `compact()` from `SessionManager.init()` entirely (Option B, escalated from the interim Option A try-catch) | try-catch prevented the crash but not the corruption: a compact rename in one isolate strands the other isolate's open file handle on the old inode, silently losing its writes. Both isolates compacted at boot — the worst moment. flush-after-save + Hive's own write-time auto-compaction keep the box bounded without it. |
+
+## Resolution (U10, 2026-06-10)
+
+The explicit `compact()` call this todo is about no longer exists; all
+acceptance criteria are met trivially (nothing to crash, nothing to log,
+corrupted records are skipped entry-by-entry by `CacheReload`).
+
+**Residual, documented constraint**: Hive's built-in write-time
+auto-compaction (default strategy: >60 deleted/overwritten frames AND >15% of
+entries) can still fire in either isolate while the other holds the box open.
+A real fix needs a cross-isolate lock that does not exist in Hive 2.x. The
+constraint — including "do NOT add compact() calls in this subsystem" — is
+documented in `lib/core/session/isolate_persistence/cache_reload.dart`. U13's
+save batching will reduce the overwrite churn that feeds the auto-compaction
+counter.
 
 ## Resources
 

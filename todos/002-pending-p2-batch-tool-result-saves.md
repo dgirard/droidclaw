@@ -1,5 +1,5 @@
 ---
-status: pending
+status: resolved
 priority: p2
 issue_id: "002"
 tags: [code-review, performance, agent-loop]
@@ -76,3 +76,15 @@ await sessions.save(session);  // flush once after all tools
 ## Resources
 
 - PR: session-loss fix implementation
+
+## Resolution (2026-06-10, U13)
+
+Resolved in U13. The per-tool save had already been batched to one save per
+tool-call iteration (Option A); U13 additionally removed the fsync from that
+per-batch save: `agent_loop.dart` now calls `sessions.save(session,
+flush: false)` after the tool loop. The write is still an awaited Hive `put`
+(survives process kill via the OS page cache); only the fsync is deferred to
+the turn-ending save (final response / error / max-iterations), which always
+flushes. Policy documented on `SessionManager`; pinned by
+`test/agent_loop_test.dart` ("flush cadence (U13)") and
+`test/session/lazy_load_and_flush_policy_test.dart`.

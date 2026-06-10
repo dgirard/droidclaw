@@ -338,6 +338,14 @@ class KnowledgeConfig {
       );
 
   /// Map locale code to full language name for LLM prompts.
+  ///
+  /// SINGLE SOURCE (U19): every prompt that names a language (context
+  /// builder KB note, KG query expansion, entity extraction, knowledge
+  /// tools, KB cleanup) resolves it here — do not add local copies.
+  /// Unknown codes deliberately resolve to 'English': supported locales are
+  /// pinned by [AppConfig._supportedLocales], so an unknown code is a
+  /// programming error and English matches the app-wide locale fallback.
+  /// Pinned by test/agent/language_compliance_test.dart.
   static String languageName(String code) => switch (code) {
         'fr' => 'French',
         'es' => 'Spanish',

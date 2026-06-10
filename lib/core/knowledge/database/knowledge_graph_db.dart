@@ -5,7 +5,23 @@ import 'dart:math';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import '../../../shared/constants.dart';
+
 part 'knowledge_graph_db.g.dart';
+
+/// One edge from a batched neighbor lookup ([KnowledgeGraphDB.findNeighborsBatch]).
+/// [anchorId] is the queried entity; [neighborId] the connected entity.
+typedef NeighborEdge = ({
+  int anchorId,
+  int neighborId,
+  String predicate,
+  double weight,
+  double relConfidence,
+});
+
+/// One active fact row from a batched fact lookup
+/// ([KnowledgeGraphDB.getActiveFactRowsBatch]).
+typedef FactRow = ({int id, String key, String value, String type});
 
 @DriftDatabase(include: {'schema.drift'})
 class KnowledgeGraphDB extends _$KnowledgeGraphDB {
@@ -15,7 +31,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   /// Test-only: construct against a caller-provided executor (e.g. an
   /// in-memory database) so the knowledge graph can be exercised without a
   /// real file or device.
-  KnowledgeGraphDB.forExecutor(QueryExecutor executor) : super(executor);
+  KnowledgeGraphDB.forExecutor(super.executor);
 
   @override
   int get schemaVersion => 3;
@@ -191,6 +207,201 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
       (map[entityId] ??= []).add(aliasName);
     }
     return map;
+  }
+
+  /// Batch-load entities by id in a single `IN (...)` query.
+  ///
+  /// Replaces per-id [getEntityById] loops in hot retrieval paths (U12).
+  /// Unchunked on purpose: callers pass top-K-sized id lists.
+  Future<List<Entity>> getEntitiesByIds(List<int> ids) async {
+    if (ids.isEmpty) return [];
+    return (select(entities)..where((e) => e.id.isIn(ids))).get();
+  }
+
+  /// Batch-load active (non-expired) facts for a set of entities in a single
+  /// `IN (...)` query, ordered by entity then fact key (mirrors
+  /// [getEntityFacts] per-entity ordering).
+  /// Unchunked on purpose: callers pass top-K-sized id lists.
+  Future<List<Fact>> getFactsForEntityIds(List<int> ids) async {
+    if (ids.isEmpty) return [];
+    return (select(facts)
+          ..where((f) => f.entityId.isIn(ids) & f.expiredAt.isNull())
+          ..orderBy([
+            (f) => OrderingTerm.asc(f.entityId),
+            (f) => OrderingTerm.asc(f.factKey),
+          ]))
+        .get();
+  }
+
+  /// Batch [findNeighbors] for a set of entity ids in a single query.
+  ///
+  /// Returns edges grouped by the queried (anchor) entity id, preserving the
+  /// per-id semantics: active, non-expired relations to active entities,
+  /// weight-descending within each anchor. Anchors with no neighbors are
+  /// absent from the map.
+  /// Unchunked on purpose: callers pass top-K-sized id lists.
+  Future<Map<int, List<NeighborEdge>>> findNeighborsBatch(
+      List<int> ids) async {
+    if (ids.isEmpty) return {};
+    final placeholders = List.filled(ids.length, '?').join(', ');
+    final vars = [for (final id in ids) Variable.withInt(id)];
+    final rows = await customSelect(
+      'SELECT r.source_id AS anchor_id, e.id AS neighbor_id, '
+      'r.predicate AS predicate, r.weight AS weight, '
+      'r.confidence AS rel_confidence '
+      'FROM relations r JOIN entities e ON e.id = r.target_id '
+      'WHERE r.source_id IN ($placeholders) '
+      'AND r.is_active = 1 AND r.expired_at IS NULL AND e.is_active = 1 '
+      'UNION ALL '
+      'SELECT r.target_id AS anchor_id, e.id AS neighbor_id, '
+      'r.predicate AS predicate, r.weight AS weight, '
+      'r.confidence AS rel_confidence '
+      'FROM relations r JOIN entities e ON e.id = r.source_id '
+      'WHERE r.target_id IN ($placeholders) '
+      'AND r.is_active = 1 AND r.expired_at IS NULL AND e.is_active = 1 '
+      'ORDER BY anchor_id, weight DESC',
+      variables: [...vars, ...vars],
+    ).get();
+
+    final map = <int, List<NeighborEdge>>{};
+    for (final r in rows) {
+      final edge = (
+        anchorId: r.read<int>('anchor_id'),
+        neighborId: r.read<int>('neighbor_id'),
+        predicate: r.read<String>('predicate'),
+        weight: r.read<double>('weight'),
+        relConfidence: r.read<double>('rel_confidence'),
+      );
+      (map[edge.anchorId] ??= []).add(edge);
+    }
+    return map;
+  }
+
+  /// Batch-load relation-neighbor ids for a set of entities (U14).
+  ///
+  /// Replaces the per-entity [getEntityRelationsWithNames] loop in
+  /// `KbMaintenanceService.findCandidates` (the dream-run N+1). Preserves the
+  /// loop's exact semantics: active, non-expired relations, neighbor = the
+  /// other endpoint, no is_active filter on the neighbor entity. Every
+  /// requested id gets a (possibly empty) entry. Ids are chunked into
+  /// `IN (...)` lists of [chunkSize] to bound bind variables per statement.
+  Future<Map<int, Set<int>>> getRelationNeighborIdsBatch(
+    List<int> ids, {
+    int chunkSize = AppConstants.knowledgeSqlInChunkSize,
+  }) async {
+    final map = {for (final id in ids) id: <int>{}};
+    await _forEachIdChunk(ids, chunkSize, (chunk, placeholders, vars) async {
+      final rows = await customSelect(
+        'SELECT source_id, target_id FROM relations '
+        'WHERE (source_id IN ($placeholders) OR target_id IN ($placeholders)) '
+        'AND is_active = 1 AND expired_at IS NULL',
+        variables: [...vars, ...vars],
+      ).get();
+      final inChunk = chunk.toSet();
+      for (final r in rows) {
+        final src = r.read<int>('source_id');
+        final tgt = r.read<int>('target_id');
+        if (inChunk.contains(src)) map[src]!.add(tgt);
+        if (inChunk.contains(tgt)) map[tgt]!.add(src);
+      }
+    });
+    return map;
+  }
+
+  /// Batch-load active facts per entity (U14).
+  ///
+  /// Replaces the per-entity fact SELECT loops in the dedup pipeline. Rows
+  /// are ordered by fact id within each entity (insertion order — same rows
+  /// the old per-entity queries returned in practice) and, when
+  /// [perEntityLimit] is non-null, truncated per entity in Dart. Ids are
+  /// chunked like [getRelationNeighborIdsBatch].
+  Future<Map<int, List<FactRow>>> getActiveFactRowsBatch(
+    List<int> ids, {
+    int? perEntityLimit,
+    int chunkSize = AppConstants.knowledgeSqlInChunkSize,
+  }) async {
+    final map = <int, List<FactRow>>{};
+    await _forEachIdChunk(ids, chunkSize, (chunk, placeholders, vars) async {
+      final rows = await customSelect(
+        'SELECT id, entity_id, fact_key, fact_value, value_type FROM facts '
+        'WHERE entity_id IN ($placeholders) AND expired_at IS NULL '
+        'ORDER BY entity_id, id',
+        variables: vars,
+      ).get();
+      for (final r in rows) {
+        final entityId = r.read<int>('entity_id');
+        final list = map[entityId] ??= [];
+        if (perEntityLimit != null && list.length >= perEntityLimit) continue;
+        list.add((
+          id: r.read<int>('id'),
+          key: r.read<String>('fact_key'),
+          value: r.read<String>('fact_value'),
+          type: r.read<String>('value_type'),
+        ));
+      }
+    });
+    return map;
+  }
+
+  /// Run [body] once per `IN (...)` chunk of [ids], bounding bind variables
+  /// per statement (U14 idiom shared by [getRelationNeighborIdsBatch] and
+  /// [getActiveFactRowsBatch]). [body] receives the chunk plus ready-made
+  /// `?` placeholders and bound [Variable]s for it.
+  Future<void> _forEachIdChunk(
+    List<int> ids,
+    int chunkSize,
+    Future<void> Function(
+      List<int> chunk,
+      String placeholders,
+      List<Variable<Object>> vars,
+    ) body,
+  ) async {
+    for (var i = 0; i < ids.length; i += chunkSize) {
+      final chunk = ids.sublist(i, min(i + chunkSize, ids.length));
+      final placeholders = List.filled(chunk.length, '?').join(', ');
+      final vars = <Variable<Object>>[
+        for (final id in chunk) Variable.withInt(id),
+      ];
+      await body(chunk, placeholders, vars);
+    }
+  }
+
+  /// Max access_count among active cold entities (0 when there are none).
+  ///
+  /// Feeds the decay-candidate cutoff: combined with
+  /// [MemoryDecay.maxAgeForRetention] it bounds how recently a cold entity
+  /// must have been accessed to possibly leave 'cold'.
+  Future<int> maxColdAccessCount() async {
+    final row = await customSelect(
+      "SELECT COALESCE(MAX(access_count), 0) AS m FROM entities "
+      "WHERE is_active = 1 AND temperature = 'cold'",
+    ).getSingle();
+    return row.read<int>('m');
+  }
+
+  /// Active entities whose temperature could cross a threshold (U15).
+  ///
+  /// Non-cold rows are always candidates (they can still decay downward).
+  /// Cold rows can only leave 'cold' if a recent access pushed retention
+  /// back above the cool threshold, i.e. last_accessed >= [coldCutoffEpoch]
+  /// (computed by the caller from the decay formula). Cold rows older than
+  /// the cutoff provably stay cold and are skipped entirely.
+  Future<List<({int id, int lastAccessed, int accessCount, String temperature})>>
+      getDecayCandidates(int coldCutoffEpoch) async {
+    final rows = await customSelect(
+      "SELECT id, last_accessed, access_count, temperature FROM entities "
+      "WHERE is_active = 1 AND (temperature != 'cold' OR last_accessed >= ?)",
+      variables: [Variable.withInt(coldCutoffEpoch)],
+    ).get();
+    return [
+      for (final r in rows)
+        (
+          id: r.read<int>('id'),
+          lastAccessed: r.read<int>('last_accessed'),
+          accessCount: r.read<int>('access_count'),
+          temperature: r.read<String>('temperature'),
+        ),
+    ];
   }
 
   /// Update temperature for a batch of entities.
@@ -580,7 +791,10 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
           'VALUES (?, ?, \'name\', 1.0)',
           [primaryId, secondaryName],
         );
-      } catch (_) {}
+      } catch (_) {
+        // Best-effort: the alias is a redundant lookup aid. A constraint
+        // failure here must not abort the surrounding merge transaction.
+      }
 
       // Delete secondary's aliases (they've been transferred)
       await customStatement(
@@ -689,7 +903,10 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
             'UPDATE summary_nodes SET member_ids = ? WHERE id = ?',
             [jsonEncode(updated), node.read<int>('id')],
           );
-        } catch (_) {}
+        } catch (_) {
+          // Skip summary nodes with malformed member_ids JSON: a stale
+          // member reference is cosmetic and must not abort the merge.
+        }
       }
 
       // Count expired relations (step 2 + 3)
@@ -726,16 +943,21 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     );
   }
 
-  /// Load all active entity embeddings for brute-force vector search.
-  /// Returns (id, embedding) pairs for entities that have embeddings.
-  Future<List<({int id, Uint8List embedding})>> getActiveEntityEmbeddings({
-    int limit = 1000,
+  /// One keyset page of active entity embeddings, ordered by id, strictly
+  /// after [afterId] (U14). Drives the paged cosine scan in
+  /// `KnowledgeService.queryRelevant` (every active embedding, at most
+  /// [pageSize] BLOBs in memory at a time — no silent cap, no fully
+  /// materialized embedding list) and the bounded dedup pre-filter scan in
+  /// `CandidateGenerator.findCandidates`.
+  Future<List<({int id, Uint8List embedding})>> getActiveEntityEmbeddingsPage({
+    required int afterId,
+    required int pageSize,
   }) async {
     final results = await customSelect(
       'SELECT id, embedding FROM entities '
-      'WHERE is_active = 1 AND embedding IS NOT NULL '
-      'LIMIT ?',
-      variables: [Variable.withInt(limit)],
+      'WHERE is_active = 1 AND embedding IS NOT NULL AND id > ? '
+      'ORDER BY id LIMIT ?',
+      variables: [Variable.withInt(afterId), Variable.withInt(pageSize)],
     ).get();
 
     return results.map((r) {

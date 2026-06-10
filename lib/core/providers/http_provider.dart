@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../shared/constants.dart';
+import '../net/retrying_http_client.dart';
 import 'llm_provider.dart';
 import 'llm_response.dart';
 
@@ -23,7 +25,8 @@ class HttpProvider implements LLMProvider {
     required String providerName,
     Map<String, String>? extraHeaders,
     http.Client? client,
-    Duration retryBaseDelay = const Duration(milliseconds: 500),
+    Duration retryBaseDelay =
+        const Duration(milliseconds: AppConstants.httpRetryBaseDelayMs),
   })  : _defaultModel = defaultModel,
         _providerName = providerName,
         _extraHeaders = extraHeaders ?? {},
@@ -63,52 +66,53 @@ class HttpProvider implements LLMProvider {
 
     final uri = Uri.parse('$apiBase/chat/completions');
 
-    final client = _client ?? http.Client();
+    // Shared retry policy (429/5xx + exponential backoff); the predicate
+    // adds the provider-specific "200 with empty choices" transient case.
+    final client = RetryingHttpClient(
+      inner: _client,
+      baseDelay: _retryBaseDelay,
+      // LLM generations need more headroom than the default tool budget.
+      timeout: const Duration(seconds: AppConstants.llmRequestTimeoutSeconds),
+      shouldRetry: _hasEmptyChoices,
+    );
     try {
-      // Retry with exponential backoff for transient failures
-      const maxRetries = 2;
-      for (var attempt = 0; attempt <= maxRetries; attempt++) {
-        final response = await client.post(
-          uri,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $apiKey',
-            ..._extraHeaders,
-          },
-          body: jsonEncode(body),
+      final response = await client.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $apiKey',
+          ..._extraHeaders,
+        },
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode != 200) {
+        throw LLMException(
+          'API error ${response.statusCode}',
+          statusCode: response.statusCode,
+          body: response.body,
         );
-
-        if (response.statusCode != 200) {
-          // Retry on 429 (rate limit) or 5xx (server errors)
-          if (attempt < maxRetries &&
-              (response.statusCode == 429 || response.statusCode >= 500)) {
-            await Future.delayed(_retryBaseDelay * (attempt + 1));
-            continue;
-          }
-          throw LLMException(
-            'API error ${response.statusCode}',
-            statusCode: response.statusCode,
-            body: response.body,
-          );
-        }
-
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        try {
-          return _parseResponse(data);
-        } on LLMException {
-          // Retry on empty choices (transient provider issue)
-          if (attempt < maxRetries) {
-            await Future.delayed(_retryBaseDelay * (attempt + 1));
-            continue;
-          }
-          rethrow;
-        }
       }
 
-      // Unreachable, but Dart requires it
-      throw LLMException('Max retries exceeded');
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      // If choices stayed empty after exhausting retries, _parseResponse
+      // throws the same LLMException as before the extraction.
+      return _parseResponse(data);
     } finally {
-      if (_client == null) client.close();
+      client.close();
+    }
+  }
+
+  /// Retry predicate: a 200 response with no `choices` is a transient
+  /// provider issue (observed with OpenRouter) worth re-requesting.
+  static bool _hasEmptyChoices(http.Response response) {
+    if (response.statusCode != 200) return false;
+    try {
+      final data = jsonDecode(response.body);
+      final choices = (data as Map<String, dynamic>)['choices'] as List?;
+      return choices == null || choices.isEmpty;
+    } catch (_) {
+      return false;
     }
   }
 

@@ -6,7 +6,7 @@ import '../../l10n/l10n.dart';
 import '../../shared/constants.dart';
 import '../config/app_config.dart';
 import '../skills/skill_loader.dart';
-import '../tools/proof_document_store.dart';
+import '../tools/proof_editor/proof_document_store.dart';
 import '../tools/tool.dart';
 import 'memory_manager.dart';
 

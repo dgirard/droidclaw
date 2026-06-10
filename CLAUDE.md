@@ -4,7 +4,7 @@
 
 DroidClaw is a personal AI assistant Android app, ported from [PicoClaw](https://github.com/sipeed/picoclaw) (Go). Everything runs on-device: agent loop, LLM API calls, tool execution, session management. No external server.
 
-- **Language**: Dart 3.10 / Flutter 3.38
+- **Language**: Dart 3.11 / Flutter 3.41 (pubspec SDK constraint `^3.10.7`, i.e. Flutter 3.38+)
 - **Platform**: Android only (minSdk 24, targetSdk 34)
 - **Package**: `com.droidclaw.app`
 - **State management**: Riverpod 3.x
@@ -33,11 +33,12 @@ lib/
 │   ├── agent/                   # AgentLoop, ContextBuilder, MemoryManager, ServiceAgentFactory
 │   ├── config/                  # AppConfig, ConfigStorage, CronConfig
 │   ├── knowledge/               # Knowledge Graph (DB, ingestion, hybrid search, algorithms)
+│   ├── net/                     # RetryingHttpClient (shared retry policy), UrlGuard
 │   ├── providers/               # LLM + Embedding abstraction (Anthropic, HTTP, Gemini, factory)
 │   ├── services/                # BackgroundTaskHandler, AudioManagerChannel
 │   ├── session/                 # Session + SessionManager (Hive persistence)
 │   ├── skills/                  # Three-tier loader + installer
-│   └── tools/                   # Tool interface + 28 implementations
+│   └── tools/                   # Tool interface + 31 implementations
 ├── features/                    # Screens and platform features
 │   ├── chat/                    # Chat screen, message bubbles, history
 │   ├── onboarding/              # First-launch setup
@@ -160,7 +161,7 @@ Multi-provider embedding abstraction mirroring the LLM provider pattern:
    ```
 3. Add toggle in `lib/features/settings/tools_config_screen.dart` → `_tools` list
 4. If service isolate compatible (pure HTTP, no Activity/UI): register in `lib/core/agent/service_agent_factory.dart`
-5. If it needs an API key: add getter/setter in `config_storage.dart`, cache in `background_service_provider.dart:_cacheSecretsForService()`, pass through `background_task_handler.dart` → `service_agent_factory.dart`
+5. If it needs an API key: add getter/setter in `config_storage.dart`, add BOTH `AppConstants.secureXxxKeyKey` and `AppConstants.cachedXxxKeyKey`, add a `mirror()` entry in `ServiceSecretCache.refresh()` (`lib/core/config/service_secret_cache.dart`), and read it via `ServiceSecretReader.read(secureKey:, mirrorKey:)` in `background_task_handler.dart` → pass to `service_agent_factory.dart`
 6. If disabled by default: add to `_defaultDisabledTools` in `lib/core/config/app_config.dart`
 7. Update README tools table + availability table
 
@@ -176,7 +177,7 @@ Multi-provider embedding abstraction mirroring the LLM provider pattern:
 - **Service isolate**: `BackgroundTaskHandler` (Telegram polling + cron scheduling), runs on separate FlutterEngine (NOT plain Dart isolate — platform channels work)
 - Service isolate has its own AgentLoop via `ServiceAgentFactory` (autonomous cron execution)
 - Communication: `FlutterForegroundTask` sendDataToMain/sendDataToTask
-- No `FlutterSecureStorage` in service isolate → secrets cached in `SharedPreferences` by main isolate (`_cacheSecretsForService()`)
+- Secrets: read directly from `FlutterSecureStorage` in the service isolate when the startup capability probe succeeds (`ServiceSecretReader.probe()`); otherwise fall back to SharedPreferences mirrors written by `ServiceSecretCache.refresh()` (which only writes mirrors when the probe hasn't succeeded, and wipes them once it has)
 
 ### API Key Pattern (Brave / ORS model)
 
@@ -184,9 +185,9 @@ For tools needing an API key that must work in both isolates:
 
 1. `FlutterSecureStorage` getter/setter in `config_storage.dart`
 2. Config screen saves key → invalidates `toolRegistryProvider`
-3. `AppConstants.cachedXxxKeyKey` for SharedPreferences cache key
-4. `_cacheSecretsForService()` in `background_service_provider.dart` copies to SharedPreferences
-5. `background_task_handler.dart` reads from SharedPreferences, passes to `ServiceAgentFactory`
+3. BOTH `AppConstants.secureXxxKeyKey` (secure storage key) and `AppConstants.cachedXxxKeyKey` (SharedPreferences mirror key)
+4. `mirror()` entry in `ServiceSecretCache.refresh()` (`lib/core/config/service_secret_cache.dart`) — mirrors are written only when the service isolate's secure-storage probe hasn't succeeded, and wiped once it has
+5. `background_task_handler.dart` reads via `ServiceSecretReader.read(secureKey:, mirrorKey:)` (secure storage when `probe()` succeeded, mirror fallback otherwise), passes to `ServiceAgentFactory`
 6. Tool constructor receives `apiKey` parameter
 
 ### Custom MethodChannel (volume_control)
@@ -199,16 +200,17 @@ For tools needing an API key that must work in both isolates:
 
 - **No shell execution** on Android — no exec/shell tools
 - **Summarization**: triggers at 20+ messages OR estimated tokens > 75% of maxTokens, keeps last 4 messages
+- **Sessions**: the Hive `sessions` box stores session JSON (key = sessionKey) AND lightweight metadata sidecars (key = `__meta__:` + sessionKey, `AppConstants.sessionMetaKeyPrefix`) used for lazy history loading; session keys must never start with `__meta__:`
 - **Web scraping**: try `web_scrape` first (lightweight HTTP), fall back to `web_scrape_js` (WebView) for JS-rendered pages. Max 15K chars.
 - **Telegram**: long polling (not webhook) via foreground service with `remoteMessaging|location` types (no 6h limit). Dual-isolate architecture.
 - **API keys**: stored in `FlutterSecureStorage`, never in `SharedPreferences` or config JSON
 - **File tool**: sandboxed to app workspace directory, path validation prevents traversal
-- **Flutter 3.38**: `DropdownButtonFormField` uses `initialValue` (not `value`)
+- **Flutter 3.38+**: `DropdownButtonFormField` uses `initialValue` (not `value`)
 
 ## Conventions
 
 - Manual `fromJson()` / `toJson()` — no code generation (freezed/hive_generator removed)
 - `AppConstants` in `lib/shared/constants.dart` for all magic values
-- `print('[AgentLoop] ...')` for debug logging (visible via `adb logcat`)
+- `AppLogger.instance.debug/info/warning/error(LogSource.xxx, ...)` for logging (`lib/core/services/app_logger.dart`) — `print` only inside the logger sinks, with `// ignore: avoid_print`
 - Config persisted in `SharedPreferences`, secrets in `FlutterSecureStorage`, sessions in Hive
-- All tool names are snake_case: `web_search`, `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`, `get_directions`, `geocode`, `get_transit`, `weather`, `get_datetime`, `knowledge_search`, `knowledge_store`, `kb_query`, `radio`, `dream`
+- All tool names are snake_case: `web_search`, `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`, `get_directions`, `geocode`, `get_transit`, `weather`, `get_datetime`, `knowledge_search`, `knowledge_store`, `kb_query`, `radio`, `proof_editor`, `dream`

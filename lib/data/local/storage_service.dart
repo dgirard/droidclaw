@@ -33,6 +33,9 @@ class StorageService {
 
   Future<bool> remove(String key) => _prefs.remove(key);
 
+  /// Remove every SharedPreferences entry (config, flags, caches).
+  Future<bool> clearPrefs() => _prefs.clear();
+
   /// Store a JSON-serializable object.
   Future<bool> setJson(String key, Map<String, dynamic> json) =>
       _prefs.setString(key, jsonEncode(json));
@@ -52,6 +55,9 @@ class StorageService {
   Future<String?> getSecure(String key) => _secure.read(key: key);
 
   Future<void> deleteSecure(String key) => _secure.delete(key: key);
+
+  /// Delete every secure-storage entry (all API keys, tokens, probe value).
+  Future<void> deleteSecureAll() => _secure.deleteAll();
 
   // --- Workspace directory ---
 

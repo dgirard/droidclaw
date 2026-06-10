@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:meta/meta.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../l10n/l10n.dart';
@@ -13,8 +14,10 @@ import '../../shared/constants.dart';
 import '../../features/telegram/telegram_api.dart';
 import '../session/isolate_persistence/durable_trigger_queue.dart';
 import '../session/isolate_persistence/hive_path_resolver.dart';
+import '../session/session_manager.dart';
 import 'app_logger.dart';
 import 'llm_trace_logger.dart';
+import 'service_secret_reader.dart';
 
 /// Top-level callback for the foreground service isolate.
 /// Must be a top-level function with @pragma to survive tree-shaking.
@@ -51,6 +54,10 @@ class BackgroundTaskHandler extends TaskHandler {
   bool _cronExecuting = false;
   String _locale = 'en';
 
+  // Secret access (capability probe: secure storage when readable in this
+  // engine, SharedPreferences mirrors otherwise). Created in onStart.
+  ServiceSecretReader? _secrets;
+
   // Log purge: every 6 hours (6 * 3600 = 21600 seconds)
   int _purgeCounter = 0;
   static const _purgeIntervalSeconds = 21600;
@@ -69,19 +76,8 @@ class BackgroundTaskHandler extends TaskHandler {
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Receive bot token from init data or stored prefs
-    final token = prefs.getString(AppConstants.telegramBotTokenKey);
-    if (token != null && token.isNotEmpty) {
-      _api = TelegramApi(token: token);
-    }
-
-    // Restore persisted offset
-    _offset = prefs.getInt(AppConstants.telegramBotOffsetKey) ?? 0;
-
-    // Load locale
-    _locale = prefs.getString(AppConstants.cachedLocaleKey) ?? 'en';
-
-    // Initialize logger for service isolate
+    // Initialize logger for service isolate (first, so the capability probe
+    // result below is visible in the persistent log)
     final workspacePath = prefs.getString(AppConstants.cachedWorkspacePathKey);
     if (workspacePath != null) {
       final appDir = HivePathResolver.hiveDirFromWorkspace(workspacePath);
@@ -91,6 +87,40 @@ class BackgroundTaskHandler extends TaskHandler {
       LlmTraceLogger.init(dirPath: appDir, isolateName: 'service');
       await LlmTraceLogger.instance.purge();
     }
+
+    // Capability probe: can this FlutterEngine read FlutterSecureStorage?
+    // On success, secrets come from secure storage and the main isolate
+    // stops mirroring them in cleartext (and wipes existing mirrors).
+    _secrets = ServiceSecretReader(prefs: prefs);
+    final capable = await _secrets!.probe();
+    AppLogger.instance.info(LogSource.service,
+        'Secure-storage capability probe: '
+        '${capable ? 'SUCCESS — reading secrets from FlutterSecureStorage; '
+            'cleartext mirrors no longer needed' : 'FAILED — falling back to '
+            'SharedPreferences secret mirrors'}');
+
+    // Receive bot token from secure storage (when capable) or its
+    // SharedPreferences mirror (written by ServiceSecretCache.refresh on
+    // probe-fail devices).
+    final token = await _secrets!.read(
+      secureKey: AppConstants.telegramBotTokenKey,
+      mirrorKey: AppConstants.cachedTelegramBotTokenKey,
+    );
+    if (token != null && token.isNotEmpty) {
+      _api = TelegramApi(token: token);
+    } else if (prefs.getBool(AppConstants.telegramBotEnabledKey) ?? false) {
+      AppLogger.instance.warning(LogSource.service,
+          'Telegram is enabled but no bot token could be resolved '
+          '(secure storage ${capable ? 'has no token' : 'unreadable'} and no '
+          'SharedPreferences mirror) — Telegram polling is disabled in the '
+          'service isolate. Open the app to refresh the secret cache.');
+    }
+
+    // Restore persisted offset
+    _offset = prefs.getInt(AppConstants.telegramBotOffsetKey) ?? 0;
+
+    // Load locale
+    _locale = prefs.getString(AppConstants.cachedLocaleKey) ?? 'en';
 
     // Load cron definitions
     _loadCronDefinitions(prefs);
@@ -361,9 +391,15 @@ class BackgroundTaskHandler extends TaskHandler {
 
     try {
       await prefs.reload();
-      final apiKey = prefs.getString(AppConstants.cachedApiKeyKey);
+      _secrets ??= ServiceSecretReader(prefs: prefs);
       final providerName = prefs.getString(AppConstants.cachedProviderNameKey);
       final workspacePath = prefs.getString(AppConstants.cachedWorkspacePathKey);
+      final apiKey = providerName == null
+          ? null
+          : await _secrets!.read(
+              secureKey: '${AppConstants.secureApiKeyPrefix}$providerName',
+              mirrorKey: AppConstants.cachedApiKeyKey,
+            );
 
       if (apiKey == null || providerName == null || workspacePath == null) {
         AppLogger.instance.warning(LogSource.service,
@@ -379,24 +415,28 @@ class BackgroundTaskHandler extends TaskHandler {
         return;
       }
 
-      // Derive Hive path via the shared resolver: the service isolate must use
-      // the same directory the main isolate's Hive.initFlutter() uses.
-      final hivePath = HivePathResolver.hiveDirFromWorkspace(workspacePath);
-
       _agentLoop = await ServiceAgentFactory.create(
         prefs: prefs,
         apiKey: apiKey,
         providerName: providerName,
         workspacePath: workspacePath,
-        hivePath: hivePath,
-        braveApiKey: prefs.getString(AppConstants.cachedBraveApiKeyKey),
-        orsApiKey: prefs.getString(AppConstants.cachedOrsApiKeyKey),
-        sncfApiKey: prefs.getString(AppConstants.cachedSncfApiKeyKey),
-        primApiKey: prefs.getString(AppConstants.cachedPrimApiKeyKey),
+        braveApiKey: await _secrets!.read(
+            secureKey: AppConstants.secureBraveApiKeyKey,
+            mirrorKey: AppConstants.cachedBraveApiKeyKey),
+        orsApiKey: await _secrets!.read(
+            secureKey: AppConstants.secureOrsApiKeyKey,
+            mirrorKey: AppConstants.cachedOrsApiKeyKey),
+        sncfApiKey: await _secrets!.read(
+            secureKey: AppConstants.secureSncfApiKeyKey,
+            mirrorKey: AppConstants.cachedSncfApiKeyKey),
+        primApiKey: await _secrets!.read(
+            secureKey: AppConstants.securePrimApiKeyKey,
+            mirrorKey: AppConstants.cachedPrimApiKeyKey),
         locale: prefs.getString(AppConstants.cachedLocaleKey) ?? 'en',
         kbLanguage: prefs.getString(AppConstants.cachedKbLanguageKey),
-        embeddingApiKey:
-            prefs.getString(AppConstants.cachedEmbeddingApiKeyKey),
+        embeddingApiKey: await _secrets!.read(
+            secureKey: AppConstants.secureEmbeddingApiKeyKey,
+            mirrorKey: AppConstants.cachedEmbeddingApiKeyKey),
         embeddingProvider:
             prefs.getString(AppConstants.cachedEmbeddingProviderKey) ?? '',
         embeddingModel:
@@ -454,22 +494,22 @@ class BackgroundTaskHandler extends TaskHandler {
         }
       }
 
-      // Save session BEFORE notifying main isolate (avoids race condition
-      // where main reloads Hive before session is flushed to disk).
-      final session = _agentLoop!.sessions.get(sessionKey);
-      if (session != null) {
-        await _agentLoop!.sessions.save(session);
-        AppLogger.instance.debug(LogSource.cron,
-            'Session saved for "${cron.name}"');
-      }
-
-      // Notify main isolate of completion (for UI update if app is open)
-      FlutterForegroundTask.sendDataToMain({
-        'type': 'cron_completed',
-        'cron_id': cron.id,
-        'cron_name': cron.name,
-        'response_length': responseLength,
-      });
+      // Persist-then-notify: save (write + flush) the session BEFORE the
+      // 'cron_completed' notification — and skip the notification entirely
+      // if the save throws (see [persistSessionThenNotify]).
+      await persistSessionThenNotify(
+        sessions: _agentLoop!.sessions,
+        sessionKey: sessionKey,
+        notification: {
+          'type': 'cron_completed',
+          'cron_id': cron.id,
+          'cron_name': cron.name,
+          'response_length': responseLength,
+        },
+        notify: FlutterForegroundTask.sendDataToMain,
+      );
+      AppLogger.instance.debug(LogSource.cron,
+          'Session saved for "${cron.name}"');
 
       // Update notification
       FlutterForegroundTask.updateService(
@@ -483,6 +523,35 @@ class BackgroundTaskHandler extends TaskHandler {
     } finally {
       _cronExecuting = false;
     }
+  }
+
+  /// Persist-then-notify invariant for the cron-session cross-isolate
+  /// handoff. The session save (an awaited write + fsync) MUST complete
+  /// before the main isolate is notified: if the notification raced ahead of
+  /// the disk flush, the main isolate would re-read the box *before* the
+  /// bytes land and the cron session would be invisible until the next
+  /// reload — a field incident class that is otherwise unreproducible
+  /// locally (see docs/solutions/database-issues/
+  /// session-data-loss-hive-flush-and-destructive-reads.md). If the save
+  /// throws, [notify] is never invoked — the main isolate must never be told
+  /// to reload state that was never written. The same invariant applies to
+  /// the pending-trigger handoff in [_checkCrons].
+  ///
+  /// Static and injectable so the invariant is unit-testable without a
+  /// FlutterForegroundTask harness ([notify] is
+  /// `FlutterForegroundTask.sendDataToMain` in production).
+  @visibleForTesting
+  static Future<void> persistSessionThenNotify({
+    required SessionManager sessions,
+    required String sessionKey,
+    required Map<String, dynamic> notification,
+    required void Function(Map<String, dynamic> data) notify,
+  }) async {
+    final session = sessions.get(sessionKey);
+    if (session != null) {
+      await sessions.save(session);
+    }
+    notify(notification);
   }
 
   // --- Cron scheduling ---
@@ -527,7 +596,11 @@ class BackgroundTaskHandler extends TaskHandler {
           // Execute directly in service isolate (autonomous mode)
           _executeCronLocally(cron, prefs);
         } else {
-          // Fallback: queue for main isolate
+          // Fallback: queue for main isolate. The trigger must be durably
+          // staged in SharedPreferences BEFORE the main isolate is notified
+          // or woken — if the app process dies mid-handoff, the queued
+          // trigger is replayed on next startup (same persist-then-notify
+          // invariant as the cron-session save in _executeCronLocally).
           final triggerData = {
             'type': 'cron_trigger',
             'cron_id': cron.id,
@@ -535,7 +608,7 @@ class BackgroundTaskHandler extends TaskHandler {
             'prompt': cron.prompt,
             'session_strategy': cron.sessionStrategy.name,
           };
-          _addPendingTrigger(prefs, triggerData);
+          await _addPendingTrigger(prefs, triggerData);
           FlutterForegroundTask.sendDataToMain(triggerData);
           FlutterForegroundTask.launchApp();
         }
@@ -569,14 +642,16 @@ class BackgroundTaskHandler extends TaskHandler {
   }
 
   /// Add a trigger to the pending queue in SharedPreferences.
-  void _addPendingTrigger(
-      SharedPreferences prefs, Map<String, dynamic> trigger) {
+  /// The returned future completes when the write has been committed, so
+  /// callers can sequence the cross-isolate notification after it.
+  Future<void> _addPendingTrigger(
+      SharedPreferences prefs, Map<String, dynamic> trigger) async {
     final pending = DurableTriggerQueue.enqueue(
       DurableTriggerQueue.decode(
           prefs.getString(AppConstants.cronPendingTriggersKey)),
       trigger,
     );
-    prefs.setString(AppConstants.cronPendingTriggersKey,
+    await prefs.setString(AppConstants.cronPendingTriggersKey,
         DurableTriggerQueue.encode(pending));
     AppLogger.instance.info(LogSource.cron,
         'Queued pending trigger for "${trigger['cron_name']}" '

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:droidclaw/core/tools/proof_document_store.dart';
+import 'package:droidclaw/core/tools/proof_editor/proof_document_store.dart';
 import 'package:droidclaw/core/tools/proof_editor_tool.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -689,6 +689,76 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  // Legacy /edit route removed server-side (API drift, U18)
+  //
+  // The live server returns 404 "Unsupported agent route" for the removed
+  // POST /api/agent/{slug}/edit route. That 404 means the OPERATION is
+  // unsupported — NOT that the document was deleted — so it must never
+  // reach the generic 404 handling that purges the document token.
+  // -------------------------------------------------------------------------
+  group('Legacy /edit 404 (route removed) must not purge the token', () {
+    late ProofDocumentStore store;
+    late MockClient client;
+
+    setUp(() async {
+      store = await _createTempStore();
+      await _seedDoc(store);
+      client = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path.contains('/state')) {
+          return _jsonResponse({
+            'markdown': '# Doc\n\nBody',
+            'marks': [],
+            'updatedAt': '2026-01-01T00:00:00Z',
+          });
+        }
+        // The removed legacy route.
+        return http.Response(
+            jsonEncode({'error': 'Unsupported agent route'}), 404);
+      });
+    });
+
+    test('edit against 404 /edit fails with alternatives, doc kept',
+        () async {
+      final tool = _buildTool(store, client);
+
+      final result = await tool.execute({
+        'operation': 'edit',
+        'slug': 'test-doc',
+        'search': 'Body',
+        'replace': 'New body',
+      });
+
+      expect(result.isError, isTrue);
+      expect(result.forLLM, contains('rewrite'));
+      expect(result.forLLM, contains('append'));
+      expect(result.forLLM, contains('suggest'));
+      expect(result.forLLM, isNot(contains('deleted')),
+          reason: 'must not claim the document was deleted');
+      expect(await store.getBySlug('test-doc'), isNotNull,
+          reason: 'the token of a healthy document must NOT be purged');
+    });
+
+    test('insert against 404 /edit fails with alternatives, doc kept',
+        () async {
+      final tool = _buildTool(store, client);
+
+      final result = await tool.execute({
+        'operation': 'insert',
+        'slug': 'test-doc',
+        'quote': 'Body',
+        'content': 'inserted',
+      });
+
+      expect(result.isError, isTrue);
+      expect(result.forLLM, contains('rewrite'));
+      expect(result.forLLM, contains('append'));
+      expect(result.forLLM, contains('suggest'));
+      expect(await store.getBySlug('test-doc'), isNotNull,
+          reason: 'the token of a healthy document must NOT be purged');
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Append operation
   // -------------------------------------------------------------------------
   group('Append operation', () {
@@ -699,13 +769,22 @@ void main() {
       await _seedDoc(store);
     });
 
-    test('successful append sends section and baseUpdatedAt', () async {
+    // API drift fix (U18): the legacy POST /edit append op was removed
+    // server-side. Append now reads /state, splices the content at the end
+    // of the target section locally, and applies rewrite.apply via /ops
+    // with the mutationBase baseToken.
+    test('successful append splices section and rewrites with baseToken',
+        () async {
       Map<String, dynamic>? capturedBody;
       final client = MockClient((request) async {
-        if (request.url.path.contains('/state')) {
-          return _jsonResponse({'updatedAt': '2026-01-20T00:00:00Z'});
+        if (request.method == 'GET' && request.url.path.contains('/state')) {
+          return _jsonResponse({
+            'markdown':
+                '# Introduction\n\nIntro text.\n\n# Other\n\nOther text.',
+            'mutationBase': {'token': 'mt1:abc'},
+          });
         }
-        if (request.url.path.contains('/edit')) {
+        if (request.method == 'POST' && request.url.path.contains('/ops')) {
           capturedBody = jsonDecode(request.body) as Map<String, dynamic>;
           return _jsonResponse({'ok': true});
         }
@@ -723,18 +802,28 @@ void main() {
       expect(result.isError, isFalse);
       expect(result.forLLM, contains('section "Introduction"'));
 
-      final ops = capturedBody!['operations'] as List;
-      expect(ops.first['op'], equals('append'));
-      expect(ops.first['section'], equals('Introduction'));
-      expect(capturedBody!['baseUpdatedAt'], equals('2026-01-20T00:00:00Z'));
+      expect(capturedBody!['type'], equals('rewrite.apply'));
+      expect(capturedBody!['baseToken'], equals('mt1:abc'));
+      final content = capturedBody!['content'] as String;
+      // New content lands at the end of Introduction, before # Other.
+      final introIdx = content.indexOf('Intro text.');
+      final newIdx = content.indexOf('New paragraph.');
+      final otherIdx = content.indexOf('# Other');
+      expect(introIdx, lessThan(newIdx));
+      expect(newIdx, lessThan(otherIdx));
     });
 
-    test('append 409 returns section error', () async {
+    test('append with unknown section fails without writing', () async {
+      var wrotePost = false;
       final client = MockClient((request) async {
-        if (request.url.path.contains('/state')) {
-          return _jsonResponse({'updatedAt': 'x'});
+        if (request.method == 'GET' && request.url.path.contains('/state')) {
+          return _jsonResponse({
+            'markdown': '# Introduction\n\nIntro text.',
+            'mutationBase': {'token': 'mt1:abc'},
+          });
         }
-        return http.Response('conflict', 409);
+        wrotePost = true;
+        return _jsonResponse({'ok': true});
       });
       final tool = _buildTool(store, client);
 
@@ -747,6 +836,31 @@ void main() {
 
       expect(result.isError, isTrue);
       expect(result.forLLM, contains('section may not exist'));
+      expect(wrotePost, isFalse,
+          reason: 'no mutation should be sent for a missing section');
+    });
+
+    test('append 409 returns conflict error', () async {
+      final client = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path.contains('/state')) {
+          return _jsonResponse({
+            'markdown': '# Bas\n\nContenu.',
+            'mutationBase': {'token': 'mt1:abc'},
+          });
+        }
+        return http.Response('conflict', 409);
+      });
+      final tool = _buildTool(store, client);
+
+      final result = await tool.execute({
+        'operation': 'append',
+        'slug': 'test-doc',
+        'section': 'Bas',
+        'content': 'stuff',
+      });
+
+      expect(result.isError, isTrue);
+      expect(result.forLLM, contains('Append conflict'));
     });
   });
 
@@ -833,11 +947,14 @@ void main() {
           return _jsonResponse({
             'revision': 42,
             'updatedAt': '2026-03-01T00:00:00Z',
+            'mutationBase': {'token': 'mt1:state-token'},
           });
         }
         if (request.method == 'POST' &&
             request.url.path.contains('/ops')) {
-          expect(request.url.queryParameters['token'], equals('tok_123'));
+          // SECURITY: token must be in the Authorization header, not the URL.
+          expect(request.headers['Authorization'], equals('Bearer tok_123'));
+          expect(request.url.queryParameters.containsKey('token'), isFalse);
           capturedBody = jsonDecode(request.body) as Map<String, dynamic>;
           return _jsonResponse({'ok': true});
         }
@@ -855,7 +972,11 @@ void main() {
       expect(result.forLLM, contains('rewrite applied'));
       expect(capturedBody!['type'], equals('rewrite.apply'));
       expect(capturedBody!['content'], equals('# New content'));
-      expect(capturedBody!['baseRevision'], equals(42));
+      // API drift fix (U18): /ops only accepts baseToken
+      // (state.mutationBase.token) as a precondition — baseRevision is
+      // rejected by the live contract.
+      expect(capturedBody!['baseToken'], equals('mt1:state-token'));
+      expect(capturedBody!.containsKey('baseRevision'), isFalse);
     });
   });
 
@@ -1277,5 +1398,92 @@ void main() {
         'append', 'insert', 'rename', 'snapshot', 'edit_v2', 'list', 'delete',
       ]));
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // Security: auth token never appears in a request URL (U6)
+  // -------------------------------------------------------------------------
+  group('Security — token never in URL', () {
+    late ProofDocumentStore store;
+    late List<Uri> capturedUrls;
+    late MockClient client;
+
+    setUp(() async {
+      store = await _createTempStore();
+      await _seedDoc(store);
+      capturedUrls = [];
+      // Catch-all mock: records every request URL, asserts /ops calls carry
+      // the bearer header, and returns a plausible success payload.
+      client = MockClient((request) async {
+        capturedUrls.add(request.url);
+        if (request.url.path.contains('/ops')) {
+          expect(request.headers['Authorization'], equals('Bearer tok_123'),
+              reason: '/ops must authenticate via Authorization header');
+        }
+        if (request.url.path.contains('/state')) {
+          return _jsonResponse({
+            'markdown': '# Doc\n\nBody',
+            'revision': 1,
+            'updatedAt': '2026-01-01T00:00:00Z',
+            'marks': [],
+          });
+        }
+        if (request.url.path.contains('/snapshot')) {
+          return _jsonResponse({
+            'blocks': [
+              {'ref': 'b1', 'content': '# Doc'},
+            ],
+            'mutationBase': {'token': 'mut_1'},
+          });
+        }
+        return _jsonResponse({'ok': true});
+      });
+    });
+
+    /// Operations that hit the network, with minimal valid arguments.
+    /// "edit" and "insert" are deprecated (the live /edit route is gone) but
+    /// stay in this matrix: the catch-all mock answers 200, so they still
+    /// exercise their full URL/auth-header path without triggering the
+    /// removed-route 404 handling.
+    final networkOperations = <Map<String, dynamic>>[
+      {'operation': 'read', 'slug': 'test-doc'},
+      {'operation': 'edit', 'slug': 'test-doc', 'search': 'Body', 'replace': 'B'},
+      {'operation': 'rewrite', 'slug': 'test-doc', 'content': '# New'},
+      {'operation': 'comment', 'slug': 'test-doc', 'quote': 'Body', 'text': 'hi'},
+      {'operation': 'suggest', 'slug': 'test-doc', 'quote': 'Body', 'content': 'B'},
+      {'operation': 'prepend', 'slug': 'test-doc', 'content': 'Top'},
+      {'operation': 'append', 'slug': 'test-doc', 'section': 'Doc', 'content': 'X'},
+      {'operation': 'insert', 'slug': 'test-doc', 'quote': 'Body', 'content': 'X'},
+      {'operation': 'rename', 'slug': 'test-doc', 'title': 'New Title'},
+      {'operation': 'snapshot', 'slug': 'test-doc'},
+      {
+        'operation': 'edit_v2',
+        'slug': 'test-doc',
+        'base_token': 'mut_1',
+        'ops': [
+          {'op': 'replace_block', 'ref': 'b1', 'markdown': '# Doc2'},
+        ],
+      },
+    ];
+
+    for (final args in networkOperations) {
+      final op = args['operation'] as String;
+      test('$op sends no token in any request URL', () async {
+        final tool = _buildTool(store, client);
+
+        final result = await tool.execute(Map<String, dynamic>.from(args));
+
+        expect(result.isError, isFalse,
+            reason: '$op failed: ${result.forLLM}');
+        expect(capturedUrls, isNotEmpty,
+            reason: '$op should have made at least one HTTP request');
+        for (final url in capturedUrls) {
+          expect(url.queryParameters.containsKey('token'), isFalse,
+              reason: 'token leaked in URL: $url');
+          expect(url.toString(), isNot(contains('tok_123')),
+              reason: 'token value leaked in URL: $url');
+        }
+      });
+    }
   });
 }

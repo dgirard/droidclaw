@@ -2,11 +2,16 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../net/retrying_http_client.dart';
 import 'tool.dart';
 
 /// Geocoding tool: converts a text address into GPS coordinates
 /// using the Nominatim (OpenStreetMap) Search API. Free, no API key required.
 class GeocodeTool extends Tool {
+  final http.Client? _client;
+
+  GeocodeTool({http.Client? client}) : _client = client;
+
   @override
   String get name => 'geocode';
 
@@ -65,10 +70,16 @@ class GeocodeTool extends Tool {
       final uri = Uri.https(
           'nominatim.openstreetmap.org', '/search', queryParams);
 
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'DroidClaw/1.0',
-        'Accept': 'application/json',
-      });
+      final client = RetryingHttpClient(inner: _client);
+      final http.Response response;
+      try {
+        response = await client.get(uri, headers: {
+          'User-Agent': 'DroidClaw/1.0',
+          'Accept': 'application/json',
+        });
+      } finally {
+        client.close();
+      }
 
       if (response.statusCode != 200) {
         return ToolResult.error(

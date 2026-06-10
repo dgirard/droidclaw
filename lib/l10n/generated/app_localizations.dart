@@ -2348,6 +2348,42 @@ abstract class AppLocalizations {
   /// **'Share all conversations as JSON'**
   String get settingsExportSubtitle;
 
+  /// No description provided for @settingsResetAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Erase all data'**
+  String get settingsResetAll;
+
+  /// No description provided for @settingsResetAllSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'API keys, conversations, knowledge, schedules, Telegram'**
+  String get settingsResetAllSubtitle;
+
+  /// No description provided for @resetConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Erase all data?'**
+  String get resetConfirmTitle;
+
+  /// No description provided for @resetConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently deletes all API keys, conversations, the knowledge base, scheduled prompts, Telegram settings, traces and logs. The app returns to initial setup.'**
+  String get resetConfirmBody;
+
+  /// No description provided for @resetConfirmButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Erase everything'**
+  String get resetConfirmButton;
+
+  /// No description provided for @resetDone.
+  ///
+  /// In en, this message translates to:
+  /// **'All data erased'**
+  String get resetDone;
+
   /// No description provided for @exportProgress.
   ///
   /// In en, this message translates to:

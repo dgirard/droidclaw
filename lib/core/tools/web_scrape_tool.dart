@@ -1,6 +1,7 @@
 import 'package:http/http.dart' as http;
 
 import '../../shared/constants.dart';
+import '../net/retrying_http_client.dart';
 import '../net/url_guard.dart';
 import 'html_to_markdown.dart';
 import 'tool.dart';
@@ -10,11 +11,13 @@ import 'tool.dart';
 class WebScrapeTool extends Tool {
   final int maxChars;
   final int maxRedirects;
+  final http.Client? _httpClient;
 
   WebScrapeTool({
     this.maxChars = AppConstants.webScrapeMaxChars,
     this.maxRedirects = AppConstants.webFetchMaxRedirects,
-  });
+    http.Client? client,
+  }) : _httpClient = client;
 
   @override
   String get name => 'web_scrape';
@@ -46,7 +49,7 @@ class WebScrapeTool extends Tool {
     }
 
     try {
-      final client = http.Client();
+      final client = RetryingHttpClient(inner: _httpClient);
       try {
         var currentUrl = url;
         http.Response? response;
@@ -60,10 +63,12 @@ class WebScrapeTool extends Tool {
           } on UrlGuardException catch (e) {
             return ToolResult.error('Blocked URL: ${e.message}');
           }
-          final request = http.Request('GET', Uri.parse(currentUrl))
-            ..followRedirects = false;
-          final streamedResponse = await client.send(request);
-          response = await http.Response.fromStream(streamedResponse);
+          // The request factory rebuilds the request per retry attempt, so
+          // retries re-send the URL validated above; redirects (3xx) are
+          // returned to this loop, never followed by the client.
+          final hopUrl = currentUrl;
+          response = await client.send(() =>
+              http.Request('GET', Uri.parse(hopUrl))..followRedirects = false);
 
           if (response.statusCode >= 300 &&
               response.statusCode < 400 &&

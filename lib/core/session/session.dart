@@ -30,6 +30,23 @@ class Session {
     updated = DateTime.now();
   }
 
+  /// Merge a persisted history into this session: [persisted]'s messages are
+  /// PREPENDED (they happened earlier) and the summaries MERGED (persisted
+  /// first — it covers the older part of the conversation). Used by
+  /// SessionManager rehydration — a session fabricated while its persisted
+  /// record was unreadable (reload window / degraded box) must absorb the
+  /// real history before it is ever saved, so an empty in-memory session can
+  /// never overwrite persisted messages, and a summary acquired mid-reload
+  /// can never silently discard the persisted one.
+  void absorbPersistedHistory(Session persisted) {
+    _messages.insertAll(0, persisted._messages);
+    final merged = [persisted.summary, summary]
+        .whereType<String>()
+        .where((s) => s.isNotEmpty)
+        .join('\n\n');
+    summary = merged.isEmpty ? null : merged;
+  }
+
   /// Get messages for the LLM context.
   /// If a summary exists, prepends it as a system message.
   /// Repairs tool messages missing `name` and strips orphaned tool results
@@ -116,6 +133,10 @@ class Session {
     }
   }
 
+  static bool _isStandalone(Message m) =>
+      (m.role == 'user' || m.role == 'assistant') &&
+      (m.toolCalls == null || m.toolCalls!.isEmpty);
+
   /// Truncate history, keeping only the last [keepLast] messages.
   /// Ensures at least one user or assistant message (without tool_calls)
   /// survives — prevents summarization from emptying the session.
@@ -127,12 +148,20 @@ class Session {
     int effectiveKeep = keepLast;
     while (effectiveKeep < _messages.length) {
       final kept = _messages.sublist(_messages.length - effectiveKeep);
-      if (kept.any((m) =>
-          (m.role == 'user' || m.role == 'assistant') &&
-          (m.toolCalls == null || m.toolCalls!.isEmpty))) {
-        break;
-      }
+      if (kept.any(_isStandalone)) break;
       effectiveKeep++;
+    }
+
+    // Pathological case (todos/006): a history that is ALL tool calls /
+    // tool results has no standalone message anywhere, so the guard loop
+    // above would grow to the full length and truncation would never
+    // happen — unbounded session growth. Fall back to the requested
+    // window: the caller stores a summary of the removed messages, and
+    // getMessages() strips any leading orphaned tool messages from the
+    // view, so the kept window remains a valid LLM sequence.
+    if (effectiveKeep >= _messages.length &&
+        !_messages.any(_isStandalone)) {
+      effectiveKeep = keepLast;
     }
 
     final removed = _messages.sublist(0, _messages.length - effectiveKeep);

@@ -142,19 +142,53 @@ void main() {
       expect(r.usage?.promptTokens, 3);
     });
 
-    test('throws on API error — no retry today (gap U16 will close)', () async {
+    test('retries on 429 then succeeds (U16 parity with HttpProvider)',
+        () async {
       var calls = 0;
       final client = MockClient((_) async {
         calls++;
-        return http.Response('rate limited', 429);
+        if (calls == 1) return http.Response('rate limited', 429);
+        return http.Response(
+          jsonEncode({
+            'content': [
+              {'type': 'text', 'text': 'ok'},
+            ],
+            'stop_reason': 'end_turn',
+          }),
+          200,
+        );
+      });
+
+      final r = await AnthropicProvider(
+        apiKey: 'k',
+        apiBase: 'https://a.test',
+        client: client,
+        retryBaseDelay: Duration.zero,
+      ).chat(messages: const [], model: 'claude');
+
+      expect(r.content, 'ok');
+      expect(calls, 2);
+    });
+
+    test('exhausts retries on persistent 5xx and throws LLMException',
+        () async {
+      var calls = 0;
+      final client = MockClient((_) async {
+        calls++;
+        return http.Response('overloaded', 529);
       });
 
       await expectLater(
-        AnthropicProvider(apiKey: 'k', apiBase: 'https://a.test', client: client)
-            .chat(messages: const [], model: 'claude'),
-        throwsA(isA<LLMException>()),
+        AnthropicProvider(
+          apiKey: 'k',
+          apiBase: 'https://a.test',
+          client: client,
+          retryBaseDelay: Duration.zero,
+        ).chat(messages: const [], model: 'claude'),
+        throwsA(isA<LLMException>()
+            .having((e) => e.statusCode, 'statusCode', 529)),
       );
-      expect(calls, 1); // documents the missing-retry parity gap
+      expect(calls, 3); // initial + 2 retries
     });
   });
 }

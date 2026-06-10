@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../shared/constants.dart';
+import '../net/retrying_http_client.dart';
 import 'http_provider.dart';
 import 'llm_provider.dart';
 import 'llm_response.dart';
@@ -14,14 +15,18 @@ class AnthropicProvider implements LLMProvider {
   final String apiBase;
   final String _defaultModel;
   final http.Client? _client;
+  final Duration _retryBaseDelay;
 
   AnthropicProvider({
     required this.apiKey,
     this.apiBase = AppConstants.anthropicApiBase,
     String defaultModel = 'claude-sonnet-4-20250514',
     http.Client? client,
+    Duration retryBaseDelay =
+        const Duration(milliseconds: AppConstants.httpRetryBaseDelayMs),
   })  : _defaultModel = defaultModel,
-        _client = client;
+        _client = client,
+        _retryBaseDelay = retryBaseDelay;
 
   @override
   String get defaultModel => _defaultModel;
@@ -67,7 +72,14 @@ class AnthropicProvider implements LLMProvider {
     }
 
     final uri = Uri.parse('$apiBase/messages');
-    final client = _client ?? http.Client();
+    // Shared retry policy (U16): 429/5xx with exponential backoff —
+    // parity with HttpProvider, which always retried transient errors.
+    final client = RetryingHttpClient(
+      inner: _client,
+      baseDelay: _retryBaseDelay,
+      // LLM generations need more headroom than the default tool budget.
+      timeout: const Duration(seconds: AppConstants.llmRequestTimeoutSeconds),
+    );
     final http.Response response;
     try {
       response = await client.post(
@@ -80,7 +92,7 @@ class AnthropicProvider implements LLMProvider {
         body: jsonEncode(body),
       );
     } finally {
-      if (_client == null) client.close();
+      client.close();
     }
 
     if (response.statusCode != 200) {

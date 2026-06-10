@@ -1276,6 +1276,26 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsExportSubtitle => 'Alle Unterhaltungen als JSON teilen';
 
   @override
+  String get settingsResetAll => 'Alle Daten löschen';
+
+  @override
+  String get settingsResetAllSubtitle =>
+      'API-Schlüssel, Unterhaltungen, Wissen, Zeitpläne, Telegram';
+
+  @override
+  String get resetConfirmTitle => 'Alle Daten löschen?';
+
+  @override
+  String get resetConfirmBody =>
+      'Löscht dauerhaft alle API-Schlüssel, Unterhaltungen, die Wissensdatenbank, geplante Prompts, Telegram-Einstellungen, Traces und Protokolle. Die App kehrt zur Ersteinrichtung zurück.';
+
+  @override
+  String get resetConfirmButton => 'Alles löschen';
+
+  @override
+  String get resetDone => 'Alle Daten wurden gelöscht';
+
+  @override
   String get exportProgress => 'Exportiere...';
 
   @override

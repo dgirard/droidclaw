@@ -1280,6 +1280,26 @@ class AppLocalizationsEs extends AppLocalizations {
       'Compartir todas las conversaciones en JSON';
 
   @override
+  String get settingsResetAll => 'Borrar todos los datos';
+
+  @override
+  String get settingsResetAllSubtitle =>
+      'Claves API, conversaciones, conocimiento, programaciones, Telegram';
+
+  @override
+  String get resetConfirmTitle => '¿Borrar todos los datos?';
+
+  @override
+  String get resetConfirmBody =>
+      'Elimina permanentemente todas las claves API, las conversaciones, la base de conocimiento, los avisos programados, la configuración de Telegram, las trazas y los registros. La aplicación vuelve a la configuración inicial.';
+
+  @override
+  String get resetConfirmButton => 'Borrar todo';
+
+  @override
+  String get resetDone => 'Todos los datos han sido borrados';
+
+  @override
   String get exportProgress => 'Exportando...';
 
   @override

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/config/log_entry.dart';
 import '../../core/knowledge/algorithms/memory_decay.dart';
 import '../../core/knowledge/models/entity.dart';
+import '../../core/services/app_logger.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 
@@ -82,7 +84,11 @@ class _KnowledgeEntityDetailScreenState
           SnackBar(content: Text(l.kgEntityDeleted)),
         );
         navigator.pop();
-      } catch (_) {}
+      } catch (e) {
+        // Keep the screen open so the user can retry; record the failure.
+        AppLogger.instance.error(
+            LogSource.app, 'Failed to deactivate entity: $e');
+      }
     }
   }
 

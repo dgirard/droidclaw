@@ -364,11 +364,15 @@ class DreamTool extends Tool {
   Future<ToolResult> _cleanup(Map<String, dynamic> args) async {
     final dryRun = args['dry_run'] as bool? ?? false;
 
-    // Build KB snapshot
-    final snapshot = await _service.buildKBSnapshot();
-
-    // Send to LLM for analysis
-    final operations = await _service.proposeCleanup(snapshot);
+    // Build KB snapshot, chunked by entity range so each cleanup prompt
+    // stays within context bounds (U15). One LLM call per chunk; each chunk
+    // is a complete, self-contained entity + relation table. Proposed
+    // operations are aggregated across chunks.
+    final chunks = await _service.buildKBSnapshotChunks();
+    final operations = <CleanupOperation>[];
+    for (final chunk in chunks) {
+      operations.addAll(await _service.proposeCleanup(chunk));
+    }
 
     if (operations.isEmpty) {
       return ToolResult.dual(

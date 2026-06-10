@@ -13,6 +13,7 @@ class GeminiEmbeddingProvider extends BaseCloudEmbeddingProvider {
     required super.apiKey,
     required super.apiBase,
     required super.dimensions,
+    super.client,
   });
 
   @override

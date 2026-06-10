@@ -17,6 +17,9 @@ class TelegramConfigScreen extends ConsumerStatefulWidget {
 }
 
 class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
+  // Hoisted formatter: never allocate DateFormat inside build methods.
+  static final _timeFormat = DateFormat('HH:mm');
+
   final _tokenController = TextEditingController();
   final _allowedUsersController = TextEditingController();
   bool _obscureToken = true;
@@ -265,7 +268,6 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
 
   Widget _buildStatusCard(BuildContext context, TelegramState state, ThemeData theme) {
     final l = AppLocalizations.of(context);
-    final timeFormat = DateFormat('HH:mm');
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -311,7 +313,7 @@ class _TelegramConfigScreenState extends ConsumerState<TelegramConfigScreen> {
                   _StatChip(
                     icon: Icons.access_time,
                     label: l.telegramLastMessage(
-                        timeFormat.format(state.lastMessageTime!)),
+                        _timeFormat.format(state.lastMessageTime!)),
                   ),
               ],
             ),

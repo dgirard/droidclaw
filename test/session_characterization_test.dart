@@ -104,4 +104,57 @@ void main() {
       expect(s.messageCount, lessThan(10));
     });
   });
+
+  group('Session.absorbPersistedHistory (rehydration merge)', () {
+    test('both sides carry a summary: merged with the persisted one FIRST',
+        () {
+      final fabricated = Session(key: 'k', summary: 'own summary');
+      final persisted = Session(key: 'k', summary: 'persisted summary');
+
+      fabricated.absorbPersistedHistory(persisted);
+
+      expect(fabricated.summary, 'persisted summary\n\nown summary',
+          reason: 'the persisted summary covers the OLDER part of the '
+              'conversation and must not be discarded (nor reordered)');
+    });
+
+    test('only the persisted side has a summary: it is adopted', () {
+      final fabricated = Session(key: 'k');
+      final persisted = Session(key: 'k', summary: 'persisted summary');
+
+      fabricated.absorbPersistedHistory(persisted);
+
+      expect(fabricated.summary, 'persisted summary');
+    });
+
+    test('only the fabricated side has a summary: it is kept', () {
+      final fabricated = Session(key: 'k', summary: 'own summary');
+      final persisted = Session(key: 'k');
+
+      fabricated.absorbPersistedHistory(persisted);
+
+      expect(fabricated.summary, 'own summary');
+    });
+
+    test('neither side has a (non-empty) summary: stays null', () {
+      final fabricated = Session(key: 'k', summary: '');
+      final persisted = Session(key: 'k');
+
+      fabricated.absorbPersistedHistory(persisted);
+
+      expect(fabricated.summary, isNull);
+    });
+
+    test('persisted messages are prepended before the fabricated ones', () {
+      final fabricated = Session(key: 'k')
+        ..addMessage(const Message(role: 'user', content: 'mid-reload'));
+      final persisted = Session(key: 'k')
+        ..addMessage(const Message(role: 'assistant', content: 'earlier'));
+
+      fabricated.absorbPersistedHistory(persisted);
+
+      expect(fabricated.messages.map((m) => m.content).toList(),
+          ['earlier', 'mid-reload']);
+    });
+  });
 }

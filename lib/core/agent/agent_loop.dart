@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:meta/meta.dart';
+
 import '../../l10n/l10n.dart';
 import '../../shared/constants.dart';
 import '../config/app_config.dart';
@@ -86,25 +88,64 @@ class AgentLoop {
     if (_needsSummarization(session)) {
       yield const SummarizingEvent();
       await _summarize(session, sessionKey);
-      await sessions.save(session);
+      // No fsync: if this write is lost, the on-disk session still holds the
+      // full pre-summarization history (a superset) — summarization simply
+      // re-runs. The turn-ending save below flushes everything anyway.
+      await sessions.save(session, flush: false);
     }
 
     // Pre-query: inject Knowledge Graph context if available
     String? kgContext;
     if (knowledgeService != null) {
       try {
-        // LLM query expansion: extract search keywords from user message
-        final expandedQuery = await _expandQueryForKG(userMessage);
+        // With an embedder configured, queryRelevant's vector path bridges
+        // the semantic gap directly — no extra LLM round-trip per turn.
+        // Without one, LLM keyword expansion remains the only bridge between
+        // paraphrased questions and stored fact tokens (see docs/solutions/
+        // logic-errors/knowledge-graph-retrieval-fts5-tokenization-and-
+        // semantic-gap.md), so it stays on in that degraded mode.
+        final hasEmbedder = knowledgeService!.hasEmbedder;
+        var kgQuery = hasEmbedder
+            ? userMessage
+            : await _expandQueryForKG(userMessage);
 
-        final results = await knowledgeService!.queryRelevant(
-          expandedQuery,
+        var results = await knowledgeService!.queryRelevant(
+          kgQuery,
           limit: 10,
         );
+
+        // The embedder was supposed to bridge the semantic gap, but the
+        // embed call failed at query time (API down, bad key, ...): the
+        // call above silently degraded to lexical-only on the RAW query —
+        // exactly the documented pre-fix failure. Retry once with LLM
+        // keyword expansion (degraded mode).
+        if (hasEmbedder && knowledgeService!.lastQueryVectorPathFailed) {
+          AppLogger.instance.warning(LogSource.agent,
+              'KG retrieval degraded: query embedding failed, retrying '
+              'pre-query with LLM keyword expansion',
+              sessionKey: sessionKey);
+          // The retry has its own try/catch: if the expansion LLM call (or
+          // the second query) throws, the first query's LEXICAL results must
+          // survive — discarding them would doubly degrade the turn.
+          try {
+            final expandedQuery = await _expandQueryForKG(userMessage);
+            results = await knowledgeService!.queryRelevant(
+              expandedQuery,
+              limit: 10,
+            );
+            kgQuery = expandedQuery;
+          } catch (e) {
+            AppLogger.instance.warning(LogSource.agent,
+                'KG degraded retry failed: $e — keeping the lexical results '
+                'from the first query',
+                sessionKey: sessionKey);
+          }
+        }
         if (results.isNotEmpty) {
           kgContext = formatKnowledgeContext(results);
           AppLogger.instance.debug(LogSource.agent,
               'KG pre-query: ${results.length} results '
-              '(expanded: "${expandedQuery.substring(0, min(100, expandedQuery.length))}...")');
+              '(query: "${kgQuery.substring(0, min(100, kgQuery.length))}")');
         }
       } catch (e) {
         AppLogger.instance.warning(LogSource.agent,
@@ -135,7 +176,7 @@ class AgentLoop {
       // (e.g. Gemini Flash) that tend to follow conversation patterns over
       // system instructions. The tag is on the copy, not the stored session.
       if (resolvedLocale != 'en') {
-        final hint = _languageHint(resolvedLocale);
+        final hint = languageHint(resolvedLocale);
         for (var i = messages.length - 1; i >= 0; i--) {
           if (messages[i].role == 'user') {
             messages[i] = messages[i].copyWith(
@@ -261,8 +302,13 @@ class AgentLoop {
           name: toolCall.name,
         ));
       }
-      // Persist once after all tool results (flush is ~10-50ms on Android)
-      await sessions.save(session);
+      // Persist once after the tool batch, WITHOUT fsync (~10-50ms each on
+      // Android): the awaited Hive put survives a process kill via the OS
+      // page cache; the residual power-loss window is accepted for
+      // reproducible tool results. The turn always ends in a flushed save
+      // (final response / error / max-iterations). See the flush policy on
+      // SessionManager.
+      await sessions.save(session, flush: false);
     }
 
     // Max iterations reached
@@ -272,8 +318,12 @@ class AgentLoop {
 
   /// Expand a user query into search keywords for Knowledge Graph retrieval.
   ///
-  /// Uses a fast LLM call (max_tokens: 50) to bridge the semantic gap between
-  /// natural language questions and stored entity/fact tokens.
+  /// Degraded-mode fallback only: called when no embedding provider is
+  /// configured, so lexical FTS is the sole retrieval signal. Uses a fast
+  /// LLM call (max_tokens: 50) to bridge the semantic gap between natural
+  /// language questions and stored entity/fact tokens. When an embedder is
+  /// available, the vector path in [KnowledgeService.queryRelevant] does
+  /// this without an extra LLM round-trip.
   /// When the KG has a fixed language, translates keywords to that language.
   Future<String> _expandQueryForKG(String userMessage) async {
     try {
@@ -342,9 +392,20 @@ class AgentLoop {
     });
   }
 
-  /// Brief language hint in the target language.
-  /// Appended to the last user message to nudge weaker models.
-  static String _languageHint(String locale) => switch (locale) {
+  /// Brief language hint written IN the target language (Layer 2 of the
+  /// language-enforcement contract; see docs/solutions/runtime-errors/
+  /// gemini-flash-ignores-system-prompt-language-instructions.md).
+  /// Appended to the LLM-bound copy of the last user message only — never
+  /// stored — to nudge weak models that follow history language patterns
+  /// over system-prompt directives.
+  ///
+  /// This is NOT a language-NAME map (that single source is
+  /// [KnowledgeConfig.languageName]); the hint must use target-language
+  /// tokens for priming. Keys mirror the supported-locale set; unknown
+  /// locales fall back to English, consistent with `languageName`.
+  /// Pinned by test/agent/language_compliance_test.dart.
+  @visibleForTesting
+  static String languageHint(String locale) => switch (locale) {
         'fr' => 'Réponds en français',
         'es' => 'Responde en español',
         'de' => 'Antworte auf Deutsch',
@@ -429,9 +490,14 @@ class AgentLoop {
       session.summary = response.content;
     } catch (_) {
       // If summarization fails, just set a basic summary from truncated messages
+      final firstUserContent = messagesToSummarize
+          .firstWhere((m) => m.role == 'user',
+              orElse: () =>
+                  const Message(role: 'user', content: 'various topics'))
+          .content;
       session.summary =
           'Previous conversation (${messagesToSummarize.length} messages) about: '
-          '${messagesToSummarize.firstWhere((m) => m.role == "user", orElse: () => const Message(role: "user", content: "various topics")).content.substring(0, 100)}...';
+          '${firstUserContent.substring(0, min(100, firstUserContent.length))}...';
     }
   }
 }

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SECURITY (U6): pin the app's network trust posture explicitly.
+  - cleartextTrafficPermitted="false": no plain-http traffic. All hardcoded
+    endpoints in lib/ are https (incl. Radio France HLS streams), so no
+    per-domain cleartext exception is needed.
+  - trust-anchors limited to "system": user-installed CAs are NOT trusted,
+    so an on-device user-CA MITM proxy cannot intercept app traffic.
+  Note: this config governs platform networking (WebView for web_scrape_js,
+  ExoPlayer/HttpURLConnection for radio playback, plugins). Dart's own
+  dart:io HttpClient uses BoringSSL with the system trust store and does not
+  consult this file; it already rejects user CAs and this config is the
+  defense-in-depth layer for everything else.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

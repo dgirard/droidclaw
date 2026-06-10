@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../../config/log_entry.dart';
+import '../../services/app_logger.dart';
+
 /// Metadata for a ProofEditor document (slug, token, title, URL).
 class ProofDocument {
   final String slug;
@@ -95,7 +98,8 @@ class ProofDocumentStore {
           .map((e) => ProofDocument.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      print('[ProofDocStore] Failed to parse: $e');
+      AppLogger.instance
+          .warning(LogSource.agent, '[ProofDocStore] Failed to parse: $e');
       return [];
     }
   }

@@ -1,12 +1,17 @@
-import 'dart:convert';
-
 import 'package:http/http.dart' as http;
 
 import '../../l10n/l10n.dart';
-import 'proof_document_store.dart';
+import '../config/log_entry.dart';
+import '../services/app_logger.dart';
+import 'proof_editor/proof_document_store.dart';
+import 'proof_editor/proof_editor_client.dart';
 import 'tool.dart';
 
 /// Collaborative document editor via ProofEditor.ai.
+///
+/// Thin dispatcher: validates parameters, resolves the target document, and
+/// formats [ToolResult]s. All HTTP transport (auth headers, retries, status
+/// branching, conflict handling, token purge) lives in [ProofEditorClient].
 ///
 /// Creates, reads, edits, and comments on shared markdown documents.
 /// Uses per-document share tokens (no global API key). Tokens are stored
@@ -14,20 +19,19 @@ import 'tool.dart';
 class ProofEditorTool extends Tool {
   final ProofDocumentStore store;
   final String locale;
-  final http.Client Function() _clientFactory;
+  final ProofEditorClient _client;
 
-  static const _baseUrl = 'https://www.proofeditor.ai';
-  static const _agentId = 'droidclaw';
-  static const _agentBy = 'ai:droidclaw';
   static final _slugPattern = RegExp(r'^[a-zA-Z0-9_-]+$');
   static const _maxContentLength = 15000;
-  static const _maxRetries = 2;
 
   ProofEditorTool({
     required this.store,
     this.locale = 'en',
     http.Client Function()? httpClientFactory,
-  }) : _clientFactory = (httpClientFactory ?? http.Client.new);
+  }) : _client = ProofEditorClient(
+          store: store,
+          httpClientFactory: httpClientFactory,
+        );
 
   @override
   String get name => 'proof_editor';
@@ -40,6 +44,9 @@ class ProofEditorTool extends Tool {
       'Use "suggest" to propose changes the user can accept/reject. '
       'Use "prepend" to add content at the very top of the document. '
       'Use "append" with a "section" heading to add content under a specific section. '
+      'DEPRECATED: "edit" and "insert" are no longer supported by the server '
+      'and will fail — use "rewrite", "append", "suggest", or '
+      '"snapshot"+"edit_v2" instead. '
       'Documents persist across sessions and are accessible via shareable URLs.';
 
   @override
@@ -64,7 +71,11 @@ class ProofEditorTool extends Tool {
               'list',
               'delete',
             ],
-            'description': 'The operation to perform on a Proof document',
+            'description':
+                'The operation to perform on a Proof document. '
+                    '"edit" and "insert" are DEPRECATED (removed from the '
+                    'live API, they always fail): use "rewrite", "append", '
+                    '"suggest", or "snapshot"+"edit_v2" instead.',
           },
           'slug': {
             'type': 'string',
@@ -83,11 +94,11 @@ class ProofEditorTool extends Tool {
           },
           'search': {
             'type': 'string',
-            'description': 'Text to find in document (for edit)',
+            'description': 'Text to find in document (for deprecated edit)',
           },
           'replace': {
             'type': 'string',
-            'description': 'Replacement text (for edit)',
+            'description': 'Replacement text (for deprecated edit)',
           },
           'quote': {
             'type': 'string',
@@ -155,7 +166,8 @@ class ProofEditorTool extends Tool {
       };
     } catch (e) {
       // SECURITY: Never expose raw exception (may contain tokens in URLs)
-      print('[ProofEditor] Operation "$operation" failed: $e');
+      AppLogger.instance.error(LogSource.agent,
+          '[ProofEditor] Operation "$operation" failed: $e');
       return ToolResult.error(
           'ProofEditor operation failed. Check network connection.');
     }
@@ -177,46 +189,26 @@ class ProofEditorTool extends Tool {
           'create operation requires "content" parameter.');
     }
 
-    final client = _clientFactory();
-    try {
-      final response = await _postJson(
-        client,
-        Uri.parse('$_baseUrl/share/markdown'),
-        body: {'title': title, 'markdown': content},
-      );
+    switch (await _client.createDocument(title: title, markdown: content)) {
+      case ProofFailure(:final message):
+        return ToolResult.error(message);
+      case ProofSuccess(:final value):
+        await store.save(ProofDocument(
+          slug: value.slug,
+          token: value.token,
+          title: title,
+          shareUrl: value.shareUrl,
+          createdAt: DateTime.now(),
+          lastAccessedAt: DateTime.now(),
+        ));
 
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        return ToolResult.error(
-            'Failed to create document (HTTP ${response.statusCode}).');
-      }
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final slug = data['slug'] as String? ?? '';
-      final token = data['accessToken'] as String? ?? '';
-      final shareUrl = data['shareUrl'] as String? ?? '';
-
-      if (slug.isEmpty || token.isEmpty) {
-        return ToolResult.error(
-            'ProofEditor returned incomplete data. Try again.');
-      }
-
-      await store.save(ProofDocument(
-        slug: slug,
-        token: token,
-        title: title,
-        shareUrl: shareUrl,
-        createdAt: DateTime.now(),
-        lastAccessedAt: DateTime.now(),
-      ));
-
-      final l = tr(locale);
-      return ToolResult.dual(
-        forLLM: 'Document created. Slug: $slug, URL: $shareUrl. '
-            'Use slug "$slug" for subsequent operations.',
-        forUser: '${l.proofDocCreated}: $title\n$shareUrl',
-      );
-    } finally {
-      client.close();
+        final l = tr(locale);
+        return ToolResult.dual(
+          forLLM: 'Document created. Slug: ${value.slug}, '
+              'URL: ${value.shareUrl}. '
+              'Use slug "${value.slug}" for subsequent operations.',
+          forUser: '${l.proofDocCreated}: $title\n${value.shareUrl}',
+        );
     }
   }
 
@@ -224,75 +216,58 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = _clientFactory();
-    try {
-      final response = await _getWithRetry(
-        client,
-        Uri.parse('$_baseUrl/api/agent/${doc.slug}/state'),
-        headers: _bearerHeaders(doc.token),
-      );
+    switch (await _client.fetchState(doc)) {
+      case ProofFailure(:final message):
+        return ToolResult.error(message);
+      case ProofSuccess(:final value):
+        await store.updateLastAccessed(doc.slug);
 
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return error;
+        final markdown = value.markdown;
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final markdown = data['markdown'] as String? ?? '';
-      // marks can be a Map (keyed by ID) or a List — handle both
-      final rawMarks = data['marks'];
-      final marksList = rawMarks is List
-          ? rawMarks
-          : rawMarks is Map
-              ? rawMarks.values.toList()
-              : <dynamic>[];
-
-      await store.updateLastAccessed(doc.slug);
-
-      // Build comment summary
-      final commentBuf = StringBuffer();
-      for (final mark in marksList) {
-        if (mark is Map<String, dynamic>) {
-          final type = mark['type'] as String? ?? '';
-          final text = mark['text'] as String? ?? '';
-          final quote = mark['quote'] as String? ?? '';
-          if (type == 'comment' && text.isNotEmpty) {
-            commentBuf.writeln('  Comment on "$quote": $text');
+        // Build comment summary
+        final commentBuf = StringBuffer();
+        for (final mark in value.marks) {
+          if (mark is Map<String, dynamic>) {
+            final type = mark['type'] as String? ?? '';
+            final text = mark['text'] as String? ?? '';
+            final quote = mark['quote'] as String? ?? '';
+            if (type == 'comment' && text.isNotEmpty) {
+              commentBuf.writeln('  Comment on "$quote": $text');
+            }
           }
         }
-      }
 
-      final truncated = markdown.length > _maxContentLength;
-      final displayContent = truncated
-          ? markdown.substring(0, _maxContentLength)
-          : markdown;
+        final truncated = markdown.length > _maxContentLength;
+        final displayContent = truncated
+            ? markdown.substring(0, _maxContentLength)
+            : markdown;
 
-      final llmBuf = StringBuffer();
-      llmBuf.writeln('Document: ${doc.title} (slug: ${doc.slug})');
-      llmBuf.writeln('URL: ${doc.shareUrl}');
-      llmBuf.writeln('---');
-      llmBuf.writeln(displayContent);
-      if (truncated) {
-        llmBuf.writeln(
-            '\n[Truncated: showing $_maxContentLength of ${markdown.length} chars]');
-      }
-      if (commentBuf.isNotEmpty) {
-        llmBuf.writeln('\nComments:');
-        llmBuf.write(commentBuf);
-      }
+        final llmBuf = StringBuffer();
+        llmBuf.writeln('Document: ${doc.title} (slug: ${doc.slug})');
+        llmBuf.writeln('URL: ${doc.shareUrl}');
+        llmBuf.writeln('---');
+        llmBuf.writeln(displayContent);
+        if (truncated) {
+          llmBuf.writeln(
+              '\n[Truncated: showing $_maxContentLength of ${markdown.length} chars]');
+        }
+        if (commentBuf.isNotEmpty) {
+          llmBuf.writeln('\nComments:');
+          llmBuf.write(commentBuf);
+        }
 
-      final l = tr(locale);
-      final preview = markdown.length > 500
-          ? '${markdown.substring(0, 500)}...'
-          : markdown;
-      final truncNote = truncated
-          ? '\n${l.proofDocTruncated(_maxContentLength, markdown.length)}'
-          : '';
+        final l = tr(locale);
+        final preview = markdown.length > 500
+            ? '${markdown.substring(0, 500)}...'
+            : markdown;
+        final truncNote = truncated
+            ? '\n${l.proofDocTruncated(_maxContentLength, markdown.length)}'
+            : '';
 
-      return ToolResult.dual(
-        forLLM: llmBuf.toString().trimRight(),
-        forUser: '$preview$truncNote',
-      );
-    } finally {
-      client.close();
+        return ToolResult.dual(
+          forLLM: llmBuf.toString().trimRight(),
+          forUser: '$preview$truncNote',
+        );
     }
   }
 
@@ -311,55 +286,14 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = _clientFactory();
-    try {
-      final baseUpdatedAt = await _fetchBaseUpdatedAt(client, doc);
-      final body = <String, dynamic>{
-        'by': _agentBy,
-        'operations': [
-          {'op': 'replace', 'search': search, 'content': replace},
-        ],
-      };
-      if (baseUpdatedAt != null) body['baseUpdatedAt'] = baseUpdatedAt;
-
-      final response = await _postJson(
-        client,
-        Uri.parse('$_baseUrl/api/agent/${doc.slug}/edit'),
-        headers: _bearerHeaders(doc.token),
-        body: body,
-      );
-
-      if (response.statusCode == 409) {
-        final errorData = jsonDecode(response.body) as Map<String, dynamic>;
-        final code = errorData['code'] as String? ?? '';
-        if (code == 'ANCHOR_NOT_FOUND') {
-          return ToolResult.error(
-              'Text not found in document. '
-              'Re-read the document to see current content.');
-        }
-        return ToolResult.error(
-            'Edit conflict. Re-read the document and try again.');
-      }
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return error;
-
-      await store.updateLastAccessed(doc.slug);
-
-      final l = tr(locale);
-      final searchPreview =
-          search.length > 60 ? '${search.substring(0, 60)}...' : search;
-      final replacePreview =
-          replace.length > 60 ? '${replace.substring(0, 60)}...' : replace;
-
-      return ToolResult.dual(
-        forLLM: 'Edit applied in document ${doc.slug}: '
-            'replaced "$searchPreview" with "$replacePreview".',
-        forUser: l.proofActionApplied,
-      );
-    } finally {
-      client.close();
-    }
+    return switch (
+        await _client.replaceText(doc, search: search, replace: replace)) {
+      ProofFailure(:final message) => ToolResult.error(message),
+      ProofSuccess() => await _applied(
+          doc,
+          'Edit applied in document ${doc.slug}: '
+          'replaced "${_preview(search)}" with "${_preview(replace)}".'),
+    };
   }
 
   Future<ToolResult> _rewrite(Map<String, dynamic> args) async {
@@ -372,61 +306,11 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = _clientFactory();
-    try {
-      // Fetch revision for optimistic concurrency on the /ops endpoint.
-      final stateResponse = await _getWithRetry(
-        client,
-        Uri.parse('$_baseUrl/api/agent/${doc.slug}/state'),
-        headers: _bearerHeaders(doc.token),
-      );
-      int? revision;
-      String? updatedAt;
-      if (stateResponse.statusCode >= 200 && stateResponse.statusCode < 300) {
-        final stateData =
-            jsonDecode(stateResponse.body) as Map<String, dynamic>;
-        revision = stateData['revision'] as int?;
-        updatedAt = stateData['updatedAt'] as String?;
-      }
-
-      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops')
-          .replace(queryParameters: {'token': doc.token});
-      final rewriteBody = <String, dynamic>{
-        'type': 'rewrite.apply',
-        'by': _agentBy,
-        'content': content,
-      };
-      if (revision != null) {
-        rewriteBody['baseRevision'] = revision;
-      } else if (updatedAt != null) {
-        rewriteBody['baseToken'] = updatedAt;
-      }
-      final response = await _postJson(
-        client,
-        uri,
-        headers: {'X-Agent-Id': _agentId},
-        body: rewriteBody,
-      );
-
-      if (response.statusCode == 409) {
-        return ToolResult.error(
-            'Rewrite conflict — document was modified. '
-            'Re-read the document and try again.');
-      }
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return error;
-
-      await store.updateLastAccessed(doc.slug);
-
-      final l = tr(locale);
-      return ToolResult.dual(
-        forLLM: 'Full rewrite applied to document ${doc.slug}.',
-        forUser: l.proofActionApplied,
-      );
-    } finally {
-      client.close();
-    }
+    return switch (await _client.rewriteDocument(doc, content: content)) {
+      ProofFailure(:final message) => ToolResult.error(message),
+      ProofSuccess() =>
+        await _applied(doc, 'Full rewrite applied to document ${doc.slug}.'),
+    };
   }
 
   Future<ToolResult> _comment(Map<String, dynamic> args) async {
@@ -444,36 +328,11 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = _clientFactory();
-    try {
-      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops')
-          .replace(queryParameters: {'token': doc.token});
-      final response = await _postJson(
-        client,
-        uri,
-        headers: {'X-Agent-Id': _agentId},
-        body: {
-          'type': 'comment.add',
-          'by': _agentBy,
-          'quote': quote,
-          'text': text,
-        },
-      );
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return error;
-
-      await store.updateLastAccessed(doc.slug);
-
-      final l = tr(locale);
-      return ToolResult.dual(
-        forLLM: 'Comment added on "${quote.length > 60 ? '${quote.substring(0, 60)}...' : quote}" '
-            'in document ${doc.slug}.',
-        forUser: l.proofActionApplied,
-      );
-    } finally {
-      client.close();
-    }
+    return switch (await _client.addComment(doc, quote: quote, text: text)) {
+      ProofFailure(:final message) => ToolResult.error(message),
+      ProofSuccess() => await _applied(doc,
+          'Comment added on "${_preview(quote)}" in document ${doc.slug}.'),
+    };
   }
 
   Future<ToolResult> _suggest(Map<String, dynamic> args) async {
@@ -491,43 +350,14 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = _clientFactory();
-    try {
-      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops')
-          .replace(queryParameters: {'token': doc.token});
-      final response = await _postJson(
-        client,
-        uri,
-        headers: {'X-Agent-Id': _agentId},
-        body: {
-          'type': 'suggestion.add',
-          'kind': 'replace',
-          'by': _agentBy,
-          'quote': quote,
-          'content': content,
-        },
-      );
-
-      if (response.statusCode == 409) {
-        return ToolResult.error(
-            'Quoted text not found in document. '
-            'Re-read the document to see current content.');
-      }
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return error;
-
-      await store.updateLastAccessed(doc.slug);
-
-      final l = tr(locale);
-      return ToolResult.dual(
-        forLLM: 'Suggestion added on "${quote.length > 60 ? '${quote.substring(0, 60)}...' : quote}" '
-            'in document ${doc.slug}. User can accept/reject in ProofEditor UI.',
-        forUser: l.proofActionApplied,
-      );
-    } finally {
-      client.close();
-    }
+    return switch (
+        await _client.addSuggestion(doc, quote: quote, content: content)) {
+      ProofFailure(:final message) => ToolResult.error(message),
+      ProofSuccess() => await _applied(
+          doc,
+          'Suggestion added on "${_preview(quote)}" in document ${doc.slug}. '
+          'User can accept/reject in ProofEditor UI.'),
+    };
   }
 
   Future<ToolResult> _prepend(Map<String, dynamic> args) async {
@@ -540,65 +370,11 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = _clientFactory();
-    try {
-      // 1. Read current document content.
-      final stateResponse = await _getWithRetry(
-        client,
-        Uri.parse('$_baseUrl/api/agent/${doc.slug}/state'),
-        headers: _bearerHeaders(doc.token),
-      );
-
-      final stateError = _checkHttpError(stateResponse, doc.slug);
-      if (stateError != null) return stateError;
-
-      final stateData =
-          jsonDecode(stateResponse.body) as Map<String, dynamic>;
-      final currentMarkdown = stateData['markdown'] as String? ?? '';
-      final revision = stateData['revision'] as int?;
-      final updatedAt = stateData['updatedAt'] as String?;
-
-      // 2. Prepend new content and rewrite the whole document.
-      final newMarkdown = '$content\n\n$currentMarkdown';
-
-      final uri = Uri.parse('$_baseUrl/api/agent/${doc.slug}/ops')
-          .replace(queryParameters: {'token': doc.token});
-      final rewriteBody = <String, dynamic>{
-        'type': 'rewrite.apply',
-        'by': _agentBy,
-        'content': newMarkdown,
-      };
-      if (revision != null) {
-        rewriteBody['baseRevision'] = revision;
-      } else if (updatedAt != null) {
-        rewriteBody['baseToken'] = updatedAt;
-      }
-      final response = await _postJson(
-        client,
-        uri,
-        headers: {'X-Agent-Id': _agentId},
-        body: rewriteBody,
-      );
-
-      if (response.statusCode == 409) {
-        return ToolResult.error(
-            'Prepend conflict — document was modified. '
-            'Re-read the document and try again.');
-      }
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return error;
-
-      await store.updateLastAccessed(doc.slug);
-
-      final l = tr(locale);
-      return ToolResult.dual(
-        forLLM: 'Content prepended to document ${doc.slug}.',
-        forUser: l.proofActionApplied,
-      );
-    } finally {
-      client.close();
-    }
+    return switch (await _client.prepend(doc, content: content)) {
+      ProofFailure(:final message) => ToolResult.error(message),
+      ProofSuccess() =>
+        await _applied(doc, 'Content prepended to document ${doc.slug}.'),
+    };
   }
 
   Future<ToolResult> _append(Map<String, dynamic> args) async {
@@ -618,48 +394,12 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = _clientFactory();
-    try {
-      final baseUpdatedAt = await _fetchBaseUpdatedAt(client, doc);
-      final op = <String, dynamic>{
-        'op': 'append',
-        'section': section,
-        'content': content,
-      };
-
-      final body = <String, dynamic>{
-        'by': _agentBy,
-        'operations': [op],
-      };
-      if (baseUpdatedAt != null) body['baseUpdatedAt'] = baseUpdatedAt;
-
-      final response = await _postJson(
-        client,
-        Uri.parse('$_baseUrl/api/agent/${doc.slug}/edit'),
-        headers: _bearerHeaders(doc.token),
-        body: body,
-      );
-
-      if (response.statusCode == 409) {
-        return ToolResult.error(
-            'Append failed — section may not exist. '
-            'Re-read the document to see current sections.');
-      }
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return error;
-
-      await store.updateLastAccessed(doc.slug);
-
-      final l = tr(locale);
-      final target = 'section "$section"';
-      return ToolResult.dual(
-        forLLM: 'Content appended to $target in document ${doc.slug}.',
-        forUser: l.proofActionApplied,
-      );
-    } finally {
-      client.close();
-    }
+    return switch (
+        await _client.appendToSection(doc, section: section, content: content)) {
+      ProofFailure(:final message) => ToolResult.error(message),
+      ProofSuccess() => await _applied(doc,
+          'Content appended to section "$section" in document ${doc.slug}.'),
+    };
   }
 
   Future<ToolResult> _insert(Map<String, dynamic> args) async {
@@ -677,54 +417,12 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = _clientFactory();
-    try {
-      final baseUpdatedAt = await _fetchBaseUpdatedAt(client, doc);
-      final body = <String, dynamic>{
-        'by': _agentBy,
-        'operations': [
-          {
-            'op': 'insert',
-            'target': {'anchor': quote},
-            'content': content,
-          },
-        ],
-      };
-      if (baseUpdatedAt != null) body['baseUpdatedAt'] = baseUpdatedAt;
-
-      final response = await _postJson(
-        client,
-        Uri.parse('$_baseUrl/api/agent/${doc.slug}/edit'),
-        headers: _bearerHeaders(doc.token),
-        body: body,
-      );
-
-      if (response.statusCode == 409) {
-        final errorData = jsonDecode(response.body) as Map<String, dynamic>;
-        final code = errorData['code'] as String? ?? '';
-        if (code == 'ANCHOR_NOT_FOUND') {
-          return ToolResult.error(
-              'Anchor text not found in document. '
-              'Re-read the document to see current content.');
-        }
-        return ToolResult.error(
-            'Insert conflict. Re-read the document and try again.');
-      }
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return error;
-
-      await store.updateLastAccessed(doc.slug);
-
-      final l = tr(locale);
-      return ToolResult.dual(
-        forLLM: 'Content inserted after "${quote.length > 60 ? '${quote.substring(0, 60)}...' : quote}" '
-            'in document ${doc.slug}.',
-        forUser: l.proofActionApplied,
-      );
-    } finally {
-      client.close();
-    }
+    return switch (
+        await _client.insertAfterAnchor(doc, quote: quote, content: content)) {
+      ProofFailure(:final message) => ToolResult.error(message),
+      ProofSuccess() => await _applied(doc,
+          'Content inserted after "${_preview(quote)}" in document ${doc.slug}.'),
+    };
   }
 
   Future<ToolResult> _list() async {
@@ -789,31 +487,21 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = _clientFactory();
-    try {
-      final response = await _putJson(
-        client,
-        Uri.parse('$_baseUrl/api/documents/${doc.slug}/title'),
-        headers: _bearerHeaders(doc.token),
-        body: {'title': title},
-      );
+    switch (await _client.renameDocument(doc, title: title)) {
+      case ProofFailure(:final message):
+        return ToolResult.error(message);
+      case ProofSuccess():
+        // Update local store with new title
+        await store.save(doc.copyWith(
+          title: title,
+          lastAccessedAt: DateTime.now(),
+        ));
 
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return error;
-
-      // Update local store with new title
-      await store.save(doc.copyWith(
-        title: title,
-        lastAccessedAt: DateTime.now(),
-      ));
-
-      final l = tr(locale);
-      return ToolResult.dual(
-        forLLM: 'Document ${doc.slug} renamed to "$title".',
-        forUser: l.proofDocRenamed(title),
-      );
-    } finally {
-      client.close();
+        final l = tr(locale);
+        return ToolResult.dual(
+          forLLM: 'Document ${doc.slug} renamed to "$title".',
+          forUser: l.proofDocRenamed(title),
+        );
     }
   }
 
@@ -821,64 +509,50 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = _clientFactory();
-    try {
-      final response = await _getWithRetry(
-        client,
-        Uri.parse('$_baseUrl/api/agent/${doc.slug}/snapshot'),
-        headers: _bearerHeaders(doc.token),
-      );
+    switch (await _client.fetchSnapshot(doc)) {
+      case ProofFailure(:final message):
+        return ToolResult.error(message);
+      case ProofSuccess(:final value):
+        await store.updateLastAccessed(doc.slug);
 
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return error;
+        // Format blocks with refs
+        final llmBuf = StringBuffer();
+        llmBuf.writeln('Document: "${doc.title}" (slug: ${doc.slug})');
+        llmBuf.writeln('mutationBase: ${value.baseToken}');
+        llmBuf.writeln('---');
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final blocks = data['blocks'] as List? ?? [];
-      final mutationBase = data['mutationBase'] as Map<String, dynamic>? ?? {};
-      final baseToken = mutationBase['token'] as String? ?? '';
-
-      await store.updateLastAccessed(doc.slug);
-
-      // Format blocks with refs
-      final llmBuf = StringBuffer();
-      llmBuf.writeln('Document: "${doc.title}" (slug: ${doc.slug})');
-      llmBuf.writeln('mutationBase: $baseToken');
-      llmBuf.writeln('---');
-
-      var truncated = false;
-      var charCount = 0;
-      for (final block in blocks) {
-        if (block is Map<String, dynamic>) {
-          final ref = block['ref'] as String? ?? '';
-          final content = block['content'] as String? ?? '';
-          final line = '[$ref] $content';
-          charCount += line.length + 1;
-          if (charCount > _maxContentLength) {
-            truncated = true;
-            llmBuf.writeln(
-                '\n[Truncated: showing $_maxContentLength of ~$charCount chars. '
-                '${blocks.length} total blocks.]');
-            break;
+        var truncated = false;
+        var charCount = 0;
+        for (final block in value.blocks) {
+          if (block is Map<String, dynamic>) {
+            final ref = block['ref'] as String? ?? '';
+            final content = block['content'] as String? ?? '';
+            final line = '[$ref] $content';
+            charCount += line.length + 1;
+            if (charCount > _maxContentLength) {
+              truncated = true;
+              llmBuf.writeln(
+                  '\n[Truncated: showing $_maxContentLength of ~$charCount chars. '
+                  '${value.blocks.length} total blocks.]');
+              break;
+            }
+            llmBuf.writeln(line);
           }
-          llmBuf.writeln(line);
         }
-      }
 
-      final l = tr(locale);
-      final preview = llmBuf.toString();
-      final userPreview = preview.length > 500
-          ? '${preview.substring(0, 500)}...'
-          : preview;
-      final truncNote = truncated
-          ? '\n${l.proofDocTruncated(_maxContentLength, charCount)}'
-          : '';
+        final l = tr(locale);
+        final preview = llmBuf.toString();
+        final userPreview = preview.length > 500
+            ? '${preview.substring(0, 500)}...'
+            : preview;
+        final truncNote = truncated
+            ? '\n${l.proofDocTruncated(_maxContentLength, charCount)}'
+            : '';
 
-      return ToolResult.dual(
-        forLLM: llmBuf.toString().trimRight(),
-        forUser: '$userPreview$truncNote',
-      );
-    } finally {
-      client.close();
+        return ToolResult.dual(
+          forLLM: llmBuf.toString().trimRight(),
+          forUser: '$userPreview$truncNote',
+        );
     }
   }
 
@@ -899,61 +573,32 @@ class ProofEditorTool extends Tool {
     final doc = await _resolveDocument(args);
     if (doc == null) return _noDocError(args);
 
-    final client = _clientFactory();
-    try {
-      final response = await _postJson(
-        client,
-        Uri.parse('$_baseUrl/api/agent/${doc.slug}/edit/v2'),
-        headers: {
-          ..._bearerHeaders(doc.token),
-          'Idempotency-Key': _idempotencyKey(),
-        },
-        body: {
-          'baseToken': baseToken,
-          'operations': ops,
-        },
-      );
-
-      if (response.statusCode == 409) {
-        return ToolResult.error(
-            'Document changed since snapshot. '
-            'Use operation "snapshot" to get current state, then retry.');
-      }
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return error;
-
-      await store.updateLastAccessed(doc.slug);
-
-      final l = tr(locale);
-      return ToolResult.dual(
-        forLLM: 'Block-level edits applied to document ${doc.slug} '
-            '(${ops.length} operation(s)).',
-        forUser: l.proofActionApplied,
-      );
-    } finally {
-      client.close();
-    }
+    return switch (
+        await _client.applyEditV2(doc, baseToken: baseToken, ops: ops)) {
+      ProofFailure(:final message) => ToolResult.error(message),
+      ProofSuccess() => await _applied(
+          doc,
+          'Block-level edits applied to document ${doc.slug} '
+          '(${ops.length} operation(s)).'),
+    };
   }
 
   // ---------------------------------------------------------------------------
-  // State helpers
+  // Result formatting helpers
   // ---------------------------------------------------------------------------
 
-  /// Fetch the current document state to get baseUpdatedAt for edit operations.
-  /// Only needed for the /edit endpoint (edit, append, insert).
-  /// The /ops endpoint (rewrite, comment, suggest) handles concurrency differently.
-  Future<String?> _fetchBaseUpdatedAt(
-      http.Client client, ProofDocument doc) async {
-    final response = await _getWithRetry(
-      client,
-      Uri.parse('$_baseUrl/api/agent/${doc.slug}/state'),
-      headers: _bearerHeaders(doc.token),
+  /// Mark the document as accessed and return the standard "applied" dual
+  /// result for a successful mutation.
+  Future<ToolResult> _applied(ProofDocument doc, String forLLM) async {
+    await store.updateLastAccessed(doc.slug);
+    return ToolResult.dual(
+      forLLM: forLLM,
+      forUser: tr(locale).proofActionApplied,
     );
-    if (response.statusCode < 200 || response.statusCode >= 300) return null;
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return data['updatedAt'] as String?;
   }
+
+  String _preview(String text) =>
+      text.length > 60 ? '${text.substring(0, 60)}...' : text;
 
   // ---------------------------------------------------------------------------
   // Document resolution
@@ -1029,107 +674,5 @@ class ProofEditorTool extends Tool {
     return ToolResult.error(
         'No document specified and no recent documents found. '
         'Use operation "create" to create one, or "list" to see known documents.');
-  }
-
-  // ---------------------------------------------------------------------------
-  // HTTP helpers
-  // ---------------------------------------------------------------------------
-
-  Map<String, String> get _baseHeaders => {'X-DroidClaw-App': _agentId};
-
-  Map<String, String> _bearerHeaders(String token) => {
-        ..._baseHeaders,
-        'Authorization': 'Bearer $token',
-        'X-Agent-Id': _agentId,
-      };
-
-  Future<http.Response> _postJson(
-    http.Client client,
-    Uri uri, {
-    Map<String, String>? headers,
-    required Map<String, dynamic> body,
-  }) async {
-    return client.post(
-      uri,
-      headers: {
-        ..._baseHeaders,
-        'Content-Type': 'application/json',
-        ...?headers,
-      },
-      body: jsonEncode(body),
-    );
-  }
-
-  Future<http.Response> _putJson(
-    http.Client client,
-    Uri uri, {
-    Map<String, String>? headers,
-    required Map<String, dynamic> body,
-  }) async {
-    return client.put(
-      uri,
-      headers: {
-        ..._baseHeaders,
-        'Content-Type': 'application/json',
-        ...?headers,
-      },
-      body: jsonEncode(body),
-    );
-  }
-
-  String _idempotencyKey() =>
-      DateTime.now().microsecondsSinceEpoch.toString();
-
-  /// GET with retry on 429/5xx (exponential backoff).
-  Future<http.Response> _getWithRetry(
-    http.Client client,
-    Uri uri, {
-    Map<String, String>? headers,
-  }) async {
-    final mergedHeaders = {..._baseHeaders, ...?headers};
-    for (var attempt = 0; attempt <= _maxRetries; attempt++) {
-      final response = await client.get(uri, headers: mergedHeaders);
-      if (attempt < _maxRetries &&
-          (response.statusCode == 429 || response.statusCode >= 500)) {
-        await Future.delayed(
-            Duration(milliseconds: 500 * (1 << attempt)));
-        continue;
-      }
-      return response;
-    }
-    // Unreachable, but Dart requires a return.
-    return client.get(uri, headers: mergedHeaders);
-  }
-
-  /// Check HTTP response for common errors. Returns null if OK.
-  ToolResult? _checkHttpError(http.Response response, String slug) {
-    if (response.statusCode >= 200 && response.statusCode < 300) return null;
-
-    // Log status code only — response body may contain tokens.
-    print('[ProofEditor] HTTP ${response.statusCode} for slug "$slug"');
-
-    switch (response.statusCode) {
-      case 401:
-      case 403:
-        // Auto-remove stale token
-        store.remove(slug);
-        return ToolResult.error(
-            'Document access denied. The share token may be invalid or expired. '
-            'Ask the user for a new ProofEditor URL.');
-      case 404:
-        store.remove(slug);
-        return ToolResult.error(
-            'Document not found. It may have been deleted.');
-      case 429:
-        return ToolResult.error(
-            'Rate limited by ProofEditor. Try again in a few seconds.');
-      default:
-        if (response.statusCode >= 500) {
-          return ToolResult.error(
-              'ProofEditor service is temporarily unavailable.');
-        }
-        return ToolResult.error(
-            'ProofEditor request failed (HTTP ${response.statusCode}).');
-    }
   }
 }

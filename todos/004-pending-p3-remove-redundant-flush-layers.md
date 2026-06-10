@@ -1,5 +1,5 @@
 ---
-status: pending
+status: resolved
 priority: p3
 issue_id: "004"
 tags: [code-review, simplicity, architecture]
@@ -56,3 +56,17 @@ Keep for now (Option A). Revisit after confirming session loss is fully resolved
 | Date | Action | Learnings |
 |------|--------|-----------|
 | 2026-03-13 | Created from code review | Defense-in-depth acceptable for data-loss bugs |
+
+## Resolution (2026-06-10, U13)
+
+Decision documented (absorbed into U13). The redundancy was resolved in the
+opposite direction: instead of deleting layers 2 and 3, U13 removed the
+genuinely redundant cost — the unconditional fsync inside every intermediate
+`save()`. Under the tiered cadence (`save(flush: false)` for mid-turn tool
+batches and post-summarization saves), the AppLifecycleListener
+(paused/detached) and `ref.onDispose` flushes are no longer belt-and-
+suspenders: they are now load-bearing, covering any unflushed intermediate
+writes when Android backgrounds or tears down the app. All turn-ending
+saves, deletes, and cross-isolate handoff saves still fsync. Full policy
+table lives in the `SessionManager` class docs; flush counts are pinned by
+`test/session/lazy_load_and_flush_policy_test.dart`.

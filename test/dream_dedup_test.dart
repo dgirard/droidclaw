@@ -5,7 +5,9 @@ import 'package:test/test.dart';
 
 import 'package:droidclaw/core/knowledge/algorithms/string_similarity.dart';
 import 'package:droidclaw/core/knowledge/services/entity_resolver.dart';
-import 'package:droidclaw/core/knowledge/services/kb_maintenance_service.dart';
+import 'package:droidclaw/core/knowledge/services/dedup/cleanup_service.dart';
+import 'package:droidclaw/core/knowledge/services/dedup/llm_verifier.dart';
+import 'package:droidclaw/core/knowledge/models/dedup_models.dart';
 
 void main() {
   group('Céline variants deduplication', () {
@@ -368,7 +370,7 @@ void main() {
     ];
 
     test('Table has correct header and row count', () {
-      final table = KbMaintenanceService.buildVerificationTable(candidates);
+      final table = DedupLlmVerifier.buildVerificationTable(candidates);
       final lines = table.trim().split('\n');
 
       // Header + separator + 5 data rows
@@ -382,7 +384,7 @@ void main() {
     });
 
     test('Table contains all entity names', () {
-      final table = KbMaintenanceService.buildVerificationTable(candidates);
+      final table = DedupLlmVerifier.buildVerificationTable(candidates);
       expect(table, contains('Céline Torris'));
       expect(table, contains('Céline Thoris'));
       expect(table, contains('Céline Taurisse'));
@@ -395,7 +397,7 @@ void main() {
     });
 
     test('Table contains aliases and facts', () {
-      final table = KbMaintenanceService.buildVerificationTable(candidates);
+      final table = DedupLlmVerifier.buildVerificationTable(candidates);
       expect(table, contains('Céline T.'));
       expect(table, contains('Léna'));
       expect(table, contains('tel: 06 12 34 56 78'));
@@ -406,28 +408,28 @@ void main() {
     });
 
     test('Table contains all IDs', () {
-      final table = KbMaintenanceService.buildVerificationTable(candidates);
+      final table = DedupLlmVerifier.buildVerificationTable(candidates);
       for (final id in [1, 2, 3, 10, 11, 20, 21, 30, 31]) {
         expect(table, contains('| $id |'));
       }
     });
 
     test('Table rows are numbered sequentially', () {
-      final table = KbMaintenanceService.buildVerificationTable(candidates);
+      final table = DedupLlmVerifier.buildVerificationTable(candidates);
       for (var i = 1; i <= candidates.length; i++) {
         expect(table, contains('| $i |'));
       }
     });
 
     test('Table contains deterministic score percentages', () {
-      final table = KbMaintenanceService.buildVerificationTable(candidates);
+      final table = DedupLlmVerifier.buildVerificationTable(candidates);
       // Lena/Léna Girard has a computed compositeScore
       final lenaScore = (StringSimilarity.combined('Léna Girard', 'Lena') * 100).round();
       expect(table, contains('$lenaScore%'));
     });
 
     test('Table is more compact than JSON equivalent', () {
-      final table = KbMaintenanceService.buildVerificationTable(candidates);
+      final table = DedupLlmVerifier.buildVerificationTable(candidates);
       final json = candidates.map((c) => {
             'id_a': c.idA,
             'name_a': c.nameA,
@@ -447,13 +449,13 @@ void main() {
     });
 
     test('Empty batch produces header-only table', () {
-      final table = KbMaintenanceService.buildVerificationTable([]);
+      final table = DedupLlmVerifier.buildVerificationTable([]);
       final lines = table.trim().split('\n');
       expect(lines.length, equals(2)); // header + separator only
     });
 
     test('Print full table for visual inspection', () {
-      final table = KbMaintenanceService.buildVerificationTable(candidates);
+      final table = DedupLlmVerifier.buildVerificationTable(candidates);
       print('--- Verification Table ---');
       print(table);
       print('--- End ---');
@@ -510,7 +512,7 @@ void main() {
     );
 
     test('Table shows context for LLM to distinguish same vs different entities', () {
-      final table = KbMaintenanceService.buildVerificationTable(
+      final table = DedupLlmVerifier.buildVerificationTable(
         [docteurSame, docteurDiff, veloBicyclette],
       );
       print(table);
@@ -534,7 +536,7 @@ void main() {
       final validIds = {42, 87};
       final llmResponse = '{"pairs":[{"id_a":42,"id_b":87,"score":90,"justification":"Same doctor, alias match + same specialty"}]}';
 
-      final pairs = KbMaintenanceService.parseLlmResponse(
+      final pairs = DedupLlmVerifier.parseLlmResponse(
         llmResponse, batch, validIds,
       );
 
@@ -552,7 +554,7 @@ void main() {
       final validIds = {42, 99};
       final llmResponse = '{"pairs":[{"id_a":42,"id_b":99,"score":25,"justification":"Different people, no shared relations"}]}';
 
-      final pairs = KbMaintenanceService.parseLlmResponse(
+      final pairs = DedupLlmVerifier.parseLlmResponse(
         llmResponse, batch, validIds,
       );
 
@@ -568,7 +570,7 @@ void main() {
       final validIds = {50, 51};
       final llmResponse = '{"pairs":[{"id_a":50,"id_b":51,"score":95,"justification":"Exact synonym, same transport type"}]}';
 
-      final pairs = KbMaintenanceService.parseLlmResponse(
+      final pairs = DedupLlmVerifier.parseLlmResponse(
         llmResponse, batch, validIds,
       );
 
@@ -588,7 +590,7 @@ void main() {
           '{"id_a":50,"id_b":51,"score":95,"justification":"Exact synonym"}'
           ']}';
 
-      final pairs = KbMaintenanceService.parseLlmResponse(
+      final pairs = DedupLlmVerifier.parseLlmResponse(
         llmResponse, batch, validIds,
       );
 
@@ -621,7 +623,7 @@ void main() {
       final validIds = {50, 51};
       final llmResponse = '```json\n{"pairs":[{"id_a":50,"id_b":51,"score":95,"justification":"Synonym"}]}\n```';
 
-      final pairs = KbMaintenanceService.parseLlmResponse(
+      final pairs = DedupLlmVerifier.parseLlmResponse(
         llmResponse, batch, validIds,
       );
 
@@ -635,7 +637,7 @@ void main() {
       // LLM hallucinated IDs 999/888
       final llmResponse = '{"pairs":[{"id_a":999,"id_b":888,"score":90,"justification":"Hallucinated"}]}';
 
-      final pairs = KbMaintenanceService.parseLlmResponse(
+      final pairs = DedupLlmVerifier.parseLlmResponse(
         llmResponse, batch, validIds,
       );
 
@@ -651,7 +653,7 @@ void main() {
       final validIds = {42, 87, 50, 51};
       final llmResponse = 'This is not JSON at all!';
 
-      final pairs = KbMaintenanceService.parseLlmResponse(
+      final pairs = DedupLlmVerifier.parseLlmResponse(
         llmResponse, batch, validIds,
       );
 
@@ -960,7 +962,7 @@ void main() {
     });
 
     test('parseCleanupResponse with confidence values', () {
-      final ops = KbMaintenanceService.parseCleanupResponse('''
+      final ops = KbCleanupService.parseCleanupResponse('''
       {"operations":[
         {"type":"delete","entity_id":34,"confidence":95,"reason":"garbage"},
         {"type":"merge","primary_id":7,"secondary_id":86,"confidence":72,"reason":"duplicates"},
@@ -981,7 +983,7 @@ void main() {
     });
 
     test('parseCleanupResponse clamps out-of-range confidence', () {
-      final ops = KbMaintenanceService.parseCleanupResponse('''
+      final ops = KbCleanupService.parseCleanupResponse('''
       {"operations":[
         {"type":"delete","entity_id":1,"confidence":150,"reason":"too high"},
         {"type":"delete","entity_id":2,"confidence":-10,"reason":"negative"},
@@ -998,7 +1000,7 @@ void main() {
     });
 
     test('parseCleanupResponse with markdown fences', () {
-      final ops = KbMaintenanceService.parseCleanupResponse('''```json
+      final ops = KbCleanupService.parseCleanupResponse('''```json
 {"operations":[{"type":"delete","entity_id":1,"confidence":90,"reason":"test"}]}
 ```''');
 
@@ -1007,7 +1009,7 @@ void main() {
     });
 
     test('parseCleanupResponse with "score" fallback key', () {
-      final ops = KbMaintenanceService.parseCleanupResponse('''
+      final ops = KbCleanupService.parseCleanupResponse('''
       {"operations":[
         {"type":"delete","entity_id":1,"score":88,"reason":"using score key"}
       ]}

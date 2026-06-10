@@ -3,7 +3,7 @@ library;
 
 import 'dart:io';
 
-import 'package:droidclaw/core/tools/proof_document_store.dart';
+import 'package:droidclaw/core/tools/proof_editor/proof_document_store.dart';
 import 'package:droidclaw/core/tools/proof_editor_tool.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;

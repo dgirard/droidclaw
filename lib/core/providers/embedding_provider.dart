@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
+import '../../shared/constants.dart';
+
 /// Result of an embedding request.
 class EmbeddingResult {
   final List<List<double>> embeddings;
@@ -39,13 +41,19 @@ abstract class BaseCloudEmbeddingProvider implements EmbeddingProvider {
   final String apiKey;
   final String apiBase;
   final int _dimensions;
-  final http.Client _client = http.Client();
+  final http.Client _client;
 
+  /// [client] is a test seam (U16): inject a mock instead of relying on
+  /// `http.runWithClient`. The retry loop here intentionally stays local —
+  /// it mirrors, not reuses, `RetryingHttpClient` (timeout + exception-based
+  /// flow differ; see U16 exclusion note in the roadmap plan).
   BaseCloudEmbeddingProvider({
     required this.apiKey,
     required this.apiBase,
     required int dimensions,
-  }) : _dimensions = dimensions;
+    http.Client? client,
+  })  : _dimensions = dimensions,
+        _client = client ?? http.Client();
 
   @override
   int get outputDimensions => _dimensions;
@@ -65,7 +73,7 @@ abstract class BaseCloudEmbeddingProvider implements EmbeddingProvider {
     int? dimensions,
     String? taskType,
   }) async {
-    const maxRetries = 2;
+    const maxRetries = AppConstants.httpMaxRetries;
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         return await callApi(
@@ -76,8 +84,9 @@ abstract class BaseCloudEmbeddingProvider implements EmbeddingProvider {
         );
       } on HttpRetryException {
         if (attempt == maxRetries) rethrow;
-        await Future.delayed(
-            Duration(milliseconds: 500 * pow(2, attempt).toInt()));
+        await Future.delayed(Duration(
+            milliseconds:
+                AppConstants.httpRetryBaseDelayMs * pow(2, attempt).toInt()));
       }
     }
     throw StateError('Unreachable');

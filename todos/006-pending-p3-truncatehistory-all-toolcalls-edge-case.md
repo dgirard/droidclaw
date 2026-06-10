@@ -1,5 +1,5 @@
 ---
-status: pending
+status: resolved
 priority: p3
 issue_id: "006"
 tags: [code-review, data-integrity, edge-case]
@@ -47,3 +47,16 @@ Tool-heavy sessions without any plain user/assistant messages are extremely rare
 | Date | Action | Learnings |
 |------|--------|-----------|
 | 2026-03-13 | Created from code review | Guard loops need upper bounds |
+
+## Resolution (2026-06-10, U13)
+
+Fixed via Option A in `lib/core/session/session.dart`: after the guard loop,
+if no standalone user/assistant message exists anywhere in the history
+(all-tool-calls pathology), `effectiveKeep` falls back to the requested
+`keepLast`, so truncation/summarization always proceeds. When a standalone
+message DOES exist, the original guard behavior is preserved (the window
+grows to retain it) — pinned by the existing characterization test. The
+LLM view stays valid because `getMessages()` strips leading orphaned tool
+messages on a copy. Regression tests:
+`test/session/lazy_load_and_flush_policy_test.dart`
+("truncateHistory all-tool-calls edge case (todos/006)").

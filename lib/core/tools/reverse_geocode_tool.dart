@@ -2,11 +2,16 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../net/retrying_http_client.dart';
 import 'tool.dart';
 
 /// Reverse geocoding tool: converts GPS coordinates to a street address
 /// using the Nominatim (OpenStreetMap) API. Free, no API key required.
 class ReverseGeocodeTool extends Tool {
+  final http.Client? _client;
+
+  ReverseGeocodeTool({http.Client? client}) : _client = client;
+
   @override
   String get name => 'get_address';
 
@@ -48,10 +53,16 @@ class ReverseGeocodeTool extends Tool {
         '?format=jsonv2&lat=$lat&lon=$lon',
       );
 
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'DroidClaw/1.0',
-        'Accept-Language': 'fr',
-      });
+      final client = RetryingHttpClient(inner: _client);
+      final http.Response response;
+      try {
+        response = await client.get(uri, headers: {
+          'User-Agent': 'DroidClaw/1.0',
+          'Accept-Language': 'fr',
+        });
+      } finally {
+        client.close();
+      }
 
       if (response.statusCode != 200) {
         return ToolResult.error(

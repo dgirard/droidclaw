@@ -446,6 +446,12 @@
 
   "settingsExportConversations": "Unterhaltungen exportieren",
   "settingsExportSubtitle": "Alle Unterhaltungen als JSON teilen",
+  "settingsResetAll": "Alle Daten löschen",
+  "settingsResetAllSubtitle": "API-Schlüssel, Unterhaltungen, Wissen, Zeitpläne, Telegram",
+  "resetConfirmTitle": "Alle Daten löschen?",
+  "resetConfirmBody": "Löscht dauerhaft alle API-Schlüssel, Unterhaltungen, die Wissensdatenbank, geplante Prompts, Telegram-Einstellungen, Traces und Protokolle. Die App kehrt zur Ersteinrichtung zurück.",
+  "resetConfirmButton": "Alles löschen",
+  "resetDone": "Alle Daten wurden gelöscht",
   "exportProgress": "Exportiere...",
   "exportSuccess": "{count} Unterhaltungen exportiert",
   "@exportSuccess": { "placeholders": { "count": { "type": "int" } } },
