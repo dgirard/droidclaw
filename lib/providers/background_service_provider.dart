@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/agent/agent_loop.dart';
 import '../core/config/log_entry.dart';
+import '../core/config/service_secret_cache.dart';
 import '../core/services/app_logger.dart';
 import '../core/services/background_task_handler.dart';
 import '../core/session/isolate_persistence/durable_trigger_queue.dart';
@@ -145,81 +146,19 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
     }
   }
 
-  /// Cache API keys and paths in SharedPreferences so the service isolate
-  /// can initialize its own AgentLoop without FlutterSecureStorage.
+  /// Refresh the SharedPreferences cache the service isolate reads at init.
+  /// Secrets are only mirrored when the service isolate's capability probe
+  /// showed it cannot read FlutterSecureStorage directly — see
+  /// [ServiceSecretCache.refresh].
   Future<void> _cacheSecretsForService() async {
     try {
       final storage = ref.read(storageServiceProvider);
-      final configStorage = ref.read(configStorageProvider);
-      final config = ref.read(appConfigProvider);
-      final prefs = ref.read(sharedPreferencesProvider);
-
-      // Cache LLM API key
-      final providerName = config.agent.provider;
-      final apiKey = await configStorage.getApiKey(providerName);
-      if (apiKey != null && apiKey.isNotEmpty) {
-        await prefs.setString(AppConstants.cachedApiKeyKey, apiKey);
-        await prefs.setString(AppConstants.cachedProviderNameKey, providerName);
-      }
-
-      // Cache Brave API key
-      final braveKey = await configStorage.getBraveApiKey();
-      if (braveKey != null && braveKey.isNotEmpty) {
-        await prefs.setString(AppConstants.cachedBraveApiKeyKey, braveKey);
-      }
-
-      // Cache ORS API key
-      final orsKey = await configStorage.getOrsApiKey();
-      if (orsKey != null && orsKey.isNotEmpty) {
-        await prefs.setString(AppConstants.cachedOrsApiKeyKey, orsKey);
-      }
-
-      // Cache SNCF API key
-      final sncfKey = await configStorage.getSncfApiKey();
-      if (sncfKey != null && sncfKey.isNotEmpty) {
-        await prefs.setString(AppConstants.cachedSncfApiKeyKey, sncfKey);
-      }
-
-      // Cache PRIM API key
-      final primKey = await configStorage.getPrimApiKey();
-      if (primKey != null && primKey.isNotEmpty) {
-        await prefs.setString(AppConstants.cachedPrimApiKeyKey, primKey);
-      }
-
-      // Cache workspace path
-      final workspacePath = await storage.workspacePath;
-      await prefs.setString(AppConstants.cachedWorkspacePathKey, workspacePath);
-
-      // Cache resolved locale
-      await prefs.setString(AppConstants.cachedLocaleKey, config.resolvedLocale);
-
-      // Cache Knowledge Graph enabled flag + language
-      await prefs.setBool(
-          AppConstants.cachedKnowledgeEnabledKey, config.knowledge.enabled);
-      final kbLang = config.knowledge.kbLanguage;
-      if (kbLang != null) {
-        await prefs.setString(AppConstants.cachedKbLanguageKey, kbLang);
-      } else {
-        await prefs.remove(AppConstants.cachedKbLanguageKey);
-      }
-
-      // Cache embedding provider config
-      final embeddingKey = await configStorage.getEmbeddingApiKey();
-      if (embeddingKey != null && embeddingKey.isNotEmpty) {
-        await prefs.setString(
-            AppConstants.cachedEmbeddingApiKeyKey, embeddingKey);
-      }
-      await prefs.setString(
-          AppConstants.cachedEmbeddingProviderKey, config.embedding.provider);
-      await prefs.setString(
-          AppConstants.cachedEmbeddingModelKey, config.embedding.model);
-      await prefs.setInt(
-          AppConstants.cachedEmbeddingDimensionsKey, config.embedding.dimensions);
-      await prefs.setString(
-          AppConstants.cachedEmbeddingApiBaseKey, config.embedding.apiBase);
-      await prefs.setBool(
-          AppConstants.cachedEmbeddingUseOwnKeyKey,
-          config.embedding.useOwnApiKey);
+      await ServiceSecretCache.refresh(
+        prefs: ref.read(sharedPreferencesProvider),
+        configStorage: ref.read(configStorageProvider),
+        config: ref.read(appConfigProvider),
+        workspacePath: await storage.workspacePath,
+      );
     } catch (e) {
       // Non-critical — service isolate will fall back to pending queue
       AppLogger.instance.warning(LogSource.service,

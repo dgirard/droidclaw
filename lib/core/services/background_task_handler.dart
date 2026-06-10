@@ -15,6 +15,7 @@ import '../session/isolate_persistence/durable_trigger_queue.dart';
 import '../session/isolate_persistence/hive_path_resolver.dart';
 import 'app_logger.dart';
 import 'llm_trace_logger.dart';
+import 'service_secret_reader.dart';
 
 /// Top-level callback for the foreground service isolate.
 /// Must be a top-level function with @pragma to survive tree-shaking.
@@ -51,6 +52,10 @@ class BackgroundTaskHandler extends TaskHandler {
   bool _cronExecuting = false;
   String _locale = 'en';
 
+  // Secret access (capability probe: secure storage when readable in this
+  // engine, SharedPreferences mirrors otherwise). Created in onStart.
+  ServiceSecretReader? _secrets;
+
   // Log purge: every 6 hours (6 * 3600 = 21600 seconds)
   int _purgeCounter = 0;
   static const _purgeIntervalSeconds = 21600;
@@ -69,19 +74,8 @@ class BackgroundTaskHandler extends TaskHandler {
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Receive bot token from init data or stored prefs
-    final token = prefs.getString(AppConstants.telegramBotTokenKey);
-    if (token != null && token.isNotEmpty) {
-      _api = TelegramApi(token: token);
-    }
-
-    // Restore persisted offset
-    _offset = prefs.getInt(AppConstants.telegramBotOffsetKey) ?? 0;
-
-    // Load locale
-    _locale = prefs.getString(AppConstants.cachedLocaleKey) ?? 'en';
-
-    // Initialize logger for service isolate
+    // Initialize logger for service isolate (first, so the capability probe
+    // result below is visible in the persistent log)
     final workspacePath = prefs.getString(AppConstants.cachedWorkspacePathKey);
     if (workspacePath != null) {
       final appDir = HivePathResolver.hiveDirFromWorkspace(workspacePath);
@@ -91,6 +85,32 @@ class BackgroundTaskHandler extends TaskHandler {
       LlmTraceLogger.init(dirPath: appDir, isolateName: 'service');
       await LlmTraceLogger.instance.purge();
     }
+
+    // Capability probe: can this FlutterEngine read FlutterSecureStorage?
+    // On success, secrets come from secure storage and the main isolate
+    // stops mirroring them in cleartext (and wipes existing mirrors).
+    _secrets = ServiceSecretReader(prefs: prefs);
+    final capable = await _secrets!.probe();
+    AppLogger.instance.info(LogSource.service,
+        'Secure-storage capability probe: '
+        '${capable ? 'SUCCESS — reading secrets from FlutterSecureStorage; '
+            'cleartext mirrors no longer needed' : 'FAILED — falling back to '
+            'SharedPreferences secret mirrors'}');
+
+    // Receive bot token from secure storage (when capable) or stored prefs
+    final token = await _secrets!.read(
+      secureKey: AppConstants.telegramBotTokenKey,
+      mirrorKey: AppConstants.telegramBotTokenKey,
+    );
+    if (token != null && token.isNotEmpty) {
+      _api = TelegramApi(token: token);
+    }
+
+    // Restore persisted offset
+    _offset = prefs.getInt(AppConstants.telegramBotOffsetKey) ?? 0;
+
+    // Load locale
+    _locale = prefs.getString(AppConstants.cachedLocaleKey) ?? 'en';
 
     // Load cron definitions
     _loadCronDefinitions(prefs);
@@ -361,9 +381,15 @@ class BackgroundTaskHandler extends TaskHandler {
 
     try {
       await prefs.reload();
-      final apiKey = prefs.getString(AppConstants.cachedApiKeyKey);
+      _secrets ??= ServiceSecretReader(prefs: prefs);
       final providerName = prefs.getString(AppConstants.cachedProviderNameKey);
       final workspacePath = prefs.getString(AppConstants.cachedWorkspacePathKey);
+      final apiKey = providerName == null
+          ? null
+          : await _secrets!.read(
+              secureKey: '${AppConstants.secureApiKeyPrefix}$providerName',
+              mirrorKey: AppConstants.cachedApiKeyKey,
+            );
 
       if (apiKey == null || providerName == null || workspacePath == null) {
         AppLogger.instance.warning(LogSource.service,
@@ -389,14 +415,23 @@ class BackgroundTaskHandler extends TaskHandler {
         providerName: providerName,
         workspacePath: workspacePath,
         hivePath: hivePath,
-        braveApiKey: prefs.getString(AppConstants.cachedBraveApiKeyKey),
-        orsApiKey: prefs.getString(AppConstants.cachedOrsApiKeyKey),
-        sncfApiKey: prefs.getString(AppConstants.cachedSncfApiKeyKey),
-        primApiKey: prefs.getString(AppConstants.cachedPrimApiKeyKey),
+        braveApiKey: await _secrets!.read(
+            secureKey: AppConstants.secureBraveApiKeyKey,
+            mirrorKey: AppConstants.cachedBraveApiKeyKey),
+        orsApiKey: await _secrets!.read(
+            secureKey: AppConstants.secureOrsApiKeyKey,
+            mirrorKey: AppConstants.cachedOrsApiKeyKey),
+        sncfApiKey: await _secrets!.read(
+            secureKey: AppConstants.secureSncfApiKeyKey,
+            mirrorKey: AppConstants.cachedSncfApiKeyKey),
+        primApiKey: await _secrets!.read(
+            secureKey: AppConstants.securePrimApiKeyKey,
+            mirrorKey: AppConstants.cachedPrimApiKeyKey),
         locale: prefs.getString(AppConstants.cachedLocaleKey) ?? 'en',
         kbLanguage: prefs.getString(AppConstants.cachedKbLanguageKey),
-        embeddingApiKey:
-            prefs.getString(AppConstants.cachedEmbeddingApiKeyKey),
+        embeddingApiKey: await _secrets!.read(
+            secureKey: AppConstants.secureEmbeddingApiKeyKey,
+            mirrorKey: AppConstants.cachedEmbeddingApiKeyKey),
         embeddingProvider:
             prefs.getString(AppConstants.cachedEmbeddingProviderKey) ?? '',
         embeddingModel:

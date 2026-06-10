@@ -446,6 +446,12 @@
 
   "settingsExportConversations": "Export Conversations",
   "settingsExportSubtitle": "Share all conversations as JSON",
+  "settingsResetAll": "Erase all data",
+  "settingsResetAllSubtitle": "API keys, conversations, knowledge, schedules, Telegram",
+  "resetConfirmTitle": "Erase all data?",
+  "resetConfirmBody": "This permanently deletes all API keys, conversations, the knowledge base, scheduled prompts, Telegram settings, traces and logs. The app returns to initial setup.",
+  "resetConfirmButton": "Erase everything",
+  "resetDone": "All data erased",
   "exportProgress": "Exporting...",
   "exportSuccess": "{count} conversations exported",
   "@exportSuccess": { "placeholders": { "count": { "type": "int" } } },

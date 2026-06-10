@@ -446,6 +446,12 @@
 
   "settingsExportConversations": "Exportar conversaciones",
   "settingsExportSubtitle": "Compartir todas las conversaciones en JSON",
+  "settingsResetAll": "Borrar todos los datos",
+  "settingsResetAllSubtitle": "Claves API, conversaciones, conocimiento, programaciones, Telegram",
+  "resetConfirmTitle": "¿Borrar todos los datos?",
+  "resetConfirmBody": "Elimina permanentemente todas las claves API, las conversaciones, la base de conocimiento, los avisos programados, la configuración de Telegram, las trazas y los registros. La aplicación vuelve a la configuración inicial.",
+  "resetConfirmButton": "Borrar todo",
+  "resetDone": "Todos los datos han sido borrados",
   "exportProgress": "Exportando...",
   "exportSuccess": "{count} conversaciones exportadas",
   "@exportSuccess": { "placeholders": { "count": { "type": "int" } } },

@@ -2,12 +2,19 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/knowledge/services/knowledge_service.dart';
+import '../../core/services/app_logger.dart';
+import '../../core/services/data_wiper.dart';
+import '../../core/services/llm_trace_logger.dart';
+import '../../core/session/session_manager.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
+import '../../providers/background_service_provider.dart';
 import '../../providers/telegram_provider.dart';
 import '../../shared/constants.dart';
 
@@ -187,8 +194,102 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text(AppConstants.appName),
             subtitle: const Text('v${AppConstants.appVersion}'),
           ),
+          ListTile(
+            leading: Icon(
+              Icons.delete_forever_outlined,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            title: Text(
+              l.settingsResetAll,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            subtitle: Text(l.settingsResetAllSubtitle),
+            onTap: () => _resetAllData(context, ref),
+          ),
         ],
       ),
+    );
+  }
+}
+
+/// Confirm, then wipe every local data store and return to onboarding.
+Future<void> _resetAllData(BuildContext context, WidgetRef ref) async {
+  final l = AppLocalizations.of(context);
+  final navigator = Navigator.of(context);
+  final messenger = ScaffoldMessenger.of(context);
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(l.resetConfirmTitle),
+      content: Text(l.resetConfirmBody),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: Text(MaterialLocalizations.of(ctx).cancelButtonLabel),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(ctx).colorScheme.error,
+          ),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text(l.resetConfirmButton),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+
+  try {
+    // Stop the foreground service first so the service isolate cannot
+    // re-cache secrets or write sessions/KB data mid-wipe.
+    try {
+      await FlutterForegroundTask.stopService();
+    } catch (_) {}
+
+    final storage = ref.read(storageServiceProvider);
+
+    SessionManager? sessions;
+    try {
+      sessions = await ref.read(sessionManagerProvider.future);
+    } catch (_) {}
+
+    KnowledgeService? knowledge;
+    try {
+      knowledge = await ref.read(knowledgeServiceProvider.future);
+    } catch (_) {}
+
+    final workspacePath = await storage.workspacePath;
+    final wiper = DataWiper(
+      storage: storage,
+      configStorage: ref.read(configStorageProvider),
+      sessions: sessions,
+      knowledge: knowledge,
+      knowledgeDbPath: '$workspacePath/${AppConstants.knowledgeDbFilename}',
+      workspacePath: workspacePath,
+      clearLlmTraces: () => LlmTraceLogger.instance.clearAll(),
+      clearLogs: () => AppLogger.instance.clearAll(),
+    );
+    final failures = await wiper.wipeAll();
+
+    // Rebuild everything downstream from a now-empty config.
+    ref.invalidate(appConfigProvider);
+    ref.invalidate(sessionManagerProvider);
+    ref.invalidate(knowledgeGraphDbProvider);
+    ref.invalidate(telegramProvider);
+    ref.invalidate(backgroundServiceProvider);
+
+    navigator.pushNamedAndRemoveUntil('/onboard', (route) => false);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(failures.isEmpty
+            ? l.resetDone
+            : l.commonFailed(failures.join(', '))),
+      ),
+    );
+  } catch (e) {
+    messenger.showSnackBar(
+      SnackBar(content: Text(l.commonFailed(e.toString()))),
     );
   }
 }

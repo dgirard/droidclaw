@@ -43,9 +43,11 @@ import 'memory_manager.dart';
 /// Creates an AgentLoop from plain Dart types for the foreground service isolate.
 ///
 /// The service isolate runs on a separate FlutterEngine with platform channel
-/// access (via GeneratedPluginRegistrant). SharedPreferences, geolocator, etc.
-/// work. Only FlutterSecureStorage, WebView, and UI-dependent features are
-/// unavailable. All secrets and paths must be pre-resolved and passed in.
+/// access (via GeneratedPluginRegistrant). SharedPreferences, geolocator, and
+/// — where the runtime capability probe in `ServiceSecretReader` succeeds —
+/// FlutterSecureStorage all work; only WebView and UI-dependent features are
+/// unavailable. Secrets are resolved by the caller (secure storage when the
+/// probe passed, SharedPreferences mirrors otherwise) and passed in here.
 class ServiceAgentFactory {
   ServiceAgentFactory._();
 

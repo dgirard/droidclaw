@@ -23,57 +23,106 @@ class ConfigStorage {
     await _storage.setJson(AppConstants.configKey, config.toJson());
   }
 
-  /// Get API key for a provider from secure storage.
-  Future<String?> getApiKey(String providerName) =>
-      _storage.getSecure('api_key_$providerName');
-
-  /// Save API key for a provider to secure storage.
-  Future<void> setApiKey(String providerName, String apiKey) =>
-      _storage.setSecure('api_key_$providerName', apiKey);
-
-  /// Delete API key for a provider. Also clears the cleartext mirror in
-  /// SharedPreferences so a deleted key does not linger for the service
-  /// isolate (re-cached only if the key still exists in secure storage).
-  Future<void> deleteApiKey(String providerName) async {
-    await _storage.deleteSecure('api_key_$providerName');
-    await _storage.remove(AppConstants.cachedApiKeyKey);
+  /// Save a secret to secure storage, or delete it (and its cleartext
+  /// SharedPreferences mirror) when [value] is empty. Putting mirror removal
+  /// here means no call site (config screens, onboarding) can forget it.
+  Future<void> _setOrDeleteSecret(
+      String secureKey, String mirrorKey, String value) async {
+    if (value.trim().isEmpty) {
+      await _deleteSecret(secureKey, mirrorKey);
+    } else {
+      await _storage.setSecure(secureKey, value);
+    }
   }
 
+  /// Delete a secret from secure storage AND its SharedPreferences mirror so
+  /// a deleted key never lingers in cleartext for the service isolate.
+  Future<void> _deleteSecret(String secureKey, String mirrorKey) async {
+    await _storage.deleteSecure(secureKey);
+    await _storage.remove(mirrorKey);
+  }
+
+  /// Get API key for a provider from secure storage.
+  Future<String?> getApiKey(String providerName) =>
+      _storage.getSecure('${AppConstants.secureApiKeyPrefix}$providerName');
+
+  /// Save API key for a provider to secure storage.
+  /// An empty value deletes the key and its cleartext mirror.
+  Future<void> setApiKey(String providerName, String apiKey) =>
+      _setOrDeleteSecret('${AppConstants.secureApiKeyPrefix}$providerName',
+          AppConstants.cachedApiKeyKey, apiKey);
+
+  /// Delete API key for a provider, including its cleartext mirror.
+  Future<void> deleteApiKey(String providerName) => _deleteSecret(
+      '${AppConstants.secureApiKeyPrefix}$providerName',
+      AppConstants.cachedApiKeyKey);
+
   /// Get Brave Search API key from secure storage.
-  Future<String?> getBraveApiKey() => _storage.getSecure('brave_api_key');
+  Future<String?> getBraveApiKey() =>
+      _storage.getSecure(AppConstants.secureBraveApiKeyKey);
 
   /// Save Brave Search API key to secure storage.
-  Future<void> setBraveApiKey(String apiKey) =>
-      _storage.setSecure('brave_api_key', apiKey);
+  /// An empty value deletes the key and its cleartext mirror.
+  Future<void> setBraveApiKey(String apiKey) => _setOrDeleteSecret(
+      AppConstants.secureBraveApiKeyKey,
+      AppConstants.cachedBraveApiKeyKey,
+      apiKey);
 
   /// Get OpenRouteService API key from secure storage.
-  Future<String?> getOrsApiKey() => _storage.getSecure('ors_api_key');
+  Future<String?> getOrsApiKey() =>
+      _storage.getSecure(AppConstants.secureOrsApiKeyKey);
 
   /// Save OpenRouteService API key to secure storage.
-  Future<void> setOrsApiKey(String apiKey) =>
-      _storage.setSecure('ors_api_key', apiKey);
+  /// An empty value deletes the key and its cleartext mirror.
+  Future<void> setOrsApiKey(String apiKey) => _setOrDeleteSecret(
+      AppConstants.secureOrsApiKeyKey,
+      AppConstants.cachedOrsApiKeyKey,
+      apiKey);
 
   /// Get SNCF API key from secure storage.
-  Future<String?> getSncfApiKey() => _storage.getSecure('sncf_api_key');
+  Future<String?> getSncfApiKey() =>
+      _storage.getSecure(AppConstants.secureSncfApiKeyKey);
 
   /// Save SNCF API key to secure storage.
-  Future<void> setSncfApiKey(String apiKey) =>
-      _storage.setSecure('sncf_api_key', apiKey);
+  /// An empty value deletes the key and its cleartext mirror.
+  Future<void> setSncfApiKey(String apiKey) => _setOrDeleteSecret(
+      AppConstants.secureSncfApiKeyKey,
+      AppConstants.cachedSncfApiKeyKey,
+      apiKey);
 
   /// Get PRIM (IDFM) API key from secure storage.
-  Future<String?> getPrimApiKey() => _storage.getSecure('prim_api_key');
+  Future<String?> getPrimApiKey() =>
+      _storage.getSecure(AppConstants.securePrimApiKeyKey);
 
   /// Save PRIM (IDFM) API key to secure storage.
-  Future<void> setPrimApiKey(String apiKey) =>
-      _storage.setSecure('prim_api_key', apiKey);
+  /// An empty value deletes the key and its cleartext mirror.
+  Future<void> setPrimApiKey(String apiKey) => _setOrDeleteSecret(
+      AppConstants.securePrimApiKeyKey,
+      AppConstants.cachedPrimApiKeyKey,
+      apiKey);
 
   /// Get embedding provider API key from secure storage.
   Future<String?> getEmbeddingApiKey() =>
-      _storage.getSecure('embedding_api_key');
+      _storage.getSecure(AppConstants.secureEmbeddingApiKeyKey);
 
   /// Save embedding provider API key to secure storage.
-  Future<void> setEmbeddingApiKey(String apiKey) =>
-      _storage.setSecure('embedding_api_key', apiKey);
+  /// An empty value deletes the key and its cleartext mirror.
+  Future<void> setEmbeddingApiKey(String apiKey) => _setOrDeleteSecret(
+      AppConstants.secureEmbeddingApiKeyKey,
+      AppConstants.cachedEmbeddingApiKeyKey,
+      apiKey);
+
+  /// Write the capability-probe value to secure storage. The service isolate
+  /// reads it back to decide whether it can use secure storage directly
+  /// instead of the cleartext SharedPreferences mirrors.
+  Future<void> writeSecureStorageProbe() => _storage.setSecure(
+      AppConstants.secureStorageProbeKey, AppConstants.secureStorageProbeValue);
+
+  /// Whether the service isolate proved (via the probe) that it can read
+  /// FlutterSecureStorage directly. When true, no cleartext secret mirrors
+  /// are written.
+  bool get serviceSecureStorageCapable =>
+      _storage.getBool(AppConstants.serviceSecureStorageCapableKey) ?? false;
 
   /// Check if onboarding has been completed.
   bool get isOnboardingComplete =>

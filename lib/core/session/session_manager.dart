@@ -99,6 +99,13 @@ class SessionManager {
     await _box?.flush();
   }
 
+  /// Delete every session (cache + Hive) and force sync to disk.
+  Future<void> deleteAllSessions() async {
+    _cache.clear();
+    await _box?.clear();
+    await _box?.flush();
+  }
+
   /// Force sync all pending Hive writes to disk.
   Future<void> flush() async {
     await _box?.flush();

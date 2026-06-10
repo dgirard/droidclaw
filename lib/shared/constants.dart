@@ -76,6 +76,26 @@ class AppConstants {
   static const String cachedKnowledgeEnabledKey = 'cached_knowledge_enabled';
   static const String cachedKbLanguageKey = 'cached_kb_language';
 
+  // FlutterSecureStorage key names (Keystore-backed store, main isolate —
+  // and the service isolate too on devices where the capability probe passes).
+  static const String secureApiKeyPrefix = 'api_key_';
+  static const String secureBraveApiKeyKey = 'brave_api_key';
+  static const String secureOrsApiKeyKey = 'ors_api_key';
+  static const String secureSncfApiKeyKey = 'sncf_api_key';
+  static const String securePrimApiKeyKey = 'prim_api_key';
+  static const String secureEmbeddingApiKeyKey = 'embedding_api_key';
+
+  // Capability probe: the main isolate writes a known value to secure storage;
+  // the service isolate tries to read it back. On success it reads secrets
+  // directly from secure storage and the cleartext mirrors are wiped.
+  static const String secureStorageProbeKey = 'secure_storage_probe';
+  static const String secureStorageProbeValue = 'probe_ok_v1';
+
+  /// Non-secret flag written by the service isolate after its probe so the
+  /// main isolate knows whether cleartext mirrors are still needed.
+  static const String serviceSecureStorageCapableKey =
+      'service_secure_storage_capable';
+
   // Cached secrets for service isolate (SharedPreferences mirror of SecureStorage)
   static const String cachedApiKeyKey = 'cached_api_key';
   static const String cachedProviderNameKey = 'cached_provider_name';
