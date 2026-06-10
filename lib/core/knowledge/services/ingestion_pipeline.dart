@@ -1,11 +1,10 @@
-import 'dart:typed_data';
-
 import 'package:drift/drift.dart';
 
 import '../../config/log_entry.dart';
 import '../../providers/embedding_provider.dart';
 import '../../providers/llm_response.dart';
 import '../../services/app_logger.dart';
+import '../algorithms/embedding_codec.dart';
 import '../database/knowledge_graph_db.dart';
 import 'entity_extractor.dart';
 import 'entity_resolver.dart';
@@ -157,8 +156,7 @@ class IngestionPipeline {
         final entityId = entityIds[entities[i].name.toLowerCase()];
         if (entityId == null || i >= result.embeddings.length) continue;
 
-        final float32 = Float32List.fromList(result.embeddings[i]);
-        final blob = float32.buffer.asUint8List();
+        final blob = EmbeddingCodec.encode(result.embeddings[i]);
         await db.updateEntityEmbedding(entityId, blob);
       }
 

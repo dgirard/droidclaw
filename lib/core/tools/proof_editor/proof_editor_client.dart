@@ -125,69 +125,61 @@ class ProofEditorClient {
   Future<ProofResult<ProofCreatedDocument>> createDocument({
     required String title,
     required String markdown,
-  }) async {
-    final client = _clientFactory();
-    try {
-      final response = await _postJson(
-        client,
-        Uri.parse('$baseUrl/share/markdown'),
-        body: {'title': title, 'markdown': markdown},
-      );
+  }) =>
+      _withClient((client) async {
+        final response = await _postJson(
+          client,
+          Uri.parse('$baseUrl/share/markdown'),
+          body: {'title': title, 'markdown': markdown},
+        );
 
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        return ProofFailure(
-            'Failed to create document (HTTP ${response.statusCode}).');
-      }
+        if (response.statusCode != 200 && response.statusCode != 201) {
+          return ProofFailure(
+              'Failed to create document (HTTP ${response.statusCode}).');
+        }
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final slug = data['slug'] as String? ?? '';
-      final token = data['accessToken'] as String? ?? '';
-      final shareUrl = data['shareUrl'] as String? ?? '';
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final slug = data['slug'] as String? ?? '';
+        final token = data['accessToken'] as String? ?? '';
+        final shareUrl = data['shareUrl'] as String? ?? '';
 
-      if (slug.isEmpty || token.isEmpty) {
-        return const ProofFailure(
-            'ProofEditor returned incomplete data. Try again.');
-      }
+        if (slug.isEmpty || token.isEmpty) {
+          return const ProofFailure(
+              'ProofEditor returned incomplete data. Try again.');
+        }
 
-      return ProofSuccess(ProofCreatedDocument(
-        slug: slug,
-        token: token,
-        shareUrl: shareUrl,
-      ));
-    } finally {
-      client.close();
-    }
-  }
+        return ProofSuccess(ProofCreatedDocument(
+          slug: slug,
+          token: token,
+          shareUrl: shareUrl,
+        ));
+      });
 
   /// `GET /api/agent/{slug}/state` — current markdown + marks.
-  Future<ProofResult<ProofDocumentState>> fetchState(ProofDocument doc) async {
-    final client = _clientFactory();
-    try {
-      final response = await _getWithRetry(
-        client,
-        _stateUri(doc.slug),
-        headers: _bearerHeaders(doc.token),
-      );
+  Future<ProofResult<ProofDocumentState>> fetchState(ProofDocument doc) =>
+      _withClient((client) async {
+        final response = await _getWithRetry(
+          client,
+          _stateUri(doc.slug),
+          headers: _bearerHeaders(doc.token),
+        );
 
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return ProofFailure(error);
+        final error = _checkHttpError(response, doc.slug);
+        if (error != null) return ProofFailure(error);
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final markdown = data['markdown'] as String? ?? '';
-      // marks can be a Map (keyed by ID) or a List — handle both.
-      final rawMarks = data['marks'];
-      final marks = rawMarks is List
-          ? rawMarks
-          : rawMarks is Map
-              ? rawMarks.values.toList()
-              : <dynamic>[];
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final markdown = data['markdown'] as String? ?? '';
+        // marks can be a Map (keyed by ID) or a List — handle both.
+        final rawMarks = data['marks'];
+        final marks = rawMarks is List
+            ? rawMarks
+            : rawMarks is Map
+                ? rawMarks.values.toList()
+                : <dynamic>[];
 
-      return ProofSuccess(
-          ProofDocumentState(markdown: markdown, marks: marks));
-    } finally {
-      client.close();
-    }
-  }
+        return ProofSuccess(
+            ProofDocumentState(markdown: markdown, marks: marks));
+      });
 
   /// `POST /api/agent/{slug}/edit` — search/replace ("edit" operation).
   ///
@@ -198,122 +190,40 @@ class ProofEditorClient {
     ProofDocument doc, {
     required String search,
     required String replace,
-  }) async {
-    final client = _clientFactory();
-    try {
-      final baseUpdatedAt = await _fetchBaseUpdatedAt(client, doc);
-      final body = <String, dynamic>{
-        'by': agentBy,
-        'operations': [
-          {'op': 'replace', 'search': search, 'content': replace},
-        ],
-      };
-      if (baseUpdatedAt != null) body['baseUpdatedAt'] = baseUpdatedAt;
-
-      final response = await _postJson(
-        client,
-        _editUri(doc.slug),
-        headers: _bearerHeaders(doc.token),
-        body: body,
+  }) =>
+      _legacyEdit(
+        doc,
+        operation: {'op': 'replace', 'search': search, 'content': replace},
+        anchorNotFoundMessage: 'Text not found in document. '
+            'Re-read the document to see current content.',
+        conflictMessage: 'Edit conflict. Re-read the document and try again.',
       );
-
-      if (response.statusCode == 409) {
-        final errorData = jsonDecode(response.body) as Map<String, dynamic>;
-        final code = errorData['code'] as String? ?? '';
-        if (code == 'ANCHOR_NOT_FOUND') {
-          return const ProofFailure(
-              'Text not found in document. '
-              'Re-read the document to see current content.');
-        }
-        return const ProofFailure(
-            'Edit conflict. Re-read the document and try again.');
-      }
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return ProofFailure(error);
-      return const ProofSuccess(null);
-    } finally {
-      client.close();
-    }
-  }
 
   /// `POST /api/agent/{slug}/ops` `rewrite.apply` — full document rewrite
   /// with optimistic concurrency (`baseToken` from a `/state` fetch).
   Future<ProofResult<void>> rewriteDocument(
     ProofDocument doc, {
     required String content,
-  }) async {
-    final client = _clientFactory();
-    try {
-      // Fetch mutationBase token for optimistic concurrency on /ops.
-      // A failed state fetch is tolerated: proceed without a precondition.
-      final stateResponse = await _getWithRetry(
-        client,
-        _stateUri(doc.slug),
-        headers: _bearerHeaders(doc.token),
+  }) =>
+      _rewriteTransformed(
+        doc,
+        (_) => content,
+        conflictVerb: 'Rewrite',
+        // A failed state fetch is tolerated: proceed without a precondition.
+        tolerateStateFailure: true,
       );
-      String? baseToken;
-      if (stateResponse.statusCode >= 200 && stateResponse.statusCode < 300) {
-        final stateData =
-            jsonDecode(stateResponse.body) as Map<String, dynamic>;
-        baseToken = _mutationBaseToken(stateData);
-      }
-
-      final response = await _applyRewrite(client, doc, content, baseToken);
-      if (response.statusCode == 409) {
-        return const ProofFailure(
-            'Rewrite conflict — document was modified. '
-            'Re-read the document and try again.');
-      }
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return ProofFailure(error);
-      return const ProofSuccess(null);
-    } finally {
-      client.close();
-    }
-  }
 
   /// Prepend content at the very top: read `/state`, then `rewrite.apply`
   /// with the new content first, carrying the `baseToken` precondition.
   Future<ProofResult<void>> prepend(
     ProofDocument doc, {
     required String content,
-  }) async {
-    final client = _clientFactory();
-    try {
-      // 1. Read current document content (errors are surfaced).
-      final stateResponse = await _getWithRetry(
-        client,
-        _stateUri(doc.slug),
-        headers: _bearerHeaders(doc.token),
+  }) =>
+      _rewriteTransformed(
+        doc,
+        (current) => '$content\n\n$current',
+        conflictVerb: 'Prepend',
       );
-
-      final stateError = _checkHttpError(stateResponse, doc.slug);
-      if (stateError != null) return ProofFailure(stateError);
-
-      final stateData =
-          jsonDecode(stateResponse.body) as Map<String, dynamic>;
-      final currentMarkdown = stateData['markdown'] as String? ?? '';
-      final baseToken = _mutationBaseToken(stateData);
-
-      // 2. Prepend new content and rewrite the whole document.
-      final newMarkdown = '$content\n\n$currentMarkdown';
-
-      final response = await _applyRewrite(client, doc, newMarkdown, baseToken);
-      if (response.statusCode == 409) {
-        return const ProofFailure(
-            'Prepend conflict — document was modified. '
-            'Re-read the document and try again.');
-      }
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return ProofFailure(error);
-      return const ProofSuccess(null);
-    } finally {
-      client.close();
-    }
-  }
 
   /// Append content at the end of the section titled [section]: read
   /// `/state`, splice locally, then `rewrite.apply` with the `baseToken`
@@ -322,48 +232,14 @@ class ProofEditorClient {
     ProofDocument doc, {
     required String section,
     required String content,
-  }) async {
-    final client = _clientFactory();
-    try {
-      // 1. Read current document content (errors are surfaced).
-      final stateResponse = await _getWithRetry(
-        client,
-        _stateUri(doc.slug),
-        headers: _bearerHeaders(doc.token),
+  }) =>
+      _rewriteTransformed(
+        doc,
+        (current) => spliceIntoSection(current, section, content),
+        conflictVerb: 'Append',
+        transformFailureMessage: 'Append failed — section may not exist. '
+            'Re-read the document to see current sections.',
       );
-
-      final stateError = _checkHttpError(stateResponse, doc.slug);
-      if (stateError != null) return ProofFailure(stateError);
-
-      final stateData =
-          jsonDecode(stateResponse.body) as Map<String, dynamic>;
-      final currentMarkdown = stateData['markdown'] as String? ?? '';
-      final baseToken = _mutationBaseToken(stateData);
-
-      // 2. Splice the new content at the end of the target section.
-      final newMarkdown =
-          spliceIntoSection(currentMarkdown, section, content);
-      if (newMarkdown == null) {
-        return const ProofFailure(
-            'Append failed — section may not exist. '
-            'Re-read the document to see current sections.');
-      }
-
-      // 3. Rewrite the whole document.
-      final response = await _applyRewrite(client, doc, newMarkdown, baseToken);
-      if (response.statusCode == 409) {
-        return const ProofFailure(
-            'Append conflict — document was modified. '
-            'Re-read the document and try again.');
-      }
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return ProofFailure(error);
-      return const ProofSuccess(null);
-    } finally {
-      client.close();
-    }
-  }
 
   /// `POST /api/agent/{slug}/edit` — insert content after an anchor quote.
   ///
@@ -373,160 +249,116 @@ class ProofEditorClient {
     ProofDocument doc, {
     required String quote,
     required String content,
-  }) async {
-    final client = _clientFactory();
-    try {
-      final baseUpdatedAt = await _fetchBaseUpdatedAt(client, doc);
-      final body = <String, dynamic>{
-        'by': agentBy,
-        'operations': [
-          {
-            'op': 'insert',
-            'target': {'anchor': quote},
-            'content': content,
-          },
-        ],
-      };
-      if (baseUpdatedAt != null) body['baseUpdatedAt'] = baseUpdatedAt;
-
-      final response = await _postJson(
-        client,
-        _editUri(doc.slug),
-        headers: _bearerHeaders(doc.token),
-        body: body,
+  }) =>
+      _legacyEdit(
+        doc,
+        operation: {
+          'op': 'insert',
+          'target': {'anchor': quote},
+          'content': content,
+        },
+        anchorNotFoundMessage: 'Anchor text not found in document. '
+            'Re-read the document to see current content.',
+        conflictMessage:
+            'Insert conflict. Re-read the document and try again.',
       );
-
-      if (response.statusCode == 409) {
-        final errorData = jsonDecode(response.body) as Map<String, dynamic>;
-        final code = errorData['code'] as String? ?? '';
-        if (code == 'ANCHOR_NOT_FOUND') {
-          return const ProofFailure(
-              'Anchor text not found in document. '
-              'Re-read the document to see current content.');
-        }
-        return const ProofFailure(
-            'Insert conflict. Re-read the document and try again.');
-      }
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return ProofFailure(error);
-      return const ProofSuccess(null);
-    } finally {
-      client.close();
-    }
-  }
 
   /// `POST /api/agent/{slug}/ops` `comment.add`.
   Future<ProofResult<void>> addComment(
     ProofDocument doc, {
     required String quote,
     required String text,
-  }) async {
-    final client = _clientFactory();
-    try {
-      // SECURITY: token goes in the Authorization header, never in the URL.
-      final response = await _postJson(
-        client,
-        _opsUri(doc.slug),
-        headers: _bearerHeaders(doc.token),
-        body: {
-          'type': 'comment.add',
-          'by': agentBy,
-          'quote': quote,
-          'text': text,
-        },
-      );
+  }) =>
+      _withClient((client) async {
+        // SECURITY: token goes in the Authorization header, never in the URL.
+        final response = await _postJson(
+          client,
+          _opsUri(doc.slug),
+          headers: _bearerHeaders(doc.token),
+          body: {
+            'type': 'comment.add',
+            'by': agentBy,
+            'quote': quote,
+            'text': text,
+          },
+        );
 
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return ProofFailure(error);
-      return const ProofSuccess(null);
-    } finally {
-      client.close();
-    }
-  }
+        final error = _checkHttpError(response, doc.slug);
+        if (error != null) return ProofFailure(error);
+        return const ProofSuccess(null);
+      });
 
   /// `POST /api/agent/{slug}/ops` `suggestion.add` (pending replace).
   Future<ProofResult<void>> addSuggestion(
     ProofDocument doc, {
     required String quote,
     required String content,
-  }) async {
-    final client = _clientFactory();
-    try {
-      // SECURITY: token goes in the Authorization header, never in the URL.
-      final response = await _postJson(
-        client,
-        _opsUri(doc.slug),
-        headers: _bearerHeaders(doc.token),
-        body: {
-          'type': 'suggestion.add',
-          'kind': 'replace',
-          'by': agentBy,
-          'quote': quote,
-          'content': content,
-        },
-      );
+  }) =>
+      _withClient((client) async {
+        // SECURITY: token goes in the Authorization header, never in the URL.
+        final response = await _postJson(
+          client,
+          _opsUri(doc.slug),
+          headers: _bearerHeaders(doc.token),
+          body: {
+            'type': 'suggestion.add',
+            'kind': 'replace',
+            'by': agentBy,
+            'quote': quote,
+            'content': content,
+          },
+        );
 
-      if (response.statusCode == 409) {
-        return const ProofFailure(
-            'Quoted text not found in document. '
-            'Re-read the document to see current content.');
-      }
+        if (response.statusCode == 409) {
+          return const ProofFailure(
+              'Quoted text not found in document. '
+              'Re-read the document to see current content.');
+        }
 
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return ProofFailure(error);
-      return const ProofSuccess(null);
-    } finally {
-      client.close();
-    }
-  }
+        final error = _checkHttpError(response, doc.slug);
+        if (error != null) return ProofFailure(error);
+        return const ProofSuccess(null);
+      });
 
   /// `PUT /api/documents/{slug}/title` — rename the document.
   Future<ProofResult<void>> renameDocument(
     ProofDocument doc, {
     required String title,
-  }) async {
-    final client = _clientFactory();
-    try {
-      final response = await _putJson(
-        client,
-        Uri.parse('$baseUrl/api/documents/${doc.slug}/title'),
-        headers: _bearerHeaders(doc.token),
-        body: {'title': title},
-      );
+  }) =>
+      _withClient((client) async {
+        final response = await _putJson(
+          client,
+          Uri.parse('$baseUrl/api/documents/${doc.slug}/title'),
+          headers: _bearerHeaders(doc.token),
+          body: {'title': title},
+        );
 
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return ProofFailure(error);
-      return const ProofSuccess(null);
-    } finally {
-      client.close();
-    }
-  }
+        final error = _checkHttpError(response, doc.slug);
+        if (error != null) return ProofFailure(error);
+        return const ProofSuccess(null);
+      });
 
   /// `GET /api/agent/{slug}/snapshot` — block refs + mutation base token.
-  Future<ProofResult<ProofSnapshot>> fetchSnapshot(ProofDocument doc) async {
-    final client = _clientFactory();
-    try {
-      final response = await _getWithRetry(
-        client,
-        Uri.parse('$baseUrl/api/agent/${doc.slug}/snapshot'),
-        headers: _bearerHeaders(doc.token),
-      );
+  Future<ProofResult<ProofSnapshot>> fetchSnapshot(ProofDocument doc) =>
+      _withClient((client) async {
+        final response = await _getWithRetry(
+          client,
+          Uri.parse('$baseUrl/api/agent/${doc.slug}/snapshot'),
+          headers: _bearerHeaders(doc.token),
+        );
 
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return ProofFailure(error);
+        final error = _checkHttpError(response, doc.slug);
+        if (error != null) return ProofFailure(error);
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final blocks = data['blocks'] as List? ?? [];
-      final mutationBase = data['mutationBase'] as Map<String, dynamic>? ?? {};
-      final baseToken = mutationBase['token'] as String? ?? '';
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final blocks = data['blocks'] as List? ?? [];
+        final mutationBase =
+            data['mutationBase'] as Map<String, dynamic>? ?? {};
+        final baseToken = mutationBase['token'] as String? ?? '';
 
-      return ProofSuccess(
-          ProofSnapshot(blocks: blocks, baseToken: baseToken));
-    } finally {
-      client.close();
-    }
-  }
+        return ProofSuccess(
+            ProofSnapshot(blocks: blocks, baseToken: baseToken));
+      });
 
   /// `POST /api/agent/{slug}/edit/v2` — block-level edits against a
   /// snapshot's mutation base token, with an Idempotency-Key.
@@ -534,35 +366,146 @@ class ProofEditorClient {
     ProofDocument doc, {
     required String baseToken,
     required List<dynamic> ops,
-  }) async {
+  }) =>
+      _withClient((client) async {
+        final response = await _postJson(
+          client,
+          Uri.parse('$baseUrl/api/agent/${doc.slug}/edit/v2'),
+          headers: {
+            ..._bearerHeaders(doc.token),
+            'Idempotency-Key': _idempotencyKey(),
+          },
+          body: {
+            'baseToken': baseToken,
+            'operations': ops,
+          },
+        );
+
+        if (response.statusCode == 409) {
+          return const ProofFailure(
+              'Document changed since snapshot. '
+              'Use operation "snapshot" to get current state, then retry.');
+        }
+
+        final error = _checkHttpError(response, doc.slug);
+        if (error != null) return ProofFailure(error);
+        return const ProofSuccess(null);
+      });
+
+  // ---------------------------------------------------------------------------
+  // Shared operation flows
+  // ---------------------------------------------------------------------------
+
+  /// Run [body] with a fresh client from the factory, always closing it.
+  Future<ProofResult<T>> _withClient<T>(
+      Future<ProofResult<T>> Function(http.Client client) body) async {
     final client = _clientFactory();
     try {
-      final response = await _postJson(
-        client,
-        Uri.parse('$baseUrl/api/agent/${doc.slug}/edit/v2'),
-        headers: {
-          ..._bearerHeaders(doc.token),
-          'Idempotency-Key': _idempotencyKey(),
-        },
-        body: {
-          'baseToken': baseToken,
-          'operations': ops,
-        },
-      );
-
-      if (response.statusCode == 409) {
-        return const ProofFailure(
-            'Document changed since snapshot. '
-            'Use operation "snapshot" to get current state, then retry.');
-      }
-
-      final error = _checkHttpError(response, doc.slug);
-      if (error != null) return ProofFailure(error);
-      return const ProofSuccess(null);
+      return await body(client);
     } finally {
       client.close();
     }
   }
+
+  /// Shared flow for the rewrite-based mutations ([rewriteDocument],
+  /// [prepend], [appendToSection]): fetch `/state` for the current markdown
+  /// and `baseToken`, run [transform] on the current content, `rewrite.apply`
+  /// via `/ops`, and map a 409 to "[conflictVerb] conflict".
+  ///
+  /// When [tolerateStateFailure] is true a failed state fetch is silently
+  /// tolerated (the rewrite proceeds without a precondition — the
+  /// [rewriteDocument] semantics); otherwise state errors are surfaced.
+  /// A null return from [transform] fails with [transformFailureMessage].
+  Future<ProofResult<void>> _rewriteTransformed(
+    ProofDocument doc,
+    String? Function(String current) transform, {
+    required String conflictVerb,
+    bool tolerateStateFailure = false,
+    String? transformFailureMessage,
+  }) =>
+      _withClient((client) async {
+        final stateResponse = await _getWithRetry(
+          client,
+          _stateUri(doc.slug),
+          headers: _bearerHeaders(doc.token),
+        );
+
+        var currentMarkdown = '';
+        String? baseToken;
+        if (tolerateStateFailure) {
+          if (stateResponse.statusCode >= 200 &&
+              stateResponse.statusCode < 300) {
+            final stateData =
+                jsonDecode(stateResponse.body) as Map<String, dynamic>;
+            currentMarkdown = stateData['markdown'] as String? ?? '';
+            baseToken = _mutationBaseToken(stateData);
+          }
+        } else {
+          final stateError = _checkHttpError(stateResponse, doc.slug);
+          if (stateError != null) return ProofFailure(stateError);
+          final stateData =
+              jsonDecode(stateResponse.body) as Map<String, dynamic>;
+          currentMarkdown = stateData['markdown'] as String? ?? '';
+          baseToken = _mutationBaseToken(stateData);
+        }
+
+        final newMarkdown = transform(currentMarkdown);
+        if (newMarkdown == null) {
+          return ProofFailure(transformFailureMessage ??
+              '$conflictVerb failed. Re-read the document and try again.');
+        }
+
+        final response =
+            await _applyRewrite(client, doc, newMarkdown, baseToken);
+        if (response.statusCode == 409) {
+          return ProofFailure(
+              '$conflictVerb conflict — document was modified. '
+              'Re-read the document and try again.');
+        }
+
+        final error = _checkHttpError(response, doc.slug);
+        if (error != null) return ProofFailure(error);
+        return const ProofSuccess(null);
+      });
+
+  /// Shared flow for the legacy `/edit` operations ([replaceText],
+  /// [insertAfterAnchor]): fetch `baseUpdatedAt`, POST the single
+  /// [operation], and map a 409 to [anchorNotFoundMessage] (code
+  /// `ANCHOR_NOT_FOUND`) or [conflictMessage].
+  Future<ProofResult<void>> _legacyEdit(
+    ProofDocument doc, {
+    required Map<String, dynamic> operation,
+    required String anchorNotFoundMessage,
+    required String conflictMessage,
+  }) =>
+      _withClient((client) async {
+        final baseUpdatedAt = await _fetchBaseUpdatedAt(client, doc);
+        final body = <String, dynamic>{
+          'by': agentBy,
+          'operations': [operation],
+        };
+        if (baseUpdatedAt != null) body['baseUpdatedAt'] = baseUpdatedAt;
+
+        final response = await _postJson(
+          client,
+          _editUri(doc.slug),
+          headers: _bearerHeaders(doc.token),
+          body: body,
+        );
+
+        if (response.statusCode == 409) {
+          final errorData = jsonDecode(response.body) as Map<String, dynamic>;
+          final code = errorData['code'] as String? ?? '';
+          if (code == 'ANCHOR_NOT_FOUND') {
+            return ProofFailure(anchorNotFoundMessage);
+          }
+          return ProofFailure(conflictMessage);
+        }
+
+        final error = _checkHttpError(response, doc.slug);
+        if (error != null) return ProofFailure(error);
+        return const ProofSuccess(null);
+      });
 
   // ---------------------------------------------------------------------------
   // Markdown section splice (used by appendToSection)

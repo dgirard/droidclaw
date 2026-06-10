@@ -1,15 +1,16 @@
+import 'dart:math';
 import 'dart:typed_data';
-
-import 'package:drift/drift.dart';
 
 import '../../../../shared/constants.dart';
 import '../../algorithms/date_similarity.dart';
+import '../../algorithms/embedding_codec.dart';
 import '../../algorithms/memory_clusterer.dart';
 import '../../algorithms/string_similarity.dart';
 import '../../database/knowledge_graph_db.dart';
 import '../../models/dedup_models.dart';
 import '../../models/entity.dart';
 import '../knowledge_service.dart';
+import 'truncate.dart';
 
 /// Deterministic duplicate-candidate generation for the KB dedup pipeline.
 ///
@@ -115,32 +116,39 @@ class CandidateGenerator {
       allIds,
       perEntityLimit: AppConstants.dedupFactsPerEntityLimit,
     );
-    final factData = <int, List<_FactEntry>>{};
+    final factData = <int, List<FactRow>>{};
     final factKeys = <int, Set<String>>{};
     final factSummaries = <int, List<String>>{};
     for (final id in allIds) {
-      final entries = [
-        for (final f in factRows[id] ?? const [])
-          _FactEntry(key: f.key, value: f.value, type: f.type),
-      ];
+      final entries = factRows[id] ?? const <FactRow>[];
       factData[id] = entries;
       factKeys[id] = entries.map((f) => f.key).toSet();
       factSummaries[id] = entries
-          .map((f) => '${f.key}: ${_truncate(f.value, 50)}')
+          .map((f) => '${f.key}: ${truncate(f.value, 50)}')
           .toList();
     }
 
-    // 9. Embedding pre-filter (if available)
+    // 9. Embedding pre-filter (if available) — paged scan, bounded at
+    // [AppConstants.dedupEntityScanLimit] embeddings (the same explicit
+    // bound the old single LIMIT query used).
     Map<int, Float32List>? embeddings;
     if (_knowledgeService.hasEmbedder) {
-      final embRows = await _db.getActiveEntityEmbeddings(
-        limit: AppConstants.dedupEntityScanLimit,
-      );
       embeddings = <int, Float32List>{};
-      for (final row in embRows) {
-        embeddings[row.id] = Float32List.view(
-          Uint8List.fromList(row.embedding).buffer,
+      var afterId = 0;
+      while (embeddings.length < AppConstants.dedupEntityScanLimit) {
+        final pageSize = min(
+          AppConstants.knowledgeEmbeddingScanPageSize,
+          AppConstants.dedupEntityScanLimit - embeddings.length,
         );
+        final page = await _db.getActiveEntityEmbeddingsPage(
+          afterId: afterId,
+          pageSize: pageSize,
+        );
+        for (final row in page) {
+          embeddings[row.id] = EmbeddingCodec.decode(row.embedding);
+        }
+        if (page.length < pageSize) break;
+        afterId = page.last.id;
       }
     }
 
@@ -364,29 +372,24 @@ class CandidateGenerator {
     final candidates = <DuplicateFactCandidate>[];
     final bundles = <EntityFactBundle>[];
 
+    // Batch-load all facts in chunked IN (...) queries instead of one
+    // SELECT per entity (the findDuplicateFacts N+1, sibling of U14).
+    final factRows = await _db.getActiveFactRowsBatch(
+      [for (final row in allRows) row['id'] as int],
+    );
+
     for (final row in allRows) {
       final entityId = row['id'] as int;
       final entityName = row['name'] as String;
 
-      final facts = await _db.customSelect(
-        'SELECT id, fact_key, fact_value, value_type FROM facts '
-        'WHERE entity_id = ? AND expired_at IS NULL',
-        variables: [Variable.withInt(entityId)],
-      ).get();
-
+      final facts = factRows[entityId] ?? const <FactRow>[];
       if (facts.length < 2) continue;
 
       // Group facts by key — duplicates are facts with the same key
       // but different values that mean the same thing
-      final byKey = <String, List<Map<String, dynamic>>>{};
+      final byKey = <String, List<FactRow>>{};
       for (final f in facts) {
-        final key = f.read<String>('fact_key');
-        (byKey[key] ??= []).add({
-          'id': f.read<int>('id'),
-          'key': key,
-          'value': f.read<String>('fact_value'),
-          'type': f.read<String>('value_type'),
-        });
+        (byKey[f.key] ??= []).add(f);
       }
 
       // For keys with multiple values, check for duplicates
@@ -399,18 +402,17 @@ class CandidateGenerator {
             final b = values[j];
 
             // Date-aware comparison
-            if (a['type'] == 'date' || b['type'] == 'date') {
-              final dateScore = DateSimilarity.score(
-                a['value'] as String, b['value'] as String);
+            if (a.type == 'date' || b.type == 'date') {
+              final dateScore = DateSimilarity.score(a.value, b.value);
               if (dateScore >= AppConstants.dedupFactDateScoreMin) {
                 candidates.add(DuplicateFactCandidate(
                   entityId: entityId,
                   entityName: entityName,
-                  factIdA: a['id'] as int,
-                  factIdB: b['id'] as int,
+                  factIdA: a.id,
+                  factIdB: b.id,
                   factKey: entry.key,
-                  valueA: a['value'] as String,
-                  valueB: b['value'] as String,
+                  valueA: a.value,
+                  valueB: b.value,
                   similarity: dateScore,
                   source: 'date',
                 ));
@@ -419,17 +421,16 @@ class CandidateGenerator {
             }
 
             // String similarity
-            final strScore = StringSimilarity.combined(
-              a['value'] as String, b['value'] as String);
+            final strScore = StringSimilarity.combined(a.value, b.value);
             if (strScore >= AppConstants.dedupFactStringScoreMin) {
               candidates.add(DuplicateFactCandidate(
                 entityId: entityId,
                 entityName: entityName,
-                factIdA: a['id'] as int,
-                factIdB: b['id'] as int,
+                factIdA: a.id,
+                factIdB: b.id,
                 factKey: entry.key,
-                valueA: a['value'] as String,
-                valueB: b['value'] as String,
+                valueA: a.value,
+                valueB: b.value,
                 similarity: strScore,
                 source: 'string',
               ));
@@ -440,17 +441,13 @@ class CandidateGenerator {
 
       // Collect entities with 2+ facts for LLM semantic dedup
       // (catches cross-key synonyms like vélo/bicyclette)
-      if (facts.length >= 2) {
-        bundles.add(EntityFactBundle(
-          entityId: entityId,
-          entityName: entityName,
-          facts: facts.map((f) => {
-                'id': f.read<int>('id'),
-                'key': f.read<String>('fact_key'),
-                'value': f.read<String>('fact_value'),
-              }).toList(),
-        ));
-      }
+      bundles.add(EntityFactBundle(
+        entityId: entityId,
+        entityName: entityName,
+        facts: [
+          for (final f in facts) {'id': f.id, 'key': f.key, 'value': f.value},
+        ],
+      ));
     }
 
     candidates.sort((a, b) => b.similarity.compareTo(a.similarity));
@@ -517,11 +514,6 @@ class CandidateGenerator {
     return union > 0 ? intersection / union : 0.0;
   }
 
-  /// Truncate string to maxLen characters.
-  static String _truncate(String s, int maxLen) {
-    return s.length <= maxLen ? s : '${s.substring(0, maxLen)}...';
-  }
-
   /// Date-aware fact scoring between two entities.
   ///
   /// For facts with matching keys:
@@ -530,7 +522,7 @@ class CandidateGenerator {
   /// Also includes key Jaccard as a baseline.
   ///
   /// Final score = 0.6 * dateAwareMatch + 0.4 * keyJaccard, clamped to [0, 1].
-  static double _factScore(List<_FactEntry> factsA, List<_FactEntry> factsB) {
+  static double _factScore(List<FactRow> factsA, List<FactRow> factsB) {
     if (factsA.isEmpty && factsB.isEmpty) return 0.0;
     if (factsA.isEmpty || factsB.isEmpty) return 0.0;
 
@@ -540,11 +532,11 @@ class CandidateGenerator {
     final keyJaccard = _jaccard(keysA, keysB);
 
     // Build key→value maps for matching
-    final mapA = <String, _FactEntry>{};
+    final mapA = <String, FactRow>{};
     for (final f in factsA) {
       mapA[f.key] = f;
     }
-    final mapB = <String, _FactEntry>{};
+    final mapB = <String, FactRow>{};
     for (final f in factsB) {
       mapB[f.key] = f;
     }
@@ -572,17 +564,4 @@ class CandidateGenerator {
             AppConstants.dedupFactKeyJaccardWeight * keyJaccard)
         .clamp(0.0, 1.0);
   }
-}
-
-/// Internal fact entry with key, value, and type.
-class _FactEntry {
-  final String key;
-  final String value;
-  final String type;
-
-  const _FactEntry({
-    required this.key,
-    required this.value,
-    required this.type,
-  });
 }

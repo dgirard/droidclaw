@@ -41,7 +41,7 @@ import 'session_metadata.dart';
 /// | `save(flush: false)` — mid-turn tool batch,        | no     |
 /// |   post-summarization save (agent_loop.dart)        |        |
 /// | `deleteSession` / `deleteAllSessions`              | yes    |
-/// | cross-isolate handoff (`WriteThenNotify.persist`,  | yes    |
+/// | cross-isolate handoff (persist-then-notify,        | yes    |
 /// |   cron saves in background_task_handler /          |        |
 /// |   background_service_provider — default `save()`)  |        |
 /// | app paused/detached (`app.dart` lifecycle) and     | yes    |

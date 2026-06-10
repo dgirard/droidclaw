@@ -4,7 +4,8 @@
 // DB round-trips. Pre-U14 it ran one getEntityRelationsWithNames query AND
 // one facts SELECT per entity (up to 2 x 5000 queries per dream run). Now
 // both loads are chunked IN (...) batches, so the SELECT count is constant
-// in the entity count.
+// in the entity count. findDuplicateFacts had the same N+1 (one facts
+// SELECT per entity) until it was moved onto the same batch loader.
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -83,5 +84,50 @@ void main() {
     expect(large, equals(small),
         reason: 'DB round-trips must not scale with entity count');
     expect(large, lessThanOrEqualTo(4));
+  });
+
+  Future<int> selectsForFindDuplicateFacts(int entityCount) async {
+    final counter = SelectCountingInterceptor();
+    final db = KnowledgeGraphDB.forExecutor(
+      NativeDatabase.memory().interceptWith(counter),
+    );
+    try {
+      await seed(db, entityCount);
+      // Add a second fact per entity (different key — active facts are
+      // unique on (entity_id, fact_key)) so entities qualify for the
+      // cross-key LLM bundles and the per-entity fact scan has work to do.
+      for (var i = 1; i <= entityCount; i++) {
+        await db.into(db.facts).insert(FactsCompanion.insert(
+              entityId: i,
+              factKey: 'code',
+              factValue: 'ALPHA-SN-${i - 1}',
+            ));
+      }
+      final service = KbMaintenanceService(
+        db: db,
+        knowledgeService: KnowledgeService(db: db),
+        llmProvider: FakeLLMProvider.text('{"pairs":[]}'),
+        model: 'fake-model',
+      );
+      counter.reset();
+      final result = await service.findDuplicateFacts();
+      expect(result.bundles, hasLength(entityCount)); // sanity: facts loaded
+      return counter.selectCount;
+    } finally {
+      await db.close();
+    }
+  }
+
+  test(
+      'findDuplicateFacts SELECT count is constant in entity count — '
+      'batched fact load, no per-entity N+1', () async {
+    final small = await selectsForFindDuplicateFacts(6);
+    final large = await selectsForFindDuplicateFacts(18);
+
+    // Before the batch loader: 1 + N selects (one facts query per entity)
+    // → 7 vs 19 here. Now: listEntitiesFiltered + one fact chunk = 2.
+    expect(large, equals(small),
+        reason: 'DB round-trips must not scale with entity count');
+    expect(large, lessThanOrEqualTo(2));
   });
 }

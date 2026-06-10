@@ -13,7 +13,6 @@ import '../../shared/constants.dart';
 import '../../features/telegram/telegram_api.dart';
 import '../session/isolate_persistence/durable_trigger_queue.dart';
 import '../session/isolate_persistence/hive_path_resolver.dart';
-import '../session/isolate_persistence/write_then_notify.dart';
 import 'app_logger.dart';
 import 'llm_trace_logger.dart';
 import 'service_secret_reader.dart';
@@ -485,26 +484,29 @@ class BackgroundTaskHandler extends TaskHandler {
         }
       }
 
-      // Save session BEFORE notifying main isolate — WriteThenNotify makes
-      // the ordering structural (main must never reload Hive before the
-      // session is flushed to disk).
-      await WriteThenNotify.run(
-        persist: () async {
-          final session = _agentLoop!.sessions.get(sessionKey);
-          if (session != null) {
-            await _agentLoop!.sessions.save(session);
-            AppLogger.instance.debug(LogSource.cron,
-                'Session saved for "${cron.name}"');
-          }
-        },
-        // Notify main isolate of completion (for UI update if app is open)
-        notify: () => FlutterForegroundTask.sendDataToMain({
-          'type': 'cron_completed',
-          'cron_id': cron.id,
-          'cron_name': cron.name,
-          'response_length': responseLength,
-        }),
-      );
+      // Save (write + flush) the session BEFORE notifying the main isolate.
+      // If the notification raced ahead of the disk flush, the main isolate
+      // would re-read the box *before* the bytes land and the cron session
+      // would be invisible until the next reload — a field incident class
+      // that is otherwise unreproducible locally (see
+      // docs/solutions/database-issues/
+      // session-data-loss-hive-flush-and-destructive-reads.md). If the save
+      // throws, the notification is skipped — the main isolate must never be
+      // told to reload state that was never written. The same persist-then-
+      // notify invariant applies to the pending-trigger handoff below.
+      final session = _agentLoop!.sessions.get(sessionKey);
+      if (session != null) {
+        await _agentLoop!.sessions.save(session);
+        AppLogger.instance.debug(LogSource.cron,
+            'Session saved for "${cron.name}"');
+      }
+      // Notify main isolate of completion (for UI update if app is open)
+      FlutterForegroundTask.sendDataToMain({
+        'type': 'cron_completed',
+        'cron_id': cron.id,
+        'cron_name': cron.name,
+        'response_length': responseLength,
+      });
 
       // Update notification
       FlutterForegroundTask.updateService(
@@ -565,7 +567,8 @@ class BackgroundTaskHandler extends TaskHandler {
           // Fallback: queue for main isolate. The trigger must be durably
           // staged in SharedPreferences BEFORE the main isolate is notified
           // or woken — if the app process dies mid-handoff, the queued
-          // trigger is replayed on next startup.
+          // trigger is replayed on next startup (same persist-then-notify
+          // invariant as the cron-session save in _executeCronLocally).
           final triggerData = {
             'type': 'cron_trigger',
             'cron_id': cron.id,
@@ -573,13 +576,9 @@ class BackgroundTaskHandler extends TaskHandler {
             'prompt': cron.prompt,
             'session_strategy': cron.sessionStrategy.name,
           };
-          await WriteThenNotify.run(
-            persist: () => _addPendingTrigger(prefs, triggerData),
-            notify: () {
-              FlutterForegroundTask.sendDataToMain(triggerData);
-              FlutterForegroundTask.launchApp();
-            },
-          );
+          await _addPendingTrigger(prefs, triggerData);
+          FlutterForegroundTask.sendDataToMain(triggerData);
+          FlutterForegroundTask.launchApp();
         }
       }
     }
@@ -612,7 +611,7 @@ class BackgroundTaskHandler extends TaskHandler {
 
   /// Add a trigger to the pending queue in SharedPreferences.
   /// The returned future completes when the write has been committed, so
-  /// callers (via [WriteThenNotify]) can sequence notification after it.
+  /// callers can sequence the cross-isolate notification after it.
   Future<void> _addPendingTrigger(
       SharedPreferences prefs, Map<String, dynamic> trigger) async {
     final pending = DurableTriggerQueue.enqueue(

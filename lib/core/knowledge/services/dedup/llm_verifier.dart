@@ -7,6 +7,7 @@ import '../../../services/app_logger.dart';
 import '../../../../shared/constants.dart';
 import '../../models/dedup_models.dart';
 import '../llm_json_parser.dart';
+import 'truncate.dart';
 
 /// LLM semantic verification of dedup candidates (entities and facts).
 ///
@@ -111,24 +112,13 @@ Return ONLY valid JSON:
 If no duplicates found, return: {"pairs":[]}
 No markdown fences, no explanation.''';
 
-      try {
-        final response = await _llmProvider.chat(
-          messages: [
-            Message(role: 'system', content: systemPrompt),
-            Message(role: 'user', content: buf.toString()),
-          ],
-          model: _model,
-          options: {'temperature': 0.1},
-        );
-
-        final llmPairs = _parseCrossKeyResponse(response.content, bundles);
-        allResults.addAll(llmPairs);
-      } catch (e) {
-        AppLogger.instance.warning(
-          LogSource.agent,
-          'Dream cross-key fact detection failed: ${e.runtimeType}',
-        );
-      }
+      allResults.addAll(await _chatJson(
+        systemPrompt: systemPrompt,
+        userMessage: buf.toString(),
+        parse: (content) => _parseCrossKeyResponse(content, bundles),
+        failureLabel: 'Dream cross-key fact detection failed',
+        onFailure: () => const <ScoredFactPair>[],
+      ));
     }
 
     // Phase 2: Verify deterministic candidates (same-key duplicates)
@@ -170,24 +160,13 @@ Return ONLY valid JSON:
 
 No markdown fences, no explanation.''';
 
-    try {
-      final response = await _llmProvider.chat(
-        messages: [
-          Message(role: 'system', content: systemPrompt),
-          Message(role: 'user', content: buf.toString()),
-        ],
-        model: _model,
-        options: {'temperature': 0.1},
-      );
-
-      return _parseFactLlmResponse(response.content, batch);
-    } catch (e) {
-      AppLogger.instance.warning(
-        LogSource.agent,
-        'Dream fact verification failed: ${e.runtimeType}',
-      );
-      return batch.map(_toDeterministicFactPair).toList();
-    }
+    return _chatJson(
+      systemPrompt: systemPrompt,
+      userMessage: buf.toString(),
+      parse: (content) => _parseFactLlmResponse(content, batch),
+      failureLabel: 'Dream fact verification failed',
+      onFailure: () => batch.map(_toDeterministicFactPair).toList(),
+    );
   }
 
   /// Build a markdown table from candidate pairs for LLM verification.
@@ -237,8 +216,26 @@ Return ONLY valid JSON:
 
 No markdown fences, no explanation.''';
 
-    final userMessage = buildVerificationTable(batch);
+    return _chatJson(
+      systemPrompt: systemPrompt,
+      userMessage: buildVerificationTable(batch),
+      parse: (content) => parseLlmResponse(content, batch, validIds),
+      failureLabel: 'Dream LLM verification failed',
+      // Fallback to deterministic scores
+      onFailure: () => batch.map(_toDeterministicPair).toList(),
+    );
+  }
 
+  /// Shared LLM round-trip for the verification prompts: system + user
+  /// messages at temperature 0.1, [parse] on the response content, and a
+  /// warn + [onFailure] fallback when the call throws.
+  Future<T> _chatJson<T>({
+    required String systemPrompt,
+    required String userMessage,
+    required T Function(String content) parse,
+    required String failureLabel,
+    required T Function() onFailure,
+  }) async {
     try {
       final response = await _llmProvider.chat(
         messages: [
@@ -248,15 +245,13 @@ No markdown fences, no explanation.''';
         model: _model,
         options: {'temperature': 0.1},
       );
-
-      return parseLlmResponse(response.content, batch, validIds);
+      return parse(response.content);
     } catch (e) {
       AppLogger.instance.warning(
         LogSource.agent,
-        'Dream LLM verification failed: ${e.runtimeType}',
+        '$failureLabel: ${e.runtimeType}',
       );
-      // Fallback to deterministic scores
-      return batch.map(_toDeterministicPair).toList();
+      return onFailure();
     }
   }
 
@@ -299,7 +294,7 @@ No markdown fences, no explanation.''';
 
         final score = ((p['score'] as num?)?.toDouble() ?? 0) / 100.0;
         final justification =
-            _truncate((p['justification'] as String?) ?? '', 100);
+            truncate((p['justification'] as String?) ?? '', 100);
 
         // Find matching candidate
         final key1 = '$idA:$idB';
@@ -358,7 +353,7 @@ No markdown fences, no explanation.''';
         final score = ((p['score'] as num?)?.toDouble() ?? 0) / 100.0;
         final keep = (p['keep'] as String?) ?? 'A';
         final justification =
-            _truncate((p['justification'] as String?) ?? '', 100);
+            truncate((p['justification'] as String?) ?? '', 100);
 
         final keepA = keep.toUpperCase() == 'A';
         result.add(ScoredFactPair(
@@ -419,7 +414,7 @@ No markdown fences, no explanation.''';
         final entityId = keepInfo['entity_id'] as int;
         final score = ((p['score'] as num?)?.toDouble() ?? 0) / 100.0;
         final justification =
-            _truncate((p['justification'] as String?) ?? '', 100);
+            truncate((p['justification'] as String?) ?? '', 100);
 
         result.add(ScoredFactPair(
           entityId: entityId,
@@ -480,11 +475,6 @@ No markdown fences, no explanation.''';
   /// Sanitize entity content for LLM prompt: truncate and strip control chars.
   static String _sanitize(String s) {
     final cleaned = s.replaceAll(_controlCharsRe, '');
-    return _truncate(cleaned, 100);
-  }
-
-  /// Truncate string to maxLen characters.
-  static String _truncate(String s, int maxLen) {
-    return s.length <= maxLen ? s : '${s.substring(0, maxLen)}...';
+    return truncate(cleaned, 100);
   }
 }

@@ -19,6 +19,10 @@ typedef NeighborEdge = ({
   double relConfidence,
 });
 
+/// One active fact row from a batched fact lookup
+/// ([KnowledgeGraphDB.getActiveFactRowsBatch]).
+typedef FactRow = ({int id, String key, String value, String type});
+
 @DriftDatabase(include: {'schema.drift'})
 class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   KnowledgeGraphDB(String dbPath)
@@ -208,6 +212,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   /// Batch-load entities by id in a single `IN (...)` query.
   ///
   /// Replaces per-id [getEntityById] loops in hot retrieval paths (U12).
+  /// Unchunked on purpose: callers pass top-K-sized id lists.
   Future<List<Entity>> getEntitiesByIds(List<int> ids) async {
     if (ids.isEmpty) return [];
     return (select(entities)..where((e) => e.id.isIn(ids))).get();
@@ -216,6 +221,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   /// Batch-load active (non-expired) facts for a set of entities in a single
   /// `IN (...)` query, ordered by entity then fact key (mirrors
   /// [getEntityFacts] per-entity ordering).
+  /// Unchunked on purpose: callers pass top-K-sized id lists.
   Future<List<Fact>> getFactsForEntityIds(List<int> ids) async {
     if (ids.isEmpty) return [];
     return (select(facts)
@@ -233,6 +239,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   /// per-id semantics: active, non-expired relations to active entities,
   /// weight-descending within each anchor. Anchors with no neighbors are
   /// absent from the map.
+  /// Unchunked on purpose: callers pass top-K-sized id lists.
   Future<Map<int, List<NeighborEdge>>> findNeighborsBatch(
       List<int> ids) async {
     if (ids.isEmpty) return {};
@@ -283,10 +290,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     int chunkSize = AppConstants.knowledgeSqlInChunkSize,
   }) async {
     final map = {for (final id in ids) id: <int>{}};
-    for (var i = 0; i < ids.length; i += chunkSize) {
-      final chunk = ids.sublist(i, min(i + chunkSize, ids.length));
-      final placeholders = List.filled(chunk.length, '?').join(', ');
-      final vars = [for (final id in chunk) Variable.withInt(id)];
+    await _forEachIdChunk(ids, chunkSize, (chunk, placeholders, vars) async {
       final rows = await customSelect(
         'SELECT source_id, target_id FROM relations '
         'WHERE (source_id IN ($placeholders) OR target_id IN ($placeholders)) '
@@ -300,45 +304,66 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
         if (inChunk.contains(src)) map[src]!.add(tgt);
         if (inChunk.contains(tgt)) map[tgt]!.add(src);
       }
-    }
+    });
     return map;
   }
 
-  /// Batch-load up to [perEntityLimit] active facts per entity (U14).
+  /// Batch-load active facts per entity (U14).
   ///
-  /// Replaces the per-entity fact SELECT loop in
-  /// `KbMaintenanceService.findCandidates`. Rows are ordered by fact id
-  /// within each entity (insertion order — same rows the old
-  /// `LIMIT [perEntityLimit]` query returned in practice) and truncated
-  /// per entity in Dart. Ids are chunked like [getRelationNeighborIdsBatch].
-  Future<Map<int, List<({String key, String value, String type})>>>
-      getActiveFactRowsBatch(
+  /// Replaces the per-entity fact SELECT loops in the dedup pipeline. Rows
+  /// are ordered by fact id within each entity (insertion order — same rows
+  /// the old per-entity queries returned in practice) and, when
+  /// [perEntityLimit] is non-null, truncated per entity in Dart. Ids are
+  /// chunked like [getRelationNeighborIdsBatch].
+  Future<Map<int, List<FactRow>>> getActiveFactRowsBatch(
     List<int> ids, {
-    required int perEntityLimit,
+    int? perEntityLimit,
     int chunkSize = AppConstants.knowledgeSqlInChunkSize,
   }) async {
-    final map = <int, List<({String key, String value, String type})>>{};
-    for (var i = 0; i < ids.length; i += chunkSize) {
-      final chunk = ids.sublist(i, min(i + chunkSize, ids.length));
-      final placeholders = List.filled(chunk.length, '?').join(', ');
+    final map = <int, List<FactRow>>{};
+    await _forEachIdChunk(ids, chunkSize, (chunk, placeholders, vars) async {
       final rows = await customSelect(
-        'SELECT entity_id, fact_key, fact_value, value_type FROM facts '
+        'SELECT id, entity_id, fact_key, fact_value, value_type FROM facts '
         'WHERE entity_id IN ($placeholders) AND expired_at IS NULL '
         'ORDER BY entity_id, id',
-        variables: [for (final id in chunk) Variable.withInt(id)],
+        variables: vars,
       ).get();
       for (final r in rows) {
         final entityId = r.read<int>('entity_id');
         final list = map[entityId] ??= [];
-        if (list.length >= perEntityLimit) continue;
+        if (perEntityLimit != null && list.length >= perEntityLimit) continue;
         list.add((
+          id: r.read<int>('id'),
           key: r.read<String>('fact_key'),
           value: r.read<String>('fact_value'),
           type: r.read<String>('value_type'),
         ));
       }
-    }
+    });
     return map;
+  }
+
+  /// Run [body] once per `IN (...)` chunk of [ids], bounding bind variables
+  /// per statement (U14 idiom shared by [getRelationNeighborIdsBatch] and
+  /// [getActiveFactRowsBatch]). [body] receives the chunk plus ready-made
+  /// `?` placeholders and bound [Variable]s for it.
+  Future<void> _forEachIdChunk(
+    List<int> ids,
+    int chunkSize,
+    Future<void> Function(
+      List<int> chunk,
+      String placeholders,
+      List<Variable<Object>> vars,
+    ) body,
+  ) async {
+    for (var i = 0; i < ids.length; i += chunkSize) {
+      final chunk = ids.sublist(i, min(i + chunkSize, ids.length));
+      final placeholders = List.filled(chunk.length, '?').join(', ');
+      final vars = <Variable<Object>>[
+        for (final id in chunk) Variable.withInt(id),
+      ];
+      await body(chunk, placeholders, vars);
+    }
   }
 
   /// Max access_count among active cold entities (0 when there are none).
@@ -918,36 +943,12 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     );
   }
 
-  /// Load active entity embeddings for the dedup embedding pre-filter.
-  /// Returns (id, embedding) pairs for entities that have embeddings.
-  ///
-  /// [limit] is required (U14): callers must state their bound explicitly —
-  /// the old silent `limit = 1000` default capped semantic search. Retrieval
-  /// no longer uses this; it pages through ALL embeddings via
-  /// [getActiveEntityEmbeddingsPage].
-  Future<List<({int id, Uint8List embedding})>> getActiveEntityEmbeddings({
-    required int limit,
-  }) async {
-    final results = await customSelect(
-      'SELECT id, embedding FROM entities '
-      'WHERE is_active = 1 AND embedding IS NOT NULL '
-      'LIMIT ?',
-      variables: [Variable.withInt(limit)],
-    ).get();
-
-    return results.map((r) {
-      return (
-        id: r.read<int>('id'),
-        embedding: r.read<Uint8List>('embedding'),
-      );
-    }).toList();
-  }
-
   /// One keyset page of active entity embeddings, ordered by id, strictly
   /// after [afterId] (U14). Drives the paged cosine scan in
-  /// `KnowledgeService.queryRelevant`: the scan covers every active
-  /// embedding with at most [pageSize] BLOBs in memory at a time — no
-  /// silent cap, no fully materialized embedding list.
+  /// `KnowledgeService.queryRelevant` (every active embedding, at most
+  /// [pageSize] BLOBs in memory at a time — no silent cap, no fully
+  /// materialized embedding list) and the bounded dedup pre-filter scan in
+  /// `CandidateGenerator.findCandidates`.
   Future<List<({int id, Uint8List embedding})>> getActiveEntityEmbeddingsPage({
     required int afterId,
     required int pageSize,

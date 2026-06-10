@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
+import '../../shared/constants.dart';
+
 /// Result of an embedding request.
 class EmbeddingResult {
   final List<List<double>> embeddings;
@@ -71,7 +73,7 @@ abstract class BaseCloudEmbeddingProvider implements EmbeddingProvider {
     int? dimensions,
     String? taskType,
   }) async {
-    const maxRetries = 2;
+    const maxRetries = AppConstants.httpMaxRetries;
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         return await callApi(
@@ -82,8 +84,9 @@ abstract class BaseCloudEmbeddingProvider implements EmbeddingProvider {
         );
       } on HttpRetryException {
         if (attempt == maxRetries) rethrow;
-        await Future.delayed(
-            Duration(milliseconds: 500 * pow(2, attempt).toInt()));
+        await Future.delayed(Duration(
+            milliseconds:
+                AppConstants.httpRetryBaseDelayMs * pow(2, attempt).toInt()));
       }
     }
     throw StateError('Unreachable');

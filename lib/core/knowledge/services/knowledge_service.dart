@@ -4,6 +4,7 @@ import '../../../shared/constants.dart';
 import '../../config/log_entry.dart';
 import '../../providers/embedding_provider.dart';
 import '../../services/app_logger.dart';
+import '../algorithms/embedding_codec.dart';
 import '../algorithms/hybrid_scorer.dart';
 import '../algorithms/memory_clusterer.dart';
 import '../algorithms/memory_decay.dart';
@@ -299,9 +300,7 @@ class KnowledgeService {
       );
       if (page.isEmpty) break;
       for (final entry in page) {
-        final entVec = Float32List.view(
-          Uint8List.fromList(entry.embedding).buffer,
-        );
+        final entVec = EmbeddingCodec.decode(entry.embedding);
         if (entVec.length != queryVec.length) continue;
         final sim = MemoryClusterer.cosineSimilarity(queryVec, entVec);
         if (sim > AppConstants.knowledgeVectorSimilarityThreshold) {

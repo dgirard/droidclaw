@@ -1,10 +1,8 @@
 // Tests for the dual-isolate persistence subsystem
-// (lib/core/session/isolate_persistence/): the write-then-notify ordering
-// contract, the cache-reload visibility protocol, Hive path resolution, and —
-// most importantly — the cross-isolate read-after-write scenario that until
-// now could only be caught in the field.
+// (lib/core/session/isolate_persistence/): the cache-reload visibility
+// protocol, Hive path resolution, and — most importantly — the cross-isolate
+// read-after-write scenario that until now could only be caught in the field.
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -13,59 +11,12 @@ import 'package:hive/hive.dart';
 
 import 'package:droidclaw/core/providers/llm_response.dart';
 import 'package:droidclaw/core/session/isolate_persistence/hive_path_resolver.dart';
-import 'package:droidclaw/core/session/isolate_persistence/write_then_notify.dart';
 import 'package:droidclaw/core/session/session.dart';
 import 'package:droidclaw/core/session/session_manager.dart';
 
 import '../support/hive_test_harness.dart';
 
 void main() {
-  group('WriteThenNotify ordering contract', () {
-    test('notify is never emitted before the persist future completes',
-        () async {
-      final persistGate = Completer<void>();
-      var persisted = false;
-      var notified = false;
-
-      final run = WriteThenNotify.run(
-        persist: () async {
-          await persistGate.future;
-          persisted = true;
-        },
-        notify: () {
-          // The contract: persist must have fully completed by now.
-          expect(persisted, isTrue,
-              reason: 'notify fired before persist completed');
-          notified = true;
-        },
-      );
-
-      // Give the event loop a chance to (incorrectly) race ahead.
-      await Future<void>.delayed(Duration.zero);
-      expect(notified, isFalse,
-          reason: 'notify fired while persist was still pending');
-
-      persistGate.complete();
-      await run;
-      expect(notified, isTrue);
-    });
-
-    test('a failed persist suppresses the notification and rethrows',
-        () async {
-      var notified = false;
-      await expectLater(
-        WriteThenNotify.run(
-          persist: () async => throw StateError('disk full'),
-          notify: () => notified = true,
-        ),
-        throwsStateError,
-      );
-      expect(notified, isFalse,
-          reason: 'the other isolate must not be told to reload state '
-              'that was never written');
-    });
-  });
-
   group('Cross-isolate visibility (read-after-cross-isolate-write)', () {
     late HiveTestHarness hive;
 
@@ -95,7 +46,7 @@ void main() {
       final cron = service.getOrCreate('cron_daily');
       cron.addMessage(
           const Message(role: 'assistant', content: 'cron output'));
-      await service.save(cron); // save() flushes — WriteThenNotify's persist
+      await service.save(cron); // save() flushes — the persist-then-notify step
       await Hive.close(); // bytes now exist ONLY on disk
 
       // Before reload, the main manager's cache must not magically know
