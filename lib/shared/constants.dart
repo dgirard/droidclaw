@@ -82,6 +82,20 @@ class AppConstants {
 
   /// Number of top-ranked candidates used to seed spreading activation.
   static const int knowledgeActivationSeedCount = 5;
+
+  /// Page size for the keyset-paged embedding scan in the vector path of
+  /// [KnowledgeService.queryRelevant]. The scan covers ALL active entity
+  /// embeddings (U14 removed the silent 1000-row cap); this only bounds how
+  /// many BLOBs are resident at once. Benchmark
+  /// (tool/benchmark_cosine_scan.dart): the inline paged scan beats
+  /// Isolate.run at 1K-5K entities because the isolate copy cost dominates
+  /// the cosine math.
+  static const int knowledgeEmbeddingScanPageSize = 500;
+
+  /// Maximum entity ids per `IN (...)` chunk in batched KG queries. Keeps
+  /// each statement far below SQLite's bind-variable limit even when the id
+  /// list is bound twice (source/target sides of a relation).
+  static const int knowledgeSqlInChunkSize = 1000;
   static const String cachedKnowledgeEnabledKey = 'cached_knowledge_enabled';
   static const String cachedKbLanguageKey = 'cached_kb_language';
 

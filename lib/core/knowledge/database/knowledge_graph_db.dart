@@ -5,6 +5,8 @@ import 'dart:math';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import '../../../shared/constants.dart';
+
 part 'knowledge_graph_db.g.dart';
 
 /// One edge from a batched neighbor lookup ([KnowledgeGraphDB.findNeighborsBatch]).
@@ -264,6 +266,77 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
         relConfidence: r.read<double>('rel_confidence'),
       );
       (map[edge.anchorId] ??= []).add(edge);
+    }
+    return map;
+  }
+
+  /// Batch-load relation-neighbor ids for a set of entities (U14).
+  ///
+  /// Replaces the per-entity [getEntityRelationsWithNames] loop in
+  /// `KbMaintenanceService.findCandidates` (the dream-run N+1). Preserves the
+  /// loop's exact semantics: active, non-expired relations, neighbor = the
+  /// other endpoint, no is_active filter on the neighbor entity. Every
+  /// requested id gets a (possibly empty) entry. Ids are chunked into
+  /// `IN (...)` lists of [chunkSize] to bound bind variables per statement.
+  Future<Map<int, Set<int>>> getRelationNeighborIdsBatch(
+    List<int> ids, {
+    int chunkSize = AppConstants.knowledgeSqlInChunkSize,
+  }) async {
+    final map = {for (final id in ids) id: <int>{}};
+    for (var i = 0; i < ids.length; i += chunkSize) {
+      final chunk = ids.sublist(i, min(i + chunkSize, ids.length));
+      final placeholders = List.filled(chunk.length, '?').join(', ');
+      final vars = [for (final id in chunk) Variable.withInt(id)];
+      final rows = await customSelect(
+        'SELECT source_id, target_id FROM relations '
+        'WHERE (source_id IN ($placeholders) OR target_id IN ($placeholders)) '
+        'AND is_active = 1 AND expired_at IS NULL',
+        variables: [...vars, ...vars],
+      ).get();
+      final inChunk = chunk.toSet();
+      for (final r in rows) {
+        final src = r.read<int>('source_id');
+        final tgt = r.read<int>('target_id');
+        if (inChunk.contains(src)) map[src]!.add(tgt);
+        if (inChunk.contains(tgt)) map[tgt]!.add(src);
+      }
+    }
+    return map;
+  }
+
+  /// Batch-load up to [perEntityLimit] active facts per entity (U14).
+  ///
+  /// Replaces the per-entity fact SELECT loop in
+  /// `KbMaintenanceService.findCandidates`. Rows are ordered by fact id
+  /// within each entity (insertion order — same rows the old
+  /// `LIMIT [perEntityLimit]` query returned in practice) and truncated
+  /// per entity in Dart. Ids are chunked like [getRelationNeighborIdsBatch].
+  Future<Map<int, List<({String key, String value, String type})>>>
+      getActiveFactRowsBatch(
+    List<int> ids, {
+    required int perEntityLimit,
+    int chunkSize = AppConstants.knowledgeSqlInChunkSize,
+  }) async {
+    final map = <int, List<({String key, String value, String type})>>{};
+    for (var i = 0; i < ids.length; i += chunkSize) {
+      final chunk = ids.sublist(i, min(i + chunkSize, ids.length));
+      final placeholders = List.filled(chunk.length, '?').join(', ');
+      final rows = await customSelect(
+        'SELECT entity_id, fact_key, fact_value, value_type FROM facts '
+        'WHERE entity_id IN ($placeholders) AND expired_at IS NULL '
+        'ORDER BY entity_id, id',
+        variables: [for (final id in chunk) Variable.withInt(id)],
+      ).get();
+      for (final r in rows) {
+        final entityId = r.read<int>('entity_id');
+        final list = map[entityId] ??= [];
+        if (list.length >= perEntityLimit) continue;
+        list.add((
+          key: r.read<String>('fact_key'),
+          value: r.read<String>('fact_value'),
+          type: r.read<String>('value_type'),
+        ));
+      }
     }
     return map;
   }
@@ -801,16 +874,45 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     );
   }
 
-  /// Load all active entity embeddings for brute-force vector search.
+  /// Load active entity embeddings for the dedup embedding pre-filter.
   /// Returns (id, embedding) pairs for entities that have embeddings.
+  ///
+  /// [limit] is required (U14): callers must state their bound explicitly —
+  /// the old silent `limit = 1000` default capped semantic search. Retrieval
+  /// no longer uses this; it pages through ALL embeddings via
+  /// [getActiveEntityEmbeddingsPage].
   Future<List<({int id, Uint8List embedding})>> getActiveEntityEmbeddings({
-    int limit = 1000,
+    required int limit,
   }) async {
     final results = await customSelect(
       'SELECT id, embedding FROM entities '
       'WHERE is_active = 1 AND embedding IS NOT NULL '
       'LIMIT ?',
       variables: [Variable.withInt(limit)],
+    ).get();
+
+    return results.map((r) {
+      return (
+        id: r.read<int>('id'),
+        embedding: r.read<Uint8List>('embedding'),
+      );
+    }).toList();
+  }
+
+  /// One keyset page of active entity embeddings, ordered by id, strictly
+  /// after [afterId] (U14). Drives the paged cosine scan in
+  /// `KnowledgeService.queryRelevant`: the scan covers every active
+  /// embedding with at most [pageSize] BLOBs in memory at a time — no
+  /// silent cap, no fully materialized embedding list.
+  Future<List<({int id, Uint8List embedding})>> getActiveEntityEmbeddingsPage({
+    required int afterId,
+    required int pageSize,
+  }) async {
+    final results = await customSelect(
+      'SELECT id, embedding FROM entities '
+      'WHERE is_active = 1 AND embedding IS NOT NULL AND id > ? '
+      'ORDER BY id LIMIT ?',
+      variables: [Variable.withInt(afterId), Variable.withInt(pageSize)],
     ).get();
 
     return results.map((r) {

@@ -34,6 +34,11 @@ class KnowledgeService {
   /// Whether vector similarity is available.
   bool get hasEmbedder => embeddingProvider != null;
 
+  /// Page size for the keyset-paged embedding scan (injectable for tests;
+  /// production uses [AppConstants.knowledgeEmbeddingScanPageSize]). Bounds
+  /// resident BLOBs only — the scan always covers ALL active embeddings.
+  final int embeddingScanPageSize;
+
   final _spreading = const SpreadingActivation();
 
   KnowledgeService({
@@ -41,6 +46,7 @@ class KnowledgeService {
     this.embeddingProvider,
     this.embeddingModel = '',
     this.embeddingDimensions = 768,
+    this.embeddingScanPageSize = AppConstants.knowledgeEmbeddingScanPageSize,
   });
 
   /// Query the knowledge graph for entities relevant to a text query.
@@ -102,19 +108,7 @@ class KnowledgeService {
         );
         if (queryResult.embeddings.isNotEmpty) {
           final queryVec = Float32List.fromList(queryResult.embeddings.first);
-          final entityEmbeddings =
-              await db.getActiveEntityEmbeddings(limit: 1000);
-
-          for (final entry in entityEmbeddings) {
-            final entVec = Float32List.view(
-              Uint8List.fromList(entry.embedding).buffer,
-            );
-            if (entVec.length != queryVec.length) continue;
-            final sim = MemoryClusterer.cosineSimilarity(queryVec, entVec);
-            if (sim > AppConstants.knowledgeVectorSimilarityThreshold) {
-              vectorScores[entry.id] = sim;
-            }
-          }
+          vectorScores.addAll(await _scanEmbeddings(queryVec));
         }
       } catch (e) {
         AppLogger.instance.warning(
@@ -282,6 +276,42 @@ class KnowledgeService {
     }
 
     return results;
+  }
+
+  /// Cosine-scan ALL active entity embeddings against [queryVec], in keyset
+  /// pages of [embeddingScanPageSize] rows (U14).
+  ///
+  /// Replaces the old single `getActiveEntityEmbeddings(limit: 1000)` load,
+  /// which silently ignored every entity past the first 1000 and kept the
+  /// whole embedding list materialized on the agent isolate. Paging bounds
+  /// memory to one page of BLOBs; scoring is unchanged (same math, same
+  /// threshold), so fused rankings are identical. The scan stays on the
+  /// calling isolate by design: the benchmark in
+  /// tool/benchmark_cosine_scan.dart showed Isolate.run is ~2x slower at 5K
+  /// entities because copying the embeddings dominates the cosine math.
+  Future<Map<int, double>> _scanEmbeddings(Float32List queryVec) async {
+    final scores = <int, double>{};
+    var afterId = 0;
+    while (true) {
+      final page = await db.getActiveEntityEmbeddingsPage(
+        afterId: afterId,
+        pageSize: embeddingScanPageSize,
+      );
+      if (page.isEmpty) break;
+      for (final entry in page) {
+        final entVec = Float32List.view(
+          Uint8List.fromList(entry.embedding).buffer,
+        );
+        if (entVec.length != queryVec.length) continue;
+        final sim = MemoryClusterer.cosineSimilarity(queryVec, entVec);
+        if (sim > AppConstants.knowledgeVectorSimilarityThreshold) {
+          scores[entry.id] = sim;
+        }
+      }
+      afterId = page.last.id;
+      if (page.length < embeddingScanPageSize) break;
+    }
+    return scores;
   }
 
   /// Batch recalculate memory decay for all active entities.

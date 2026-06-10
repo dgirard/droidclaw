@@ -215,39 +215,31 @@ class KbMaintenanceService {
       if (e.id != null) entityById[e.id!] = e;
     }
 
-    // 6. Load relations for all entities (batch)
-    final relNeighbors = <int, Set<int>>{};
-    for (final e in allEntities) {
-      if (e.id == null) continue;
-      final rels = await _db.getEntityRelationsWithNames(e.id!);
-      final neighbors = <int>{};
-      for (final r in rels) {
-        final srcId = r['source_id'] as int;
-        final tgtId = r['target_id'] as int;
-        neighbors.add(srcId == e.id! ? tgtId : srcId);
-      }
-      relNeighbors[e.id!] = neighbors;
-    }
+    final allIds = [
+      for (final e in allEntities)
+        if (e.id != null) e.id!,
+    ];
 
-    // 7. Load facts for all entities (key, value, type for date-aware scoring)
+    // 6. Load relation neighbors for all entities — a handful of chunked
+    // IN (...) queries instead of one getEntityRelationsWithNames per
+    // entity (U14: the dream-run N+1, up to 5000 queries).
+    final relNeighbors = await _db.getRelationNeighborIdsBatch(allIds);
+
+    // 7. Load facts for all entities (key, value, type for date-aware
+    // scoring) — chunked IN (...) queries instead of one SELECT per entity.
+    final factRows =
+        await _db.getActiveFactRowsBatch(allIds, perEntityLimit: 10);
     final factData = <int, List<_FactEntry>>{};
     final factKeys = <int, Set<String>>{};
     final factSummaries = <int, List<String>>{};
-    for (final e in allEntities) {
-      if (e.id == null) continue;
-      final facts = await _db.customSelect(
-        'SELECT fact_key, fact_value, value_type FROM facts '
-        'WHERE entity_id = ? AND expired_at IS NULL LIMIT 10',
-        variables: [Variable.withInt(e.id!)],
-      ).get();
-      final entries = facts.map((f) => _FactEntry(
-            key: f.read<String>('fact_key'),
-            value: f.read<String>('fact_value'),
-            type: f.read<String>('value_type'),
-          )).toList();
-      factData[e.id!] = entries;
-      factKeys[e.id!] = entries.map((f) => f.key).toSet();
-      factSummaries[e.id!] = entries
+    for (final id in allIds) {
+      final entries = [
+        for (final f in factRows[id] ?? const [])
+          _FactEntry(key: f.key, value: f.value, type: f.type),
+      ];
+      factData[id] = entries;
+      factKeys[id] = entries.map((f) => f.key).toSet();
+      factSummaries[id] = entries
           .map((f) => '${f.key}: ${_truncate(f.value, 50)}')
           .toList();
     }
