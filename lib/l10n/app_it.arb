@@ -449,6 +449,13 @@
   "@voiceLanguageUnavailable": { "placeholders": { "language": { "type": "String" } } },
   "voiceTtsUnavailable": "La sintesi vocale non è disponibile su questo dispositivo",
 
+  "voiceConvListening": "In ascolto… parla ora",
+  "voiceConvProcessing": "Sto pensando…",
+  "voiceConvSpeaking": "Sto parlando… tocca per interrompere",
+  "voiceConvExit": "Termina la conversazione vocale",
+  "voiceClarificationPrompt": "Non ho capito, puoi ripetere?",
+  "voiceConvNotUnderstood": "Non ti ho ancora capito — conversazione vocale terminata",
+
   "agentSummarizeInstructions": "Write the summary in Italian.",
 
   "settingsExportConversations": "Esporta conversazioni",

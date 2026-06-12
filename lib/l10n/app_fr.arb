@@ -414,6 +414,13 @@
   "@voiceLanguageUnavailable": { "placeholders": { "language": { "type": "String" } } },
   "voiceTtsUnavailable": "La synthèse vocale est indisponible sur cet appareil",
 
+  "voiceConvListening": "À l'écoute… parlez maintenant",
+  "voiceConvProcessing": "Réflexion…",
+  "voiceConvSpeaking": "Lecture… touchez pour interrompre",
+  "voiceConvExit": "Terminer la conversation vocale",
+  "voiceClarificationPrompt": "Je n'ai pas compris, pouvez-vous répéter ?",
+  "voiceConvNotUnderstood": "Je n'ai toujours pas compris — conversation vocale terminée",
+
   "agentSummarizeInstructions": "Write the summary in French.",
 
   "settingsExportConversations": "Exporter les conversations",

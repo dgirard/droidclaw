@@ -347,6 +347,37 @@ class AppConstants {
     'it': 'it-IT',
   };
 
+  // Voice conversation mode (U5 — hands-free turn-taking)
+
+  /// Endpointing: silence after speech that ends a listen session.
+  static const Duration voiceListenPauseFor = Duration(seconds: 3);
+
+  /// Hard cap on a single STT listen session.
+  static const Duration voiceListenFor = Duration(seconds: 30);
+
+  /// Follow-up window after the spoken answer: silence for this long closes
+  /// the conversation silently (Alexa Follow-Up pattern — no reprompt).
+  static const Duration voiceFollowUpWindow = Duration(seconds: 7);
+
+  /// Empty/garbage STT sessions tolerated before conversation mode exits
+  /// with a visual fallback (first strike gets one spoken clarification).
+  static const int voiceMaxStrikes = 2;
+
+  /// Exit phrases per app locale code, matched (normalized: lowercased,
+  /// trimmed, trailing punctuation stripped, curly apostrophes straightened)
+  /// against the FULL final STT utterance before it is sent to the agent.
+  ///
+  /// These are MATCHING TOKENS, not display strings — they live here instead
+  /// of the ARB files on purpose: localizers must never "translate" them
+  /// independently of what the speech recognizer actually produces.
+  static const Map<String, List<String>> voiceExitPhrases = {
+    'fr': ['stop', 'merci', "c'est tout", 'termine', 'terminé'],
+    'en': ['stop', 'thanks', 'thank you', "that's all"],
+    'es': ['stop', 'para', 'gracias', 'eso es todo', 'termina'],
+    'de': ['stopp', 'stop', 'danke', 'das ist alles', 'beenden'],
+    'it': ['stop', 'grazie', 'è tutto', 'basta così', 'termina'],
+  };
+
   // Local embedding provider (U2 — EmbeddingGemma 308M ONNX, on-device)
 
   /// EmbeddingConfig.provider value selecting the on-device provider.

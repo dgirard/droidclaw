@@ -1266,6 +1266,26 @@ class AppLocalizationsEn extends AppLocalizations {
       'Text-to-speech is unavailable on this device';
 
   @override
+  String get voiceConvListening => 'Listening… speak now';
+
+  @override
+  String get voiceConvProcessing => 'Thinking…';
+
+  @override
+  String get voiceConvSpeaking => 'Speaking… tap to interrupt';
+
+  @override
+  String get voiceConvExit => 'End voice conversation';
+
+  @override
+  String get voiceClarificationPrompt =>
+      'Sorry, I didn\'t catch that. Could you say it again?';
+
+  @override
+  String get voiceConvNotUnderstood =>
+      'I still couldn\'t understand you — voice conversation ended';
+
+  @override
   String get agentSummarizeInstructions => 'Write the summary in English.';
 
   @override

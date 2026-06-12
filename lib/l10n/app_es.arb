@@ -449,6 +449,13 @@
   "@voiceLanguageUnavailable": { "placeholders": { "language": { "type": "String" } } },
   "voiceTtsUnavailable": "La síntesis de voz no está disponible en este dispositivo",
 
+  "voiceConvListening": "Escuchando… habla ahora",
+  "voiceConvProcessing": "Pensando…",
+  "voiceConvSpeaking": "Hablando… toca para interrumpir",
+  "voiceConvExit": "Terminar la conversación de voz",
+  "voiceClarificationPrompt": "No te he entendido, ¿puedes repetirlo?",
+  "voiceConvNotUnderstood": "Sigo sin entenderte — conversación de voz terminada",
+
   "agentSummarizeInstructions": "Write the summary in Spanish.",
 
   "settingsExportConversations": "Exportar conversaciones",

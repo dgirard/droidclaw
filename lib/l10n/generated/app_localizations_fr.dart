@@ -1287,6 +1287,26 @@ class AppLocalizationsFr extends AppLocalizations {
       'La synthèse vocale est indisponible sur cet appareil';
 
   @override
+  String get voiceConvListening => 'À l\'écoute… parlez maintenant';
+
+  @override
+  String get voiceConvProcessing => 'Réflexion…';
+
+  @override
+  String get voiceConvSpeaking => 'Lecture… touchez pour interrompre';
+
+  @override
+  String get voiceConvExit => 'Terminer la conversation vocale';
+
+  @override
+  String get voiceClarificationPrompt =>
+      'Je n\'ai pas compris, pouvez-vous répéter ?';
+
+  @override
+  String get voiceConvNotUnderstood =>
+      'Je n\'ai toujours pas compris — conversation vocale terminée';
+
+  @override
   String get agentSummarizeInstructions => 'Write the summary in French.';
 
   @override

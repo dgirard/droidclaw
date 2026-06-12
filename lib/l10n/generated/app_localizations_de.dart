@@ -1285,6 +1285,26 @@ class AppLocalizationsDe extends AppLocalizations {
       'Sprachausgabe ist auf diesem Gerät nicht verfügbar';
 
   @override
+  String get voiceConvListening => 'Ich höre zu… sprich jetzt';
+
+  @override
+  String get voiceConvProcessing => 'Denke nach…';
+
+  @override
+  String get voiceConvSpeaking => 'Spreche… zum Unterbrechen tippen';
+
+  @override
+  String get voiceConvExit => 'Sprachgespräch beenden';
+
+  @override
+  String get voiceClarificationPrompt =>
+      'Das habe ich nicht verstanden, kannst du es wiederholen?';
+
+  @override
+  String get voiceConvNotUnderstood =>
+      'Ich habe dich immer noch nicht verstanden — Sprachgespräch beendet';
+
+  @override
   String get agentSummarizeInstructions => 'Write the summary in German.';
 
   @override

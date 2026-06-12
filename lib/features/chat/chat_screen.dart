@@ -13,6 +13,7 @@ import '../../providers/chat_provider.dart';
 import 'agent_status_indicator.dart';
 import 'input_bar.dart';
 import 'message_bubble.dart';
+import 'voice_conversation_controller.dart';
 
 /// Main chat screen.
 class ChatScreen extends ConsumerStatefulWidget {
@@ -37,6 +38,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   StreamSubscription<VoiceNarratorState>? _narratorSub;
   VoiceDegradation _lastDegradation = VoiceDegradation.none;
 
+  /// Hands-free conversation mode (U5). Entered by long-pressing the mic
+  /// button; exited by tap on the mode chip, mic tap, typing, exit phrase,
+  /// or silence in the follow-up window.
+  late final VoiceConversationController _voiceController;
+  StreamSubscription<VoiceConversationState>? _voiceSub;
+  VoiceConversationState _voiceState = const VoiceConversationState();
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +55,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     // pattern: never fail silently — the text answer is always displayed).
     _narratorSub =
         ref.read(voiceNarratorProvider).states.listen(_onNarratorState);
+    _voiceController = VoiceConversationController(
+      stt: SpeechToTextSttEngine(_speech),
+      narrator: ref.read(voiceNarratorProvider),
+      resolveLocale: () => ref.read(appConfigProvider).resolvedLocale,
+      onSendVoiceMessage: (text) => ref
+          .read(chatProvider.notifier)
+          .sendMessage(text, modality: ChatTurnModality.voice),
+    );
+    _voiceSub = _voiceController.states.listen(_onVoiceConversationState);
+  }
+
+  void _onVoiceConversationState(VoiceConversationState state) {
+    if (!mounted) return;
+    // Two unusable STT sessions in a row: visual fallback (no audible
+    // reprompt beyond the single clarification).
+    if (!state.isActive &&
+        _voiceState.isActive &&
+        state.closeReason == VoiceCloseReason.notUnderstood) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).voiceConvNotUnderstood),
+        ),
+      );
+    }
+    setState(() => _voiceState = state);
   }
 
   void _onNarratorState(VoiceNarratorState state) {
@@ -72,6 +105,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     // exposed by flutter_tts — documented gap in VoiceNarrator.
     if (state == AppLifecycleState.paused) {
       ref.read(voiceNarratorProvider).stop();
+      // Never keep the mic open in the background (U5).
+      _voiceController.exitConversationMode();
     }
   }
 
@@ -83,7 +118,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     if (mounted) setState(() {});
   }
 
+  /// Long-press on the mic: enter hands-free conversation mode. A live
+  /// single-shot session is stopped first (the recognizer is a singleton —
+  /// never two listen sessions).
+  Future<void> _enterConversationMode() async {
+    if (_isListening) {
+      await _speech.stop();
+      if (mounted) setState(() => _isListening = false);
+    }
+    await _voiceController.enterConversationMode();
+  }
+
   void _toggleListening() {
+    // Mic tap during conversation mode exits it (single-shot and
+    // conversation never share a session).
+    if (_voiceState.isActive) {
+      _voiceController.exitConversationMode();
+      return;
+    }
     if (_isListening) {
       _speech.stop();
       setState(() => _isListening = false);
@@ -109,16 +161,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   }
 
   void _onSpeechStatus(String status) {
+    // speech_to_text status/error callbacks are global (set once at
+    // initialize) — forward them to the conversation controller, which
+    // ignores them outside conversation mode.
+    _voiceController.onSttStatus(status);
     if (status == 'done' || status == 'notListening') {
       if (mounted) setState(() => _isListening = false);
     }
   }
 
   void _onSpeechError(SpeechRecognitionError error) {
+    _voiceController.onSttError(error.errorMsg);
     if (mounted) {
       setState(() => _isListening = false);
-      // Don't show error for normal speech timeout
-      if (error.errorMsg != 'error_speech_timeout') {
+      // Don't show error for normal speech timeout, and let conversation
+      // mode handle its own recoveries (clarification / silent close).
+      if (error.errorMsg != 'error_speech_timeout' && !_voiceState.isActive) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -134,6 +192,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _narratorSub?.cancel();
+    _voiceSub?.cancel();
+    _voiceController.dispose();
     _scrollController.dispose();
     _speech.stop();
     super.dispose();
@@ -160,6 +220,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     ref.listen(chatProvider, (previous, next) {
       if (previous?.messages.length != next.messages.length) {
         _scrollToBottom();
+      }
+      // Turn finished (response or error): conversation mode waits for the
+      // narration to drain, then opens the 7 s follow-up listen window.
+      if ((previous?.isProcessing ?? false) && !next.isProcessing) {
+        _voiceController.onTurnFinished();
       }
     });
 
@@ -206,8 +271,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           if (chatState.isProcessing)
             AgentStatusIndicator(event: chatState.currentEvent),
 
-          // Voice narration indicator (tap stop to cut speech)
-          _SpeakingIndicator(narrator: ref.watch(voiceNarratorProvider)),
+          // Conversation mode chip (U5) when active; otherwise the plain
+          // narration indicator (tap stop to cut speech).
+          if (_voiceState.isActive)
+            _ConversationModeBar(
+              state: _voiceState,
+              onExit: () => _voiceController.exitConversationMode(),
+            )
+          else
+            _SpeakingIndicator(narrator: ref.watch(voiceNarratorProvider)),
 
           // Input bar
           InputBar(
@@ -225,13 +297,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
               chatNotifier.sendMessage(text, modality: modality);
             },
             onMicToggle: _speechAvailable ? _toggleListening : null,
+            onMicLongPress:
+                _speechAvailable ? _enterConversationMode : null,
             onUserTyped: () {
-              // Keyboard edit: demote the pending voice turn to typed and
-              // stop any ongoing narration (R2).
+              // Keyboard edit: demote the pending voice turn to typed, stop
+              // any ongoing narration (R2) and leave conversation mode (U5).
               _pendingVoiceSend = false;
               ref.read(voiceNarratorProvider).stop();
+              _voiceController.exitConversationMode();
             },
-            isListening: _isListening,
+            isListening: _isListening ||
+                _voiceState.phase == VoiceConversationPhase.listening,
             enabled: !chatState.isProcessing,
           ),
         ],
@@ -271,6 +347,114 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Voice conversation mode chip (U5): shows the current phase
+/// (Listening pulse / Processing / Speaking) and exits the mode on tap
+/// anywhere on the chip.
+class _ConversationModeBar extends StatelessWidget {
+  final VoiceConversationState state;
+  final VoidCallback onExit;
+
+  const _ConversationModeBar({required this.state, required this.onExit});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l = AppLocalizations.of(context);
+
+    final (Widget icon, String label) = switch (state.phase) {
+      VoiceConversationPhase.listening => (
+          _PulsingIcon(
+            icon: Icons.mic,
+            color: theme.colorScheme.error,
+          ),
+          l.voiceConvListening,
+        ),
+      VoiceConversationPhase.processing => (
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          l.voiceConvProcessing,
+        ),
+      _ => (
+          Icon(Icons.volume_up_outlined,
+              size: 16, color: theme.colorScheme.primary),
+          l.voiceConvSpeaking,
+        ),
+    };
+
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: InkWell(
+        onTap: onExit,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              icon,
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.stop_circle_outlined,
+                size: 20,
+                color: theme.colorScheme.primary,
+                semanticLabel: l.voiceConvExit,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Gently pulsing icon for the "listening" phase of conversation mode.
+class _PulsingIcon extends StatefulWidget {
+  final IconData icon;
+  final Color color;
+
+  const _PulsingIcon({required this.icon, required this.color});
+
+  @override
+  State<_PulsingIcon> createState() => _PulsingIconState();
+}
+
+class _PulsingIconState extends State<_PulsingIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.35, end: 1).animate(_controller),
+      child: Icon(widget.icon, size: 16, color: widget.color),
     );
   }
 }

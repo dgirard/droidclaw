@@ -2360,6 +2360,42 @@ abstract class AppLocalizations {
   /// **'Text-to-speech is unavailable on this device'**
   String get voiceTtsUnavailable;
 
+  /// No description provided for @voiceConvListening.
+  ///
+  /// In en, this message translates to:
+  /// **'Listening… speak now'**
+  String get voiceConvListening;
+
+  /// No description provided for @voiceConvProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking…'**
+  String get voiceConvProcessing;
+
+  /// No description provided for @voiceConvSpeaking.
+  ///
+  /// In en, this message translates to:
+  /// **'Speaking… tap to interrupt'**
+  String get voiceConvSpeaking;
+
+  /// No description provided for @voiceConvExit.
+  ///
+  /// In en, this message translates to:
+  /// **'End voice conversation'**
+  String get voiceConvExit;
+
+  /// No description provided for @voiceClarificationPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Sorry, I didn\'t catch that. Could you say it again?'**
+  String get voiceClarificationPrompt;
+
+  /// No description provided for @voiceConvNotUnderstood.
+  ///
+  /// In en, this message translates to:
+  /// **'I still couldn\'t understand you — voice conversation ended'**
+  String get voiceConvNotUnderstood;
+
   /// No description provided for @agentSummarizeInstructions.
   ///
   /// In en, this message translates to:

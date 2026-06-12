@@ -1285,6 +1285,25 @@ class AppLocalizationsIt extends AppLocalizations {
       'La sintesi vocale non è disponibile su questo dispositivo';
 
   @override
+  String get voiceConvListening => 'In ascolto… parla ora';
+
+  @override
+  String get voiceConvProcessing => 'Sto pensando…';
+
+  @override
+  String get voiceConvSpeaking => 'Sto parlando… tocca per interrompere';
+
+  @override
+  String get voiceConvExit => 'Termina la conversazione vocale';
+
+  @override
+  String get voiceClarificationPrompt => 'Non ho capito, puoi ripetere?';
+
+  @override
+  String get voiceConvNotUnderstood =>
+      'Non ti ho ancora capito — conversazione vocale terminata';
+
+  @override
   String get agentSummarizeInstructions => 'Write the summary in Italian.';
 
   @override

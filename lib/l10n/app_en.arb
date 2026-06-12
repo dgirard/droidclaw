@@ -449,6 +449,13 @@
   "@voiceLanguageUnavailable": { "placeholders": { "language": { "type": "String" } } },
   "voiceTtsUnavailable": "Text-to-speech is unavailable on this device",
 
+  "voiceConvListening": "Listening… speak now",
+  "voiceConvProcessing": "Thinking…",
+  "voiceConvSpeaking": "Speaking… tap to interrupt",
+  "voiceConvExit": "End voice conversation",
+  "voiceClarificationPrompt": "Sorry, I didn't catch that. Could you say it again?",
+  "voiceConvNotUnderstood": "I still couldn't understand you — voice conversation ended",
+
   "agentSummarizeInstructions": "Write the summary in English.",
 
   "settingsExportConversations": "Export Conversations",

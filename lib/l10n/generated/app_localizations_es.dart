@@ -1288,6 +1288,26 @@ class AppLocalizationsEs extends AppLocalizations {
       'La síntesis de voz no está disponible en este dispositivo';
 
   @override
+  String get voiceConvListening => 'Escuchando… habla ahora';
+
+  @override
+  String get voiceConvProcessing => 'Pensando…';
+
+  @override
+  String get voiceConvSpeaking => 'Hablando… toca para interrumpir';
+
+  @override
+  String get voiceConvExit => 'Terminar la conversación de voz';
+
+  @override
+  String get voiceClarificationPrompt =>
+      'No te he entendido, ¿puedes repetirlo?';
+
+  @override
+  String get voiceConvNotUnderstood =>
+      'Sigo sin entenderte — conversación de voz terminada';
+
+  @override
   String get agentSummarizeInstructions => 'Write the summary in Spanish.';
 
   @override
