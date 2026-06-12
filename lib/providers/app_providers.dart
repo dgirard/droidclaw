@@ -11,6 +11,7 @@ import '../core/config/config_storage.dart';
 import '../core/knowledge/database/knowledge_graph_db.dart';
 import '../core/knowledge/services/entity_extractor.dart';
 import '../core/knowledge/services/entity_resolver.dart';
+import '../core/knowledge/services/episode_store.dart';
 import '../core/knowledge/services/ingestion_pipeline.dart';
 import '../core/knowledge/services/kb_maintenance_service.dart';
 import '../core/knowledge/services/knowledge_service.dart';
@@ -456,6 +457,12 @@ final agentLoopProvider = FutureProvider<AgentLoop?>((ref) async {
       ? await ref.watch(ingestionPipelineProvider.future)
       : null;
 
+  // Episodic memory (U4) — lives in the KG database, so it follows the same
+  // enabled/disabled switch.
+  final kgDbForEpisodes = await ref.watch(knowledgeGraphDbProvider.future);
+  final episodeStore =
+      kgDbForEpisodes != null ? EpisodeStore(kgDbForEpisodes) : null;
+
   final agentLoop = AgentLoop(
     provider: provider,
     config: config,
@@ -464,6 +471,7 @@ final agentLoopProvider = FutureProvider<AgentLoop?>((ref) async {
     contextBuilder: contextBuilder,
     knowledgeService: kgService2,
     ingestionPipeline: ingestionPipeline,
+    episodeStore: episodeStore,
   );
 
   // Wire SubagentTool executor: creates a fresh session, processes the task,

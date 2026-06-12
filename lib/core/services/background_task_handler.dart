@@ -492,6 +492,12 @@ class BackgroundTaskHandler extends TaskHandler {
         AppLogger.instance.info(LogSource.service,
             'KG purge: $purged cold entities deactivated');
       }
+      // Episodic memory eviction (U4): TTL is the eviction boundary.
+      final evicted = await _agentLoop!.episodeStore?.purgeExpired() ?? 0;
+      if (evicted > 0) {
+        AppLogger.instance.info(LogSource.service,
+            'KG purge: $evicted expired episodes evicted');
+      }
     } catch (e) {
       AppLogger.instance.warning(LogSource.service,
           'KG purge failed: $e');

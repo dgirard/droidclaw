@@ -3793,6 +3793,572 @@ class AliasesCompanion extends UpdateCompanion<Aliase> {
   }
 }
 
+class Episodes extends Table with TableInfo<Episodes, Episode> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  Episodes(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    $customConstraints: 'NOT NULL PRIMARY KEY AUTOINCREMENT',
+  );
+  static const VerificationMeta _toolMeta = const VerificationMeta('tool');
+  late final GeneratedColumn<String> tool = GeneratedColumn<String>(
+    'tool',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    $customConstraints: 'NOT NULL',
+  );
+  static const VerificationMeta _argsDigestMeta = const VerificationMeta(
+    'argsDigest',
+  );
+  late final GeneratedColumn<String> argsDigest = GeneratedColumn<String>(
+    'args_digest',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    $customConstraints: 'NOT NULL',
+  );
+  static const VerificationMeta _contextKeyMeta = const VerificationMeta(
+    'contextKey',
+  );
+  late final GeneratedColumn<String> contextKey = GeneratedColumn<String>(
+    'context_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    $customConstraints: '',
+  );
+  static const VerificationMeta _resultRedactedMeta = const VerificationMeta(
+    'resultRedacted',
+  );
+  late final GeneratedColumn<String> resultRedacted = GeneratedColumn<String>(
+    'result_redacted',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    $customConstraints: 'NOT NULL',
+  );
+  static const VerificationMeta _isErrorMeta = const VerificationMeta(
+    'isError',
+  );
+  late final GeneratedColumn<int> isError = GeneratedColumn<int>(
+    'is_error',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    $customConstraints: 'NOT NULL DEFAULT 0',
+    defaultValue: const CustomExpression('0'),
+  );
+  static const VerificationMeta _sessionKeyMeta = const VerificationMeta(
+    'sessionKey',
+  );
+  late final GeneratedColumn<String> sessionKey = GeneratedColumn<String>(
+    'session_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    $customConstraints: '',
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    $customConstraints: 'NOT NULL',
+  );
+  static const VerificationMeta _expiresAtMeta = const VerificationMeta(
+    'expiresAt',
+  );
+  late final GeneratedColumn<int> expiresAt = GeneratedColumn<int>(
+    'expires_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    $customConstraints: 'NOT NULL',
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    tool,
+    argsDigest,
+    contextKey,
+    resultRedacted,
+    isError,
+    sessionKey,
+    createdAt,
+    expiresAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'episodes';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Episode> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('tool')) {
+      context.handle(
+        _toolMeta,
+        tool.isAcceptableOrUnknown(data['tool']!, _toolMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_toolMeta);
+    }
+    if (data.containsKey('args_digest')) {
+      context.handle(
+        _argsDigestMeta,
+        argsDigest.isAcceptableOrUnknown(data['args_digest']!, _argsDigestMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_argsDigestMeta);
+    }
+    if (data.containsKey('context_key')) {
+      context.handle(
+        _contextKeyMeta,
+        contextKey.isAcceptableOrUnknown(data['context_key']!, _contextKeyMeta),
+      );
+    }
+    if (data.containsKey('result_redacted')) {
+      context.handle(
+        _resultRedactedMeta,
+        resultRedacted.isAcceptableOrUnknown(
+          data['result_redacted']!,
+          _resultRedactedMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_resultRedactedMeta);
+    }
+    if (data.containsKey('is_error')) {
+      context.handle(
+        _isErrorMeta,
+        isError.isAcceptableOrUnknown(data['is_error']!, _isErrorMeta),
+      );
+    }
+    if (data.containsKey('session_key')) {
+      context.handle(
+        _sessionKeyMeta,
+        sessionKey.isAcceptableOrUnknown(data['session_key']!, _sessionKeyMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('expires_at')) {
+      context.handle(
+        _expiresAtMeta,
+        expiresAt.isAcceptableOrUnknown(data['expires_at']!, _expiresAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_expiresAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {tool, argsDigest, contextKey},
+  ];
+  @override
+  Episode map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Episode(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      tool: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tool'],
+      )!,
+      argsDigest: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}args_digest'],
+      )!,
+      contextKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}context_key'],
+      ),
+      resultRedacted: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}result_redacted'],
+      )!,
+      isError: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_error'],
+      )!,
+      sessionKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}session_key'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      expiresAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}expires_at'],
+      )!,
+    );
+  }
+
+  @override
+  Episodes createAlias(String alias) {
+    return Episodes(attachedDatabase, alias);
+  }
+
+  @override
+  List<String> get customConstraints => const [
+    'UNIQUE(tool, args_digest, context_key)',
+  ];
+  @override
+  bool get dontWriteConstraints => true;
+}
+
+class Episode extends DataClass implements Insertable<Episode> {
+  final int id;
+  final String tool;
+  final String argsDigest;
+  final String? contextKey;
+  final String resultRedacted;
+  final int isError;
+  final String? sessionKey;
+  final int createdAt;
+  final int expiresAt;
+  const Episode({
+    required this.id,
+    required this.tool,
+    required this.argsDigest,
+    this.contextKey,
+    required this.resultRedacted,
+    required this.isError,
+    this.sessionKey,
+    required this.createdAt,
+    required this.expiresAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['tool'] = Variable<String>(tool);
+    map['args_digest'] = Variable<String>(argsDigest);
+    if (!nullToAbsent || contextKey != null) {
+      map['context_key'] = Variable<String>(contextKey);
+    }
+    map['result_redacted'] = Variable<String>(resultRedacted);
+    map['is_error'] = Variable<int>(isError);
+    if (!nullToAbsent || sessionKey != null) {
+      map['session_key'] = Variable<String>(sessionKey);
+    }
+    map['created_at'] = Variable<int>(createdAt);
+    map['expires_at'] = Variable<int>(expiresAt);
+    return map;
+  }
+
+  EpisodesCompanion toCompanion(bool nullToAbsent) {
+    return EpisodesCompanion(
+      id: Value(id),
+      tool: Value(tool),
+      argsDigest: Value(argsDigest),
+      contextKey: contextKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contextKey),
+      resultRedacted: Value(resultRedacted),
+      isError: Value(isError),
+      sessionKey: sessionKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sessionKey),
+      createdAt: Value(createdAt),
+      expiresAt: Value(expiresAt),
+    );
+  }
+
+  factory Episode.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Episode(
+      id: serializer.fromJson<int>(json['id']),
+      tool: serializer.fromJson<String>(json['tool']),
+      argsDigest: serializer.fromJson<String>(json['args_digest']),
+      contextKey: serializer.fromJson<String?>(json['context_key']),
+      resultRedacted: serializer.fromJson<String>(json['result_redacted']),
+      isError: serializer.fromJson<int>(json['is_error']),
+      sessionKey: serializer.fromJson<String?>(json['session_key']),
+      createdAt: serializer.fromJson<int>(json['created_at']),
+      expiresAt: serializer.fromJson<int>(json['expires_at']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'tool': serializer.toJson<String>(tool),
+      'args_digest': serializer.toJson<String>(argsDigest),
+      'context_key': serializer.toJson<String?>(contextKey),
+      'result_redacted': serializer.toJson<String>(resultRedacted),
+      'is_error': serializer.toJson<int>(isError),
+      'session_key': serializer.toJson<String?>(sessionKey),
+      'created_at': serializer.toJson<int>(createdAt),
+      'expires_at': serializer.toJson<int>(expiresAt),
+    };
+  }
+
+  Episode copyWith({
+    int? id,
+    String? tool,
+    String? argsDigest,
+    Value<String?> contextKey = const Value.absent(),
+    String? resultRedacted,
+    int? isError,
+    Value<String?> sessionKey = const Value.absent(),
+    int? createdAt,
+    int? expiresAt,
+  }) => Episode(
+    id: id ?? this.id,
+    tool: tool ?? this.tool,
+    argsDigest: argsDigest ?? this.argsDigest,
+    contextKey: contextKey.present ? contextKey.value : this.contextKey,
+    resultRedacted: resultRedacted ?? this.resultRedacted,
+    isError: isError ?? this.isError,
+    sessionKey: sessionKey.present ? sessionKey.value : this.sessionKey,
+    createdAt: createdAt ?? this.createdAt,
+    expiresAt: expiresAt ?? this.expiresAt,
+  );
+  Episode copyWithCompanion(EpisodesCompanion data) {
+    return Episode(
+      id: data.id.present ? data.id.value : this.id,
+      tool: data.tool.present ? data.tool.value : this.tool,
+      argsDigest: data.argsDigest.present
+          ? data.argsDigest.value
+          : this.argsDigest,
+      contextKey: data.contextKey.present
+          ? data.contextKey.value
+          : this.contextKey,
+      resultRedacted: data.resultRedacted.present
+          ? data.resultRedacted.value
+          : this.resultRedacted,
+      isError: data.isError.present ? data.isError.value : this.isError,
+      sessionKey: data.sessionKey.present
+          ? data.sessionKey.value
+          : this.sessionKey,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      expiresAt: data.expiresAt.present ? data.expiresAt.value : this.expiresAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Episode(')
+          ..write('id: $id, ')
+          ..write('tool: $tool, ')
+          ..write('argsDigest: $argsDigest, ')
+          ..write('contextKey: $contextKey, ')
+          ..write('resultRedacted: $resultRedacted, ')
+          ..write('isError: $isError, ')
+          ..write('sessionKey: $sessionKey, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('expiresAt: $expiresAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    tool,
+    argsDigest,
+    contextKey,
+    resultRedacted,
+    isError,
+    sessionKey,
+    createdAt,
+    expiresAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Episode &&
+          other.id == this.id &&
+          other.tool == this.tool &&
+          other.argsDigest == this.argsDigest &&
+          other.contextKey == this.contextKey &&
+          other.resultRedacted == this.resultRedacted &&
+          other.isError == this.isError &&
+          other.sessionKey == this.sessionKey &&
+          other.createdAt == this.createdAt &&
+          other.expiresAt == this.expiresAt);
+}
+
+class EpisodesCompanion extends UpdateCompanion<Episode> {
+  final Value<int> id;
+  final Value<String> tool;
+  final Value<String> argsDigest;
+  final Value<String?> contextKey;
+  final Value<String> resultRedacted;
+  final Value<int> isError;
+  final Value<String?> sessionKey;
+  final Value<int> createdAt;
+  final Value<int> expiresAt;
+  const EpisodesCompanion({
+    this.id = const Value.absent(),
+    this.tool = const Value.absent(),
+    this.argsDigest = const Value.absent(),
+    this.contextKey = const Value.absent(),
+    this.resultRedacted = const Value.absent(),
+    this.isError = const Value.absent(),
+    this.sessionKey = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.expiresAt = const Value.absent(),
+  });
+  EpisodesCompanion.insert({
+    this.id = const Value.absent(),
+    required String tool,
+    required String argsDigest,
+    this.contextKey = const Value.absent(),
+    required String resultRedacted,
+    this.isError = const Value.absent(),
+    this.sessionKey = const Value.absent(),
+    required int createdAt,
+    required int expiresAt,
+  }) : tool = Value(tool),
+       argsDigest = Value(argsDigest),
+       resultRedacted = Value(resultRedacted),
+       createdAt = Value(createdAt),
+       expiresAt = Value(expiresAt);
+  static Insertable<Episode> custom({
+    Expression<int>? id,
+    Expression<String>? tool,
+    Expression<String>? argsDigest,
+    Expression<String>? contextKey,
+    Expression<String>? resultRedacted,
+    Expression<int>? isError,
+    Expression<String>? sessionKey,
+    Expression<int>? createdAt,
+    Expression<int>? expiresAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (tool != null) 'tool': tool,
+      if (argsDigest != null) 'args_digest': argsDigest,
+      if (contextKey != null) 'context_key': contextKey,
+      if (resultRedacted != null) 'result_redacted': resultRedacted,
+      if (isError != null) 'is_error': isError,
+      if (sessionKey != null) 'session_key': sessionKey,
+      if (createdAt != null) 'created_at': createdAt,
+      if (expiresAt != null) 'expires_at': expiresAt,
+    });
+  }
+
+  EpisodesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? tool,
+    Value<String>? argsDigest,
+    Value<String?>? contextKey,
+    Value<String>? resultRedacted,
+    Value<int>? isError,
+    Value<String?>? sessionKey,
+    Value<int>? createdAt,
+    Value<int>? expiresAt,
+  }) {
+    return EpisodesCompanion(
+      id: id ?? this.id,
+      tool: tool ?? this.tool,
+      argsDigest: argsDigest ?? this.argsDigest,
+      contextKey: contextKey ?? this.contextKey,
+      resultRedacted: resultRedacted ?? this.resultRedacted,
+      isError: isError ?? this.isError,
+      sessionKey: sessionKey ?? this.sessionKey,
+      createdAt: createdAt ?? this.createdAt,
+      expiresAt: expiresAt ?? this.expiresAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (tool.present) {
+      map['tool'] = Variable<String>(tool.value);
+    }
+    if (argsDigest.present) {
+      map['args_digest'] = Variable<String>(argsDigest.value);
+    }
+    if (contextKey.present) {
+      map['context_key'] = Variable<String>(contextKey.value);
+    }
+    if (resultRedacted.present) {
+      map['result_redacted'] = Variable<String>(resultRedacted.value);
+    }
+    if (isError.present) {
+      map['is_error'] = Variable<int>(isError.value);
+    }
+    if (sessionKey.present) {
+      map['session_key'] = Variable<String>(sessionKey.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (expiresAt.present) {
+      map['expires_at'] = Variable<int>(expiresAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EpisodesCompanion(')
+          ..write('id: $id, ')
+          ..write('tool: $tool, ')
+          ..write('argsDigest: $argsDigest, ')
+          ..write('contextKey: $contextKey, ')
+          ..write('resultRedacted: $resultRedacted, ')
+          ..write('isError: $isError, ')
+          ..write('sessionKey: $sessionKey, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('expiresAt: $expiresAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class EntitiesFts extends Table
     with
         TableInfo<EntitiesFts, EntitiesFt>,
@@ -4361,6 +4927,11 @@ abstract class _$KnowledgeGraphDB extends GeneratedDatabase {
     'idx_summary_level',
     'CREATE INDEX idx_summary_level ON summary_nodes (level)',
   );
+  late final Episodes episodes = Episodes(this);
+  late final Index idxEpisodesExpires = Index(
+    'idx_episodes_expires',
+    'CREATE INDEX idx_episodes_expires ON episodes (expires_at)',
+  );
   late final EntitiesFts entitiesFts = EntitiesFts(this);
   late final FactsFts factsFts = FactsFts(this);
   late final Trigger entitiesAi = Trigger(
@@ -4554,6 +5125,8 @@ abstract class _$KnowledgeGraphDB extends GeneratedDatabase {
     idxAliasesEntity,
     idxSummaryParent,
     idxSummaryLevel,
+    episodes,
+    idxEpisodesExpires,
     entitiesFts,
     factsFts,
     entitiesAi,
@@ -7234,6 +7807,276 @@ typedef $AliasesProcessedTableManager =
       Aliase,
       PrefetchHooks Function({bool entityId})
     >;
+typedef $EpisodesCreateCompanionBuilder =
+    EpisodesCompanion Function({
+      Value<int> id,
+      required String tool,
+      required String argsDigest,
+      Value<String?> contextKey,
+      required String resultRedacted,
+      Value<int> isError,
+      Value<String?> sessionKey,
+      required int createdAt,
+      required int expiresAt,
+    });
+typedef $EpisodesUpdateCompanionBuilder =
+    EpisodesCompanion Function({
+      Value<int> id,
+      Value<String> tool,
+      Value<String> argsDigest,
+      Value<String?> contextKey,
+      Value<String> resultRedacted,
+      Value<int> isError,
+      Value<String?> sessionKey,
+      Value<int> createdAt,
+      Value<int> expiresAt,
+    });
+
+class $EpisodesFilterComposer extends Composer<_$KnowledgeGraphDB, Episodes> {
+  $EpisodesFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tool => $composableBuilder(
+    column: $table.tool,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get argsDigest => $composableBuilder(
+    column: $table.argsDigest,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contextKey => $composableBuilder(
+    column: $table.contextKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get resultRedacted => $composableBuilder(
+    column: $table.resultRedacted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isError => $composableBuilder(
+    column: $table.isError,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sessionKey => $composableBuilder(
+    column: $table.sessionKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $EpisodesOrderingComposer extends Composer<_$KnowledgeGraphDB, Episodes> {
+  $EpisodesOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tool => $composableBuilder(
+    column: $table.tool,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get argsDigest => $composableBuilder(
+    column: $table.argsDigest,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contextKey => $composableBuilder(
+    column: $table.contextKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get resultRedacted => $composableBuilder(
+    column: $table.resultRedacted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get isError => $composableBuilder(
+    column: $table.isError,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sessionKey => $composableBuilder(
+    column: $table.sessionKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $EpisodesAnnotationComposer
+    extends Composer<_$KnowledgeGraphDB, Episodes> {
+  $EpisodesAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get tool =>
+      $composableBuilder(column: $table.tool, builder: (column) => column);
+
+  GeneratedColumn<String> get argsDigest => $composableBuilder(
+    column: $table.argsDigest,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get contextKey => $composableBuilder(
+    column: $table.contextKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get resultRedacted => $composableBuilder(
+    column: $table.resultRedacted,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get isError =>
+      $composableBuilder(column: $table.isError, builder: (column) => column);
+
+  GeneratedColumn<String> get sessionKey => $composableBuilder(
+    column: $table.sessionKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get expiresAt =>
+      $composableBuilder(column: $table.expiresAt, builder: (column) => column);
+}
+
+class $EpisodesTableManager
+    extends
+        RootTableManager<
+          _$KnowledgeGraphDB,
+          Episodes,
+          Episode,
+          $EpisodesFilterComposer,
+          $EpisodesOrderingComposer,
+          $EpisodesAnnotationComposer,
+          $EpisodesCreateCompanionBuilder,
+          $EpisodesUpdateCompanionBuilder,
+          (Episode, BaseReferences<_$KnowledgeGraphDB, Episodes, Episode>),
+          Episode,
+          PrefetchHooks Function()
+        > {
+  $EpisodesTableManager(_$KnowledgeGraphDB db, Episodes table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $EpisodesFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $EpisodesOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $EpisodesAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> tool = const Value.absent(),
+                Value<String> argsDigest = const Value.absent(),
+                Value<String?> contextKey = const Value.absent(),
+                Value<String> resultRedacted = const Value.absent(),
+                Value<int> isError = const Value.absent(),
+                Value<String?> sessionKey = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> expiresAt = const Value.absent(),
+              }) => EpisodesCompanion(
+                id: id,
+                tool: tool,
+                argsDigest: argsDigest,
+                contextKey: contextKey,
+                resultRedacted: resultRedacted,
+                isError: isError,
+                sessionKey: sessionKey,
+                createdAt: createdAt,
+                expiresAt: expiresAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String tool,
+                required String argsDigest,
+                Value<String?> contextKey = const Value.absent(),
+                required String resultRedacted,
+                Value<int> isError = const Value.absent(),
+                Value<String?> sessionKey = const Value.absent(),
+                required int createdAt,
+                required int expiresAt,
+              }) => EpisodesCompanion.insert(
+                id: id,
+                tool: tool,
+                argsDigest: argsDigest,
+                contextKey: contextKey,
+                resultRedacted: resultRedacted,
+                isError: isError,
+                sessionKey: sessionKey,
+                createdAt: createdAt,
+                expiresAt: expiresAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $EpisodesProcessedTableManager =
+    ProcessedTableManager<
+      _$KnowledgeGraphDB,
+      Episodes,
+      Episode,
+      $EpisodesFilterComposer,
+      $EpisodesOrderingComposer,
+      $EpisodesAnnotationComposer,
+      $EpisodesCreateCompanionBuilder,
+      $EpisodesUpdateCompanionBuilder,
+      (Episode, BaseReferences<_$KnowledgeGraphDB, Episodes, Episode>),
+      Episode,
+      PrefetchHooks Function()
+    >;
 typedef $EntitiesFtsCreateCompanionBuilder =
     EntitiesFtsCompanion Function({
       Value<String?> name,
@@ -7542,6 +8385,8 @@ class $KnowledgeGraphDBManager {
       $RelationsTableManager(_db, _db.relations);
   $FactsTableManager get facts => $FactsTableManager(_db, _db.facts);
   $AliasesTableManager get aliases => $AliasesTableManager(_db, _db.aliases);
+  $EpisodesTableManager get episodes =>
+      $EpisodesTableManager(_db, _db.episodes);
   $EntitiesFtsTableManager get entitiesFts =>
       $EntitiesFtsTableManager(_db, _db.entitiesFts);
   $FactsFtsTableManager get factsFts =>

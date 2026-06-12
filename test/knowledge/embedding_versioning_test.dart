@@ -180,9 +180,16 @@ void main() {
           AppConstants.knowledgeLegacyEmbeddingModel);
       expect(summaryNode.read<int>('embedding_dim'), 4);
 
+      // The upgrade chain continues past v4: v5 (U4) adds the episodes
+      // table, so an old v3 database lands on the current schema version
+      // with an empty, usable episodes table.
       final version =
           await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.data.values.first, 4);
+      expect(version.data.values.first, 5);
+      final episodes = await db
+          .customSelect('SELECT COUNT(*) AS cnt FROM episodes')
+          .getSingle();
+      expect(episodes.read<int>('cnt'), 0);
     });
 
     test('legacy rows are queryable through the guard with a same-dim '

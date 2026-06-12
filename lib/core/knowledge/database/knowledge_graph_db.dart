@@ -34,7 +34,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   KnowledgeGraphDB.forExecutor(super.executor);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   static QueryExecutor _openConnection(String dbPath) {
     return driftDatabase(
@@ -79,6 +79,26 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
                 'embedding_dim = length(embedding) / 4 '
                 'WHERE embedding IS NOT NULL');
             }
+          }
+          if (from < 5) {
+            // v5: episodic tool-result cache (U4). Mirrors the episodes
+            // definition in schema.drift.
+            await customStatement('''
+              CREATE TABLE episodes (
+                id              INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                tool            TEXT    NOT NULL,
+                args_digest     TEXT    NOT NULL,
+                context_key     TEXT,
+                result_redacted TEXT    NOT NULL,
+                is_error        INTEGER NOT NULL DEFAULT 0,
+                session_key     TEXT,
+                created_at      INTEGER NOT NULL,
+                expires_at      INTEGER NOT NULL,
+                UNIQUE(tool, args_digest, context_key)
+              )
+            ''');
+            await customStatement(
+                'CREATE INDEX idx_episodes_expires ON episodes(expires_at)');
           }
         },
         beforeOpen: (details) async {
@@ -1105,6 +1125,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
       await customStatement('DELETE FROM aliases');
       await customStatement('DELETE FROM summary_nodes');
       await customStatement('DELETE FROM entities');
+      await customStatement('DELETE FROM episodes');
     });
     // 4. Recreate empty FTS5 tables + triggers
     await _createFts5Tables();

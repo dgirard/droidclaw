@@ -100,7 +100,13 @@ class DataWiper {
     // 4. Knowledge graph: clear via the open service (best-effort), close
     // its connection, then ALWAYS delete the file set — deleted rows remain
     // forensically recoverable inside the .db/-wal pages otherwise.
+    // Episodes (U4) live in the same database: an explicit step first
+    // (deleteAll covers them too, but a partial deleteAll failure must not
+    // leave cached tool results behind), then the file deletion below
+    // covers the degraded-service case.
     if (knowledge != null) {
+      await step('episodes',
+          () => knowledge!.db.customStatement('DELETE FROM episodes'));
       await step('knowledge', knowledge!.deleteAll);
       await step('knowledge_db_close', knowledge!.db.close);
     }

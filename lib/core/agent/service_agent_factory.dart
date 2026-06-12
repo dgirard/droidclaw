@@ -12,6 +12,7 @@ import '../services/model_download_manager.dart';
 import '../knowledge/database/knowledge_graph_db.dart';
 import '../knowledge/services/entity_extractor.dart';
 import '../knowledge/services/entity_resolver.dart';
+import '../knowledge/services/episode_store.dart';
 import '../knowledge/services/ingestion_pipeline.dart';
 import '../knowledge/services/knowledge_service.dart';
 import '../providers/embedding_provider.dart';
@@ -220,11 +221,16 @@ class ServiceAgentFactory {
     // 4c. Knowledge Graph tools (with optional vector search via embeddings)
     KnowledgeService? knowledgeService;
     IngestionPipeline? ingestionPipeline;
+    EpisodeStore? episodeStore;
     final kgEnabled = prefs.getBool(AppConstants.cachedKnowledgeEnabledKey) ?? false;
     if (kgEnabled) {
       try {
         final dbPath = p.join(workspacePath, AppConstants.knowledgeDbFilename);
         final kgDb = KnowledgeGraphDB(dbPath);
+        // Episodic memory (U4): the service isolate opens its own WAL
+        // connection, so episodes written by cron turns are visible to the
+        // main isolate (and vice versa).
+        episodeStore = EpisodeStore(kgDb);
         knowledgeService = KnowledgeService(
           db: kgDb,
           embeddingProvider: embeddingProviderInstance,
@@ -269,6 +275,7 @@ class ServiceAgentFactory {
         }
       } catch (_) {
         // KG init failed in service isolate — continue without it
+        episodeStore = null;
       }
     }
 
@@ -303,6 +310,7 @@ class ServiceAgentFactory {
       contextBuilder: contextBuilder,
       knowledgeService: knowledgeService,
       ingestionPipeline: ingestionPipeline,
+      episodeStore: episodeStore,
     );
   }
 }

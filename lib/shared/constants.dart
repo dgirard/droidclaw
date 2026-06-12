@@ -270,6 +270,55 @@ class AppConstants {
   static const double dedupFactMatchWeight = 0.6;
   static const double dedupFactKeyJaccardWeight = 0.4;
 
+  // Episodic memory (U4 — tool-result cache in the KG database)
+
+  /// Tool classification: cacheable read-only tools → TTL in seconds.
+  /// TTL is the EVICTION boundary by volatility; a served cache hit is always
+  /// annotated with its age so the LLM can judge staleness itself ("weather
+  /// from 40 min ago"). Tools absent from this map are NEVER cached: every
+  /// side-effecting tool (message, speak, open_app, set_alarm, notifications,
+  /// clipboard, volume_control, radio, proof_editor, dream, knowledge_store,
+  /// qr_generate, pick_image, ocr, subagent, file), `get_datetime` (trivial),
+  /// `get_location` (local sensor read, fast and free — and TraceRedactor's
+  /// phone pattern would redact the stored coordinates, making the cached
+  /// payload useless), and `kb_query`/`knowledge_search` (already the memory).
+  static const Map<String, int> episodeTtlSeconds = {
+    'weather': 3600, // 1h, geo-keyed
+    'get_transit': 1800, // 30min, geo-keyed
+    'get_directions': 1800, // 30min, geo-keyed
+    'geocode': 2592000, // 30d — addresses don't move
+    'get_address': 2592000, // 30d
+    'web_search': 43200, // 12h
+    'web_scrape': 86400, // 24h
+    'web_scrape_js': 86400, // 24h
+    'device_info': 604800, // 7d
+    'contacts': 86400, // 24h, summary-only (forUser, never forLLM bodies)
+    'calendar': 900, // 15min, summary-only
+  };
+
+  /// Tools whose cache key includes the device location cell in addition to
+  /// the args digest — otherwise "what's the weather?" after a train ride
+  /// answers for the departure city. No known cell → no caching
+  /// (correctness first).
+  static const Set<String> episodeGeoKeyedTools = {
+    'weather',
+    'get_transit',
+    'get_directions',
+  };
+
+  /// Tools whose episodes store ONLY the redacted `forUser` summary — the
+  /// structured `forLLM` bodies (full contact/event listings) are never
+  /// persisted.
+  static const Set<String> episodeSummaryOnlyTools = {'contacts', 'calendar'};
+
+  /// Decimal places kept on lat/lon for the episode location cell
+  /// (2 decimals ≈ 1.1 km).
+  static const int episodeLocationCellDecimals = 2;
+
+  /// Cap on the compressed-away conversation text sent to
+  /// `IngestionPipeline.extractAndStore` after a summarization (U4).
+  static const int episodeSummarizationIngestMaxChars = 8000;
+
   // Security: one-time wipe of cleartext secret mirrors that earlier versions
   // wrote to SharedPreferences and never cleared on key delete/rotate.
   static const String secretsCacheMigratedKey = 'secrets_cache_migrated_v1';
