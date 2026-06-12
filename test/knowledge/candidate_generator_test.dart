@@ -43,7 +43,10 @@ Future<int> _insertEntity(
       ));
   await db.customStatement(
     'UPDATE entities SET access_count = ?, created_at = ?, last_accessed = ?'
-    '${embedding != null ? ', embedding = ?' : ''} WHERE id = ?',
+    // Embeddings are stamped with the fake provider's space (U3): the dedup
+    // pre-filter only scans the selected query space.
+    '${embedding != null ? ", embedding = ?, embedding_model = 'fake', "
+        'embedding_dim = 4' : ''} WHERE id = ?',
     [
       accessCount,
       createdAt,

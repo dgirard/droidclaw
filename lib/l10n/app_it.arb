@@ -617,5 +617,12 @@
   "@embeddingLocalBenchmarkResult": { "placeholders": { "ms": { "type": "int" }, "runs": { "type": "int" }, "verdict": { "type": "String" } } },
   "embeddingLocalVerdictFast": "veloce (adatto come predefinito)",
   "embeddingLocalVerdictAcceptable": "accettabile (opt-in)",
-  "embeddingLocalVerdictSlow": "lento (solo fallback offline)"
+  "embeddingLocalVerdictSlow": "lento (solo fallback offline)",
+  "embeddingBackfillSection": "Ricodifica della base di conoscenza",
+  "embeddingBackfillHint": "Ricodifica le conoscenze memorizzate nello spazio di embedding del provider salvato. Finché non è completata, la ricerca semantica continua a usare lo spazio precedente. Viene eseguita anche automaticamente durante la ricarica quando è selezionato il provider locale.",
+  "embeddingBackfillStatus": "{done} / {total} entità nello spazio attivo",
+  "@embeddingBackfillStatus": { "placeholders": { "done": { "type": "int" }, "total": { "type": "int" } } },
+  "embeddingBackfillComplete": "Tutte le entità sono nello spazio di embedding attivo",
+  "embeddingBackfillStart": "Ricodifica ora",
+  "embeddingBackfillCancel": "Interrompi"
 }

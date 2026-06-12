@@ -1786,4 +1786,27 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get embeddingLocalVerdictSlow => 'lento (solo respaldo sin conexión)';
+
+  @override
+  String get embeddingBackfillSection =>
+      'Recodificación de la base de conocimientos';
+
+  @override
+  String get embeddingBackfillHint =>
+      'Recodifica el conocimiento almacenado en el espacio de embeddings del proveedor guardado. Hasta que termine, la búsqueda semántica sigue usando el espacio anterior. También se ejecuta automáticamente durante la carga cuando el proveedor local está seleccionado.';
+
+  @override
+  String embeddingBackfillStatus(int done, int total) {
+    return '$done / $total entidades en el espacio activo';
+  }
+
+  @override
+  String get embeddingBackfillComplete =>
+      'Todas las entidades están en el espacio de embeddings activo';
+
+  @override
+  String get embeddingBackfillStart => 'Recodificar ahora';
+
+  @override
+  String get embeddingBackfillCancel => 'Detener';
 }

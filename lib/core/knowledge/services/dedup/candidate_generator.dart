@@ -130,9 +130,12 @@ class CandidateGenerator {
 
     // 9. Embedding pre-filter (if available) — paged scan, bounded at
     // [AppConstants.dedupEntityScanLimit] embeddings (the same explicit
-    // bound the old single LIMIT query used).
+    // bound the old single LIMIT query used). The scan is restricted to the
+    // selected query space (U3): cosine similarity between vectors from two
+    // embedding spaces is meaningless, in dedup as in retrieval.
     Map<int, Float32List>? embeddings;
-    if (_knowledgeService.hasEmbedder) {
+    final querySpace = await _knowledgeService.resolveQuerySpace();
+    if (querySpace != null) {
       embeddings = <int, Float32List>{};
       var afterId = 0;
       while (embeddings.length < AppConstants.dedupEntityScanLimit) {
@@ -143,6 +146,8 @@ class CandidateGenerator {
         final page = await _db.getActiveEntityEmbeddingsPage(
           afterId: afterId,
           pageSize: pageSize,
+          model: querySpace.model,
+          dim: querySpace.dim,
         );
         for (final row in page) {
           embeddings[row.id] = EmbeddingCodec.decode(row.embedding);

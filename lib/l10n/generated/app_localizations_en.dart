@@ -1757,4 +1757,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get embeddingLocalVerdictSlow => 'slow (offline fallback only)';
+
+  @override
+  String get embeddingBackfillSection => 'Knowledge base re-embedding';
+
+  @override
+  String get embeddingBackfillHint =>
+      'Re-embeds stored knowledge into the saved provider\'s embedding space. Until it completes, semantic search keeps using the previous space. Also runs automatically while charging when the local provider is selected.';
+
+  @override
+  String embeddingBackfillStatus(int done, int total) {
+    return '$done / $total entities in the active space';
+  }
+
+  @override
+  String get embeddingBackfillComplete =>
+      'All entities are in the active embedding space';
+
+  @override
+  String get embeddingBackfillStart => 'Backfill now';
+
+  @override
+  String get embeddingBackfillCancel => 'Stop';
 }

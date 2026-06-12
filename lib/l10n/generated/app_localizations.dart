@@ -3223,6 +3223,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'slow (offline fallback only)'**
   String get embeddingLocalVerdictSlow;
+
+  /// No description provided for @embeddingBackfillSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge base re-embedding'**
+  String get embeddingBackfillSection;
+
+  /// No description provided for @embeddingBackfillHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-embeds stored knowledge into the saved provider\'s embedding space. Until it completes, semantic search keeps using the previous space. Also runs automatically while charging when the local provider is selected.'**
+  String get embeddingBackfillHint;
+
+  /// No description provided for @embeddingBackfillStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} / {total} entities in the active space'**
+  String embeddingBackfillStatus(int done, int total);
+
+  /// No description provided for @embeddingBackfillComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'All entities are in the active embedding space'**
+  String get embeddingBackfillComplete;
+
+  /// No description provided for @embeddingBackfillStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Backfill now'**
+  String get embeddingBackfillStart;
+
+  /// No description provided for @embeddingBackfillCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get embeddingBackfillCancel;
 }
 
 class _AppLocalizationsDelegate

@@ -70,10 +70,15 @@ void main() {
           weight: const Value(0.8),
         ));
 
-    await db.updateEntityEmbedding(didier, _blob([0.0, 1.0, 0.0, 0.0]));
-    await db.updateEntityEmbedding(home, _blob([0.95, 0.05, 0.0, 0.0]));
-    await db.updateEntityEmbedding(sfeir, _blob([0.0, 0.0, 1.0, 0.0]));
-    await db.updateEntityEmbedding(eiffel, _blob([0.0, 0.0, 0.0, 1.0]));
+    // The fake embedder's space is ('fake', 4) — U3 stamps every vector.
+    await db.updateEntityEmbedding(didier, _blob([0.0, 1.0, 0.0, 0.0]),
+        model: 'fake', dim: 4);
+    await db.updateEntityEmbedding(home, _blob([0.95, 0.05, 0.0, 0.0]),
+        model: 'fake', dim: 4);
+    await db.updateEntityEmbedding(sfeir, _blob([0.0, 0.0, 1.0, 0.0]),
+        model: 'fake', dim: 4);
+    await db.updateEntityEmbedding(eiffel, _blob([0.0, 0.0, 0.0, 1.0]),
+        model: 'fake', dim: 4);
 
     // Deterministic decay: recent entities vs one long-cold entity.
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -258,7 +263,8 @@ void main() {
             );
         final theta = 0.1 + 0.08 * i; // cos: ~0.995 down to ~0.68, all > 0.5
         await db.updateEntityEmbedding(
-            id, _blob([cos(theta), sin(theta), 0.0, 0.0]));
+            id, _blob([cos(theta), sin(theta), 0.0, 0.0]),
+            model: 'fake', dim: 4);
       }
 
       final service = KnowledgeService(

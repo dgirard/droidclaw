@@ -1780,4 +1780,27 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get embeddingLocalVerdictSlow => 'langsam (nur Offline-Fallback)';
+
+  @override
+  String get embeddingBackfillSection =>
+      'Neuberechnung der Wissensbasis-Embeddings';
+
+  @override
+  String get embeddingBackfillHint =>
+      'Berechnet gespeichertes Wissen im Embedding-Raum des gespeicherten Anbieters neu. Bis zum Abschluss nutzt die semantische Suche weiter den vorherigen Raum. Läuft auch automatisch beim Laden, wenn der lokale Anbieter ausgewählt ist.';
+
+  @override
+  String embeddingBackfillStatus(int done, int total) {
+    return '$done / $total Entitäten im aktiven Raum';
+  }
+
+  @override
+  String get embeddingBackfillComplete =>
+      'Alle Entitäten sind im aktiven Embedding-Raum';
+
+  @override
+  String get embeddingBackfillStart => 'Jetzt neu berechnen';
+
+  @override
+  String get embeddingBackfillCancel => 'Stoppen';
 }

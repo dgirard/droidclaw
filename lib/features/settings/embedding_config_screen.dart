@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/config/log_entry.dart';
+import '../../core/knowledge/services/embedding_backfill_service.dart';
 import '../../core/providers/embedding_provider.dart';
 import '../../core/providers/embedding_provider_factory.dart';
 import '../../core/services/app_logger.dart';
@@ -43,6 +44,13 @@ class _EmbeddingConfigScreenState
   bool _benchmarkRunning = false;
   String? _benchmarkResult;
 
+  // Versioned re-embed backfill (U3): manual "backfill now" with progress.
+  // The service targets the SAVED provider config (not unsaved dropdown
+  // changes) — the section is hidden when KG or the provider is off.
+  EmbeddingBackfillService? _backfillService;
+  BackfillProgress? _backfillProgress;
+  bool _backfillRunning = false;
+
   static const _modelSpec = ModelSpec.embeddingGemmaInt8;
 
   static const _providers = [
@@ -70,6 +78,7 @@ class _EmbeddingConfigScreenState
     super.initState();
     _loadConfig();
     _initModelManager();
+    _refreshBackfillProgress();
   }
 
   void _loadConfig() {
@@ -360,6 +369,64 @@ class _EmbeddingConfigScreenState
     }
   }
 
+  /// Build the backfill service against the SAVED configuration (Drift KG
+  /// db + the active embedding provider from the provider graph). Null when
+  /// KG is disabled or no provider is configured.
+  Future<EmbeddingBackfillService?> _createBackfillService() async {
+    final db = await ref.read(knowledgeGraphDbProvider.future);
+    final provider = await ref.read(embeddingProviderProvider.future);
+    if (db == null || provider == null) return null;
+    final config = ref.read(appConfigProvider);
+    return EmbeddingBackfillService(
+      db: db,
+      provider: provider,
+      embeddingModel: config.embedding.model,
+    );
+  }
+
+  Future<void> _refreshBackfillProgress() async {
+    try {
+      final service = _backfillService ??= await _createBackfillService();
+      if (service == null) return;
+      final progress = await service.progress();
+      if (mounted) setState(() => _backfillProgress = progress);
+    } catch (e) {
+      AppLogger.instance
+          .warning(LogSource.app, 'Backfill progress check failed: $e');
+    }
+  }
+
+  Future<void> _runBackfill() async {
+    final l = AppLocalizations.of(context);
+    final service = _backfillService ??= await _createBackfillService();
+    if (service == null) return;
+
+    setState(() => _backfillRunning = true);
+    try {
+      await service.runToCompletion(onProgress: (progress) {
+        if (mounted) setState(() => _backfillProgress = progress);
+      });
+      // Coverage may have flipped the query space: rebuild the downstream
+      // KnowledgeService so it re-resolves (and logs) its selection.
+      ref.invalidate(knowledgeServiceProvider);
+    } catch (e) {
+      AppLogger.instance
+          .warning(LogSource.app, 'Manual embedding backfill failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l.commonFailed('$e'))),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _backfillRunning = false);
+        await _refreshBackfillProgress();
+      }
+    }
+  }
+
+  void _cancelBackfill() => _backfillService?.cancel();
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
@@ -508,9 +575,69 @@ class _EmbeddingConfigScreenState
               ),
             ],
           ],
+
+          if (_backfillProgress != null) ..._buildBackfillSection(l),
         ],
       ),
     );
+  }
+
+  /// Versioned re-embed backfill controls (U3): progress toward the saved
+  /// provider's embedding space, manual run, cancel.
+  List<Widget> _buildBackfillSection(AppLocalizations l) {
+    final theme = Theme.of(context);
+    final progress = _backfillProgress!;
+    final complete = progress.isComplete && !_backfillRunning;
+
+    return [
+      const SizedBox(height: 24),
+      Text(l.embeddingBackfillSection, style: theme.textTheme.titleMedium),
+      const SizedBox(height: 8),
+      Text(
+        l.embeddingBackfillHint,
+        style: theme.textTheme.bodySmall
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          Icon(
+            complete ? Icons.check_circle : Icons.sync,
+            size: 20,
+            color: complete
+                ? Colors.green
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(complete
+                ? l.embeddingBackfillComplete
+                : l.embeddingBackfillStatus(progress.done, progress.total)),
+          ),
+        ],
+      ),
+      if (_backfillRunning) ...[
+        const SizedBox(height: 8),
+        LinearProgressIndicator(
+          value:
+              progress.total > 0 ? progress.done / progress.total : null,
+        ),
+      ],
+      if (!complete) ...[
+        const SizedBox(height: 12),
+        _backfillRunning
+            ? OutlinedButton.icon(
+                onPressed: _cancelBackfill,
+                icon: const Icon(Icons.close),
+                label: Text(l.embeddingBackfillCancel),
+              )
+            : FilledButton.tonalIcon(
+                onPressed: _runBackfill,
+                icon: const Icon(Icons.sync),
+                label: Text(l.embeddingBackfillStart),
+              ),
+      ],
+    ];
   }
 
   List<Widget> _buildLocalSection(AppLocalizations l) {

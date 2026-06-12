@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:meta/meta.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../l10n/l10n.dart';
@@ -12,11 +14,14 @@ import '../config/cron_config.dart';
 import '../config/log_entry.dart';
 import '../../shared/constants.dart';
 import '../../features/telegram/telegram_api.dart';
+import '../knowledge/services/embedding_backfill_service.dart';
+import '../providers/embedding_provider_factory.dart';
 import '../session/isolate_persistence/durable_trigger_queue.dart';
 import '../session/isolate_persistence/hive_path_resolver.dart';
 import '../session/session_manager.dart';
 import 'app_logger.dart';
 import 'llm_trace_logger.dart';
+import 'model_download_manager.dart';
 import 'service_secret_reader.dart';
 
 /// Top-level callback for the foreground service isolate.
@@ -67,6 +72,12 @@ class BackgroundTaskHandler extends TaskHandler {
   static const _kgDecayIntervalSeconds = 3600; // hourly
   int _kgPurgeCounter = 0;
   static const _kgPurgeIntervalSeconds = 86400; // daily
+
+  // Versioned re-embed backfill toward the local embedding space (U3):
+  // charger-gated slice, checked every 30 min on the same counter idiom.
+  int _kgBackfillCounter = 0;
+  bool _kgBackfillRunning = false;
+  EmbeddingBackfillService? _backfillService;
 
   static const _maxBackoff = Duration(seconds: 60);
   static const _baseBackoff = Duration(seconds: 2);
@@ -174,6 +185,14 @@ class BackgroundTaskHandler extends TaskHandler {
       if (_kgPurgeCounter >= _kgPurgeIntervalSeconds) {
         _kgPurgeCounter = 0;
         _runKgPurge();
+      }
+
+      // Re-embed backfill slice (charger-gated) every 30 minutes
+      _kgBackfillCounter++;
+      if (_kgBackfillCounter >=
+          AppConstants.knowledgeBackfillCheckIntervalSeconds) {
+        _kgBackfillCounter = 0;
+        _maybeRunBackfillSlice();
       }
     }
 
@@ -363,6 +382,102 @@ class BackgroundTaskHandler extends TaskHandler {
     } catch (e) {
       AppLogger.instance.warning(LogSource.service,
           'KG decay failed: $e');
+    }
+  }
+
+  /// Pure decision for the scheduled backfill slice (unit-testable with
+  /// injected inputs): run ONLY when the device is charging, the user has
+  /// configured the local embedding provider, its model files are on disk,
+  /// and the target space does not yet cover the whole KB.
+  @visibleForTesting
+  static bool shouldRunBackfillSlice({
+    required bool charging,
+    required bool localProviderConfigured,
+    required bool localModelReady,
+    required bool backfillIncomplete,
+  }) =>
+      charging &&
+      localProviderConfigured &&
+      localModelReady &&
+      backfillIncomplete;
+
+  /// Check the charger+idle gate and run one backfill slice if it passes.
+  ///
+  /// The scheduled job specifically targets the LOCAL embedding space (the
+  /// cloud→local cutover): it never runs unless the local provider is the
+  /// configured one, so it cannot drain a healthy cloud space. Manual
+  /// backfills for any provider are available in the embedding settings
+  /// screen. Best-effort: every failure is logged and retried at the next
+  /// 30-min tick.
+  Future<void> _maybeRunBackfillSlice() async {
+    if (_kgBackfillRunning) return;
+    final knowledgeService = _agentLoop?.knowledgeService;
+    if (knowledgeService == null) return;
+    _kgBackfillRunning = true;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final workspacePath =
+          prefs.getString(AppConstants.cachedWorkspacePathKey);
+      final localProviderConfigured =
+          prefs.getString(AppConstants.cachedEmbeddingProviderKey) ==
+              AppConstants.localEmbeddingProviderName;
+
+      var localModelReady = false;
+      const spec = ModelSpec.embeddingGemmaInt8;
+      String? modelsRoot;
+      if (localProviderConfigured && workspacePath != null) {
+        modelsRoot = ModelDownloadManager.rootFromWorkspace(workspacePath);
+        localModelReady = ModelDownloadManager.isReadySync(
+            modelsRootDir: modelsRoot, spec: spec);
+      }
+
+      var charging = false;
+      try {
+        final state = await Battery().batteryState;
+        charging =
+            state == BatteryState.charging || state == BatteryState.full;
+      } catch (e) {
+        // No battery signal (probe failure) → treat as not charging.
+        AppLogger.instance.debug(LogSource.service,
+            'Battery state unavailable, skipping backfill slice: $e');
+      }
+
+      if (!localProviderConfigured || !localModelReady || !charging) return;
+
+      final service = _backfillService ??= EmbeddingBackfillService(
+        db: knowledgeService.db,
+        provider: EmbeddingProviderFactory.create(
+          providerName: AppConstants.localEmbeddingProviderName,
+          dimensions: prefs.getInt(AppConstants.cachedEmbeddingDimensionsKey) ??
+              AppConstants.localEmbeddingDimensions,
+          localModelDir: p.join(modelsRoot!, spec.id),
+        ),
+        embeddingModel: prefs.getString(AppConstants.cachedEmbeddingModelKey) ??
+            AppConstants.localEmbeddingModelId,
+      );
+
+      final before = await service.progress();
+      if (!shouldRunBackfillSlice(
+        charging: charging,
+        localProviderConfigured: localProviderConfigured,
+        localModelReady: localModelReady,
+        backfillIncomplete: !before.isComplete,
+      )) {
+        return;
+      }
+
+      final after = await service.runSlice();
+      if (after.isComplete) {
+        // The long-lived KnowledgeService caches its query-space selection;
+        // coverage just flipped, so re-resolve (and log) the new space.
+        await knowledgeService.resolveQuerySpace(refresh: true);
+      }
+    } catch (e) {
+      AppLogger.instance.warning(LogSource.service,
+          'KG embedding backfill slice failed (will retry): $e');
+    } finally {
+      _kgBackfillRunning = false;
     }
   }
 

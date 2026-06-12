@@ -8,6 +8,11 @@ CREATE TABLE entities (
   summary       TEXT,
   properties    TEXT    NOT NULL DEFAULT '{}',
   embedding     BLOB,
+  -- Embedding provenance (v4): the space a vector belongs to. NULL iff
+  -- embedding is NULL. Vectors from different (model, dim) spaces must
+  -- never be compared (see KnowledgeService.resolveQuerySpace).
+  embedding_model TEXT,
+  embedding_dim   INTEGER,
   -- Bi-temporal
   created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now')),
   valid_at      INTEGER,
@@ -40,6 +45,9 @@ CREATE TABLE relations (
   weight        REAL    NOT NULL DEFAULT 1.0,
   properties    TEXT    NOT NULL DEFAULT '{}',
   embedding     BLOB,
+  -- Embedding provenance (v4) — see entities.embedding_model.
+  embedding_model TEXT,
+  embedding_dim   INTEGER,
   -- Bi-temporal
   created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now')),
   valid_at      INTEGER,
@@ -104,6 +112,9 @@ CREATE TABLE summary_nodes (
   level         INTEGER NOT NULL DEFAULT 0,
   summary_text  TEXT    NOT NULL,
   embedding     BLOB,
+  -- Embedding provenance (v4) — see entities.embedding_model.
+  embedding_model TEXT,
+  embedding_dim   INTEGER,
   member_ids    TEXT    NOT NULL DEFAULT '[]',
   cluster_label INTEGER,
   created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now')),

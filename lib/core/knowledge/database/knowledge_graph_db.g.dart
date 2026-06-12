@@ -61,6 +61,28 @@ class SummaryNodes extends Table with TableInfo<SummaryNodes, SummaryNode> {
     requiredDuringInsert: false,
     $customConstraints: '',
   );
+  static const VerificationMeta _embeddingModelMeta = const VerificationMeta(
+    'embeddingModel',
+  );
+  late final GeneratedColumn<String> embeddingModel = GeneratedColumn<String>(
+    'embedding_model',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    $customConstraints: '',
+  );
+  static const VerificationMeta _embeddingDimMeta = const VerificationMeta(
+    'embeddingDim',
+  );
+  late final GeneratedColumn<int> embeddingDim = GeneratedColumn<int>(
+    'embedding_dim',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    $customConstraints: '',
+  );
   static const VerificationMeta _memberIdsMeta = const VerificationMeta(
     'memberIds',
   );
@@ -115,6 +137,8 @@ class SummaryNodes extends Table with TableInfo<SummaryNodes, SummaryNode> {
     level,
     summaryText,
     embedding,
+    embeddingModel,
+    embeddingDim,
     memberIds,
     clusterLabel,
     createdAt,
@@ -162,6 +186,24 @@ class SummaryNodes extends Table with TableInfo<SummaryNodes, SummaryNode> {
       context.handle(
         _embeddingMeta,
         embedding.isAcceptableOrUnknown(data['embedding']!, _embeddingMeta),
+      );
+    }
+    if (data.containsKey('embedding_model')) {
+      context.handle(
+        _embeddingModelMeta,
+        embeddingModel.isAcceptableOrUnknown(
+          data['embedding_model']!,
+          _embeddingModelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('embedding_dim')) {
+      context.handle(
+        _embeddingDimMeta,
+        embeddingDim.isAcceptableOrUnknown(
+          data['embedding_dim']!,
+          _embeddingDimMeta,
+        ),
       );
     }
     if (data.containsKey('member_ids')) {
@@ -223,6 +265,14 @@ class SummaryNodes extends Table with TableInfo<SummaryNodes, SummaryNode> {
         DriftSqlType.blob,
         data['${effectivePrefix}embedding'],
       ),
+      embeddingModel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}embedding_model'],
+      ),
+      embeddingDim: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}embedding_dim'],
+      ),
       memberIds: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}member_ids'],
@@ -257,6 +307,10 @@ class SummaryNode extends DataClass implements Insertable<SummaryNode> {
   final int level;
   final String summaryText;
   final Uint8List? embedding;
+
+  /// Embedding provenance (v4) — see entities.embedding_model.
+  final String? embeddingModel;
+  final int? embeddingDim;
   final String memberIds;
   final int? clusterLabel;
   final int createdAt;
@@ -267,6 +321,8 @@ class SummaryNode extends DataClass implements Insertable<SummaryNode> {
     required this.level,
     required this.summaryText,
     this.embedding,
+    this.embeddingModel,
+    this.embeddingDim,
     required this.memberIds,
     this.clusterLabel,
     required this.createdAt,
@@ -283,6 +339,12 @@ class SummaryNode extends DataClass implements Insertable<SummaryNode> {
     map['summary_text'] = Variable<String>(summaryText);
     if (!nullToAbsent || embedding != null) {
       map['embedding'] = Variable<Uint8List>(embedding);
+    }
+    if (!nullToAbsent || embeddingModel != null) {
+      map['embedding_model'] = Variable<String>(embeddingModel);
+    }
+    if (!nullToAbsent || embeddingDim != null) {
+      map['embedding_dim'] = Variable<int>(embeddingDim);
     }
     map['member_ids'] = Variable<String>(memberIds);
     if (!nullToAbsent || clusterLabel != null) {
@@ -304,6 +366,12 @@ class SummaryNode extends DataClass implements Insertable<SummaryNode> {
       embedding: embedding == null && nullToAbsent
           ? const Value.absent()
           : Value(embedding),
+      embeddingModel: embeddingModel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(embeddingModel),
+      embeddingDim: embeddingDim == null && nullToAbsent
+          ? const Value.absent()
+          : Value(embeddingDim),
       memberIds: Value(memberIds),
       clusterLabel: clusterLabel == null && nullToAbsent
           ? const Value.absent()
@@ -324,6 +392,8 @@ class SummaryNode extends DataClass implements Insertable<SummaryNode> {
       level: serializer.fromJson<int>(json['level']),
       summaryText: serializer.fromJson<String>(json['summary_text']),
       embedding: serializer.fromJson<Uint8List?>(json['embedding']),
+      embeddingModel: serializer.fromJson<String?>(json['embedding_model']),
+      embeddingDim: serializer.fromJson<int?>(json['embedding_dim']),
       memberIds: serializer.fromJson<String>(json['member_ids']),
       clusterLabel: serializer.fromJson<int?>(json['cluster_label']),
       createdAt: serializer.fromJson<int>(json['created_at']),
@@ -339,6 +409,8 @@ class SummaryNode extends DataClass implements Insertable<SummaryNode> {
       'level': serializer.toJson<int>(level),
       'summary_text': serializer.toJson<String>(summaryText),
       'embedding': serializer.toJson<Uint8List?>(embedding),
+      'embedding_model': serializer.toJson<String?>(embeddingModel),
+      'embedding_dim': serializer.toJson<int?>(embeddingDim),
       'member_ids': serializer.toJson<String>(memberIds),
       'cluster_label': serializer.toJson<int?>(clusterLabel),
       'created_at': serializer.toJson<int>(createdAt),
@@ -352,6 +424,8 @@ class SummaryNode extends DataClass implements Insertable<SummaryNode> {
     int? level,
     String? summaryText,
     Value<Uint8List?> embedding = const Value.absent(),
+    Value<String?> embeddingModel = const Value.absent(),
+    Value<int?> embeddingDim = const Value.absent(),
     String? memberIds,
     Value<int?> clusterLabel = const Value.absent(),
     int? createdAt,
@@ -362,6 +436,10 @@ class SummaryNode extends DataClass implements Insertable<SummaryNode> {
     level: level ?? this.level,
     summaryText: summaryText ?? this.summaryText,
     embedding: embedding.present ? embedding.value : this.embedding,
+    embeddingModel: embeddingModel.present
+        ? embeddingModel.value
+        : this.embeddingModel,
+    embeddingDim: embeddingDim.present ? embeddingDim.value : this.embeddingDim,
     memberIds: memberIds ?? this.memberIds,
     clusterLabel: clusterLabel.present ? clusterLabel.value : this.clusterLabel,
     createdAt: createdAt ?? this.createdAt,
@@ -376,6 +454,12 @@ class SummaryNode extends DataClass implements Insertable<SummaryNode> {
           ? data.summaryText.value
           : this.summaryText,
       embedding: data.embedding.present ? data.embedding.value : this.embedding,
+      embeddingModel: data.embeddingModel.present
+          ? data.embeddingModel.value
+          : this.embeddingModel,
+      embeddingDim: data.embeddingDim.present
+          ? data.embeddingDim.value
+          : this.embeddingDim,
       memberIds: data.memberIds.present ? data.memberIds.value : this.memberIds,
       clusterLabel: data.clusterLabel.present
           ? data.clusterLabel.value
@@ -395,6 +479,8 @@ class SummaryNode extends DataClass implements Insertable<SummaryNode> {
           ..write('level: $level, ')
           ..write('summaryText: $summaryText, ')
           ..write('embedding: $embedding, ')
+          ..write('embeddingModel: $embeddingModel, ')
+          ..write('embeddingDim: $embeddingDim, ')
           ..write('memberIds: $memberIds, ')
           ..write('clusterLabel: $clusterLabel, ')
           ..write('createdAt: $createdAt, ')
@@ -410,6 +496,8 @@ class SummaryNode extends DataClass implements Insertable<SummaryNode> {
     level,
     summaryText,
     $driftBlobEquality.hash(embedding),
+    embeddingModel,
+    embeddingDim,
     memberIds,
     clusterLabel,
     createdAt,
@@ -424,6 +512,8 @@ class SummaryNode extends DataClass implements Insertable<SummaryNode> {
           other.level == this.level &&
           other.summaryText == this.summaryText &&
           $driftBlobEquality.equals(other.embedding, this.embedding) &&
+          other.embeddingModel == this.embeddingModel &&
+          other.embeddingDim == this.embeddingDim &&
           other.memberIds == this.memberIds &&
           other.clusterLabel == this.clusterLabel &&
           other.createdAt == this.createdAt &&
@@ -436,6 +526,8 @@ class SummaryNodesCompanion extends UpdateCompanion<SummaryNode> {
   final Value<int> level;
   final Value<String> summaryText;
   final Value<Uint8List?> embedding;
+  final Value<String?> embeddingModel;
+  final Value<int?> embeddingDim;
   final Value<String> memberIds;
   final Value<int?> clusterLabel;
   final Value<int> createdAt;
@@ -446,6 +538,8 @@ class SummaryNodesCompanion extends UpdateCompanion<SummaryNode> {
     this.level = const Value.absent(),
     this.summaryText = const Value.absent(),
     this.embedding = const Value.absent(),
+    this.embeddingModel = const Value.absent(),
+    this.embeddingDim = const Value.absent(),
     this.memberIds = const Value.absent(),
     this.clusterLabel = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -457,6 +551,8 @@ class SummaryNodesCompanion extends UpdateCompanion<SummaryNode> {
     this.level = const Value.absent(),
     required String summaryText,
     this.embedding = const Value.absent(),
+    this.embeddingModel = const Value.absent(),
+    this.embeddingDim = const Value.absent(),
     this.memberIds = const Value.absent(),
     this.clusterLabel = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -468,6 +564,8 @@ class SummaryNodesCompanion extends UpdateCompanion<SummaryNode> {
     Expression<int>? level,
     Expression<String>? summaryText,
     Expression<Uint8List>? embedding,
+    Expression<String>? embeddingModel,
+    Expression<int>? embeddingDim,
     Expression<String>? memberIds,
     Expression<int>? clusterLabel,
     Expression<int>? createdAt,
@@ -479,6 +577,8 @@ class SummaryNodesCompanion extends UpdateCompanion<SummaryNode> {
       if (level != null) 'level': level,
       if (summaryText != null) 'summary_text': summaryText,
       if (embedding != null) 'embedding': embedding,
+      if (embeddingModel != null) 'embedding_model': embeddingModel,
+      if (embeddingDim != null) 'embedding_dim': embeddingDim,
       if (memberIds != null) 'member_ids': memberIds,
       if (clusterLabel != null) 'cluster_label': clusterLabel,
       if (createdAt != null) 'created_at': createdAt,
@@ -492,6 +592,8 @@ class SummaryNodesCompanion extends UpdateCompanion<SummaryNode> {
     Value<int>? level,
     Value<String>? summaryText,
     Value<Uint8List?>? embedding,
+    Value<String?>? embeddingModel,
+    Value<int?>? embeddingDim,
     Value<String>? memberIds,
     Value<int?>? clusterLabel,
     Value<int>? createdAt,
@@ -503,6 +605,8 @@ class SummaryNodesCompanion extends UpdateCompanion<SummaryNode> {
       level: level ?? this.level,
       summaryText: summaryText ?? this.summaryText,
       embedding: embedding ?? this.embedding,
+      embeddingModel: embeddingModel ?? this.embeddingModel,
+      embeddingDim: embeddingDim ?? this.embeddingDim,
       memberIds: memberIds ?? this.memberIds,
       clusterLabel: clusterLabel ?? this.clusterLabel,
       createdAt: createdAt ?? this.createdAt,
@@ -528,6 +632,12 @@ class SummaryNodesCompanion extends UpdateCompanion<SummaryNode> {
     if (embedding.present) {
       map['embedding'] = Variable<Uint8List>(embedding.value);
     }
+    if (embeddingModel.present) {
+      map['embedding_model'] = Variable<String>(embeddingModel.value);
+    }
+    if (embeddingDim.present) {
+      map['embedding_dim'] = Variable<int>(embeddingDim.value);
+    }
     if (memberIds.present) {
       map['member_ids'] = Variable<String>(memberIds.value);
     }
@@ -551,6 +661,8 @@ class SummaryNodesCompanion extends UpdateCompanion<SummaryNode> {
           ..write('level: $level, ')
           ..write('summaryText: $summaryText, ')
           ..write('embedding: $embedding, ')
+          ..write('embeddingModel: $embeddingModel, ')
+          ..write('embeddingDim: $embeddingDim, ')
           ..write('memberIds: $memberIds, ')
           ..write('clusterLabel: $clusterLabel, ')
           ..write('createdAt: $createdAt, ')
@@ -627,6 +739,28 @@ class Entities extends Table with TableInfo<Entities, Entity> {
     aliasedName,
     true,
     type: DriftSqlType.blob,
+    requiredDuringInsert: false,
+    $customConstraints: '',
+  );
+  static const VerificationMeta _embeddingModelMeta = const VerificationMeta(
+    'embeddingModel',
+  );
+  late final GeneratedColumn<String> embeddingModel = GeneratedColumn<String>(
+    'embedding_model',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    $customConstraints: '',
+  );
+  static const VerificationMeta _embeddingDimMeta = const VerificationMeta(
+    'embeddingDim',
+  );
+  late final GeneratedColumn<int> embeddingDim = GeneratedColumn<int>(
+    'embedding_dim',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
     $customConstraints: '',
   );
@@ -767,6 +901,8 @@ class Entities extends Table with TableInfo<Entities, Entity> {
     summary,
     properties,
     embedding,
+    embeddingModel,
+    embeddingDim,
     createdAt,
     validAt,
     invalidAt,
@@ -824,6 +960,24 @@ class Entities extends Table with TableInfo<Entities, Entity> {
       context.handle(
         _embeddingMeta,
         embedding.isAcceptableOrUnknown(data['embedding']!, _embeddingMeta),
+      );
+    }
+    if (data.containsKey('embedding_model')) {
+      context.handle(
+        _embeddingModelMeta,
+        embeddingModel.isAcceptableOrUnknown(
+          data['embedding_model']!,
+          _embeddingModelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('embedding_dim')) {
+      context.handle(
+        _embeddingDimMeta,
+        embeddingDim.isAcceptableOrUnknown(
+          data['embedding_dim']!,
+          _embeddingDimMeta,
+        ),
       );
     }
     if (data.containsKey('created_at')) {
@@ -937,6 +1091,14 @@ class Entities extends Table with TableInfo<Entities, Entity> {
         DriftSqlType.blob,
         data['${effectivePrefix}embedding'],
       ),
+      embeddingModel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}embedding_model'],
+      ),
+      embeddingDim: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}embedding_dim'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -1001,6 +1163,12 @@ class Entity extends DataClass implements Insertable<Entity> {
   final String properties;
   final Uint8List? embedding;
 
+  /// Embedding provenance (v4): the space a vector belongs to. NULL iff
+  /// embedding is NULL. Vectors from different (model, dim) spaces must
+  /// never be compared (see KnowledgeService.resolveQuerySpace).
+  final String? embeddingModel;
+  final int? embeddingDim;
+
   /// Bi-temporal
   final int createdAt;
   final int? validAt;
@@ -1024,6 +1192,8 @@ class Entity extends DataClass implements Insertable<Entity> {
     this.summary,
     required this.properties,
     this.embedding,
+    this.embeddingModel,
+    this.embeddingDim,
     required this.createdAt,
     this.validAt,
     this.invalidAt,
@@ -1048,6 +1218,12 @@ class Entity extends DataClass implements Insertable<Entity> {
     map['properties'] = Variable<String>(properties);
     if (!nullToAbsent || embedding != null) {
       map['embedding'] = Variable<Uint8List>(embedding);
+    }
+    if (!nullToAbsent || embeddingModel != null) {
+      map['embedding_model'] = Variable<String>(embeddingModel);
+    }
+    if (!nullToAbsent || embeddingDim != null) {
+      map['embedding_dim'] = Variable<int>(embeddingDim);
     }
     map['created_at'] = Variable<int>(createdAt);
     if (!nullToAbsent || validAt != null) {
@@ -1083,6 +1259,12 @@ class Entity extends DataClass implements Insertable<Entity> {
       embedding: embedding == null && nullToAbsent
           ? const Value.absent()
           : Value(embedding),
+      embeddingModel: embeddingModel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(embeddingModel),
+      embeddingDim: embeddingDim == null && nullToAbsent
+          ? const Value.absent()
+          : Value(embeddingDim),
       createdAt: Value(createdAt),
       validAt: validAt == null && nullToAbsent
           ? const Value.absent()
@@ -1117,6 +1299,8 @@ class Entity extends DataClass implements Insertable<Entity> {
       summary: serializer.fromJson<String?>(json['summary']),
       properties: serializer.fromJson<String>(json['properties']),
       embedding: serializer.fromJson<Uint8List?>(json['embedding']),
+      embeddingModel: serializer.fromJson<String?>(json['embedding_model']),
+      embeddingDim: serializer.fromJson<int?>(json['embedding_dim']),
       createdAt: serializer.fromJson<int>(json['created_at']),
       validAt: serializer.fromJson<int?>(json['valid_at']),
       invalidAt: serializer.fromJson<int?>(json['invalid_at']),
@@ -1140,6 +1324,8 @@ class Entity extends DataClass implements Insertable<Entity> {
       'summary': serializer.toJson<String?>(summary),
       'properties': serializer.toJson<String>(properties),
       'embedding': serializer.toJson<Uint8List?>(embedding),
+      'embedding_model': serializer.toJson<String?>(embeddingModel),
+      'embedding_dim': serializer.toJson<int?>(embeddingDim),
       'created_at': serializer.toJson<int>(createdAt),
       'valid_at': serializer.toJson<int?>(validAt),
       'invalid_at': serializer.toJson<int?>(invalidAt),
@@ -1161,6 +1347,8 @@ class Entity extends DataClass implements Insertable<Entity> {
     Value<String?> summary = const Value.absent(),
     String? properties,
     Value<Uint8List?> embedding = const Value.absent(),
+    Value<String?> embeddingModel = const Value.absent(),
+    Value<int?> embeddingDim = const Value.absent(),
     int? createdAt,
     Value<int?> validAt = const Value.absent(),
     Value<int?> invalidAt = const Value.absent(),
@@ -1179,6 +1367,10 @@ class Entity extends DataClass implements Insertable<Entity> {
     summary: summary.present ? summary.value : this.summary,
     properties: properties ?? this.properties,
     embedding: embedding.present ? embedding.value : this.embedding,
+    embeddingModel: embeddingModel.present
+        ? embeddingModel.value
+        : this.embeddingModel,
+    embeddingDim: embeddingDim.present ? embeddingDim.value : this.embeddingDim,
     createdAt: createdAt ?? this.createdAt,
     validAt: validAt.present ? validAt.value : this.validAt,
     invalidAt: invalidAt.present ? invalidAt.value : this.invalidAt,
@@ -1205,6 +1397,12 @@ class Entity extends DataClass implements Insertable<Entity> {
           ? data.properties.value
           : this.properties,
       embedding: data.embedding.present ? data.embedding.value : this.embedding,
+      embeddingModel: data.embeddingModel.present
+          ? data.embeddingModel.value
+          : this.embeddingModel,
+      embeddingDim: data.embeddingDim.present
+          ? data.embeddingDim.value
+          : this.embeddingDim,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       validAt: data.validAt.present ? data.validAt.value : this.validAt,
       invalidAt: data.invalidAt.present ? data.invalidAt.value : this.invalidAt,
@@ -1238,6 +1436,8 @@ class Entity extends DataClass implements Insertable<Entity> {
           ..write('summary: $summary, ')
           ..write('properties: $properties, ')
           ..write('embedding: $embedding, ')
+          ..write('embeddingModel: $embeddingModel, ')
+          ..write('embeddingDim: $embeddingDim, ')
           ..write('createdAt: $createdAt, ')
           ..write('validAt: $validAt, ')
           ..write('invalidAt: $invalidAt, ')
@@ -1261,6 +1461,8 @@ class Entity extends DataClass implements Insertable<Entity> {
     summary,
     properties,
     $driftBlobEquality.hash(embedding),
+    embeddingModel,
+    embeddingDim,
     createdAt,
     validAt,
     invalidAt,
@@ -1283,6 +1485,8 @@ class Entity extends DataClass implements Insertable<Entity> {
           other.summary == this.summary &&
           other.properties == this.properties &&
           $driftBlobEquality.equals(other.embedding, this.embedding) &&
+          other.embeddingModel == this.embeddingModel &&
+          other.embeddingDim == this.embeddingDim &&
           other.createdAt == this.createdAt &&
           other.validAt == this.validAt &&
           other.invalidAt == this.invalidAt &&
@@ -1303,6 +1507,8 @@ class EntitiesCompanion extends UpdateCompanion<Entity> {
   final Value<String?> summary;
   final Value<String> properties;
   final Value<Uint8List?> embedding;
+  final Value<String?> embeddingModel;
+  final Value<int?> embeddingDim;
   final Value<int> createdAt;
   final Value<int?> validAt;
   final Value<int?> invalidAt;
@@ -1321,6 +1527,8 @@ class EntitiesCompanion extends UpdateCompanion<Entity> {
     this.summary = const Value.absent(),
     this.properties = const Value.absent(),
     this.embedding = const Value.absent(),
+    this.embeddingModel = const Value.absent(),
+    this.embeddingDim = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.validAt = const Value.absent(),
     this.invalidAt = const Value.absent(),
@@ -1340,6 +1548,8 @@ class EntitiesCompanion extends UpdateCompanion<Entity> {
     this.summary = const Value.absent(),
     this.properties = const Value.absent(),
     this.embedding = const Value.absent(),
+    this.embeddingModel = const Value.absent(),
+    this.embeddingDim = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.validAt = const Value.absent(),
     this.invalidAt = const Value.absent(),
@@ -1359,6 +1569,8 @@ class EntitiesCompanion extends UpdateCompanion<Entity> {
     Expression<String>? summary,
     Expression<String>? properties,
     Expression<Uint8List>? embedding,
+    Expression<String>? embeddingModel,
+    Expression<int>? embeddingDim,
     Expression<int>? createdAt,
     Expression<int>? validAt,
     Expression<int>? invalidAt,
@@ -1378,6 +1590,8 @@ class EntitiesCompanion extends UpdateCompanion<Entity> {
       if (summary != null) 'summary': summary,
       if (properties != null) 'properties': properties,
       if (embedding != null) 'embedding': embedding,
+      if (embeddingModel != null) 'embedding_model': embeddingModel,
+      if (embeddingDim != null) 'embedding_dim': embeddingDim,
       if (createdAt != null) 'created_at': createdAt,
       if (validAt != null) 'valid_at': validAt,
       if (invalidAt != null) 'invalid_at': invalidAt,
@@ -1399,6 +1613,8 @@ class EntitiesCompanion extends UpdateCompanion<Entity> {
     Value<String?>? summary,
     Value<String>? properties,
     Value<Uint8List?>? embedding,
+    Value<String?>? embeddingModel,
+    Value<int?>? embeddingDim,
     Value<int>? createdAt,
     Value<int?>? validAt,
     Value<int?>? invalidAt,
@@ -1418,6 +1634,8 @@ class EntitiesCompanion extends UpdateCompanion<Entity> {
       summary: summary ?? this.summary,
       properties: properties ?? this.properties,
       embedding: embedding ?? this.embedding,
+      embeddingModel: embeddingModel ?? this.embeddingModel,
+      embeddingDim: embeddingDim ?? this.embeddingDim,
       createdAt: createdAt ?? this.createdAt,
       validAt: validAt ?? this.validAt,
       invalidAt: invalidAt ?? this.invalidAt,
@@ -1452,6 +1670,12 @@ class EntitiesCompanion extends UpdateCompanion<Entity> {
     }
     if (embedding.present) {
       map['embedding'] = Variable<Uint8List>(embedding.value);
+    }
+    if (embeddingModel.present) {
+      map['embedding_model'] = Variable<String>(embeddingModel.value);
+    }
+    if (embeddingDim.present) {
+      map['embedding_dim'] = Variable<int>(embeddingDim.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
@@ -1498,6 +1722,8 @@ class EntitiesCompanion extends UpdateCompanion<Entity> {
           ..write('summary: $summary, ')
           ..write('properties: $properties, ')
           ..write('embedding: $embedding, ')
+          ..write('embeddingModel: $embeddingModel, ')
+          ..write('embeddingDim: $embeddingDim, ')
           ..write('createdAt: $createdAt, ')
           ..write('validAt: $validAt, ')
           ..write('invalidAt: $invalidAt, ')
@@ -1592,6 +1818,28 @@ class Relations extends Table with TableInfo<Relations, Relation> {
     aliasedName,
     true,
     type: DriftSqlType.blob,
+    requiredDuringInsert: false,
+    $customConstraints: '',
+  );
+  static const VerificationMeta _embeddingModelMeta = const VerificationMeta(
+    'embeddingModel',
+  );
+  late final GeneratedColumn<String> embeddingModel = GeneratedColumn<String>(
+    'embedding_model',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    $customConstraints: '',
+  );
+  static const VerificationMeta _embeddingDimMeta = const VerificationMeta(
+    'embeddingDim',
+  );
+  late final GeneratedColumn<int> embeddingDim = GeneratedColumn<int>(
+    'embedding_dim',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
     $customConstraints: '',
   );
@@ -1720,6 +1968,8 @@ class Relations extends Table with TableInfo<Relations, Relation> {
     weight,
     properties,
     embedding,
+    embeddingModel,
+    embeddingDim,
     createdAt,
     validAt,
     invalidAt,
@@ -1786,6 +2036,24 @@ class Relations extends Table with TableInfo<Relations, Relation> {
       context.handle(
         _embeddingMeta,
         embedding.isAcceptableOrUnknown(data['embedding']!, _embeddingMeta),
+      );
+    }
+    if (data.containsKey('embedding_model')) {
+      context.handle(
+        _embeddingModelMeta,
+        embeddingModel.isAcceptableOrUnknown(
+          data['embedding_model']!,
+          _embeddingModelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('embedding_dim')) {
+      context.handle(
+        _embeddingDimMeta,
+        embeddingDim.isAcceptableOrUnknown(
+          data['embedding_dim']!,
+          _embeddingDimMeta,
+        ),
       );
     }
     if (data.containsKey('created_at')) {
@@ -1891,6 +2159,14 @@ class Relations extends Table with TableInfo<Relations, Relation> {
         DriftSqlType.blob,
         data['${effectivePrefix}embedding'],
       ),
+      embeddingModel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}embedding_model'],
+      ),
+      embeddingDim: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}embedding_dim'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -1952,6 +2228,10 @@ class Relation extends DataClass implements Insertable<Relation> {
   final String properties;
   final Uint8List? embedding;
 
+  /// Embedding provenance (v4) — see entities.embedding_model.
+  final String? embeddingModel;
+  final int? embeddingDim;
+
   /// Bi-temporal
   final int createdAt;
   final int? validAt;
@@ -1973,6 +2253,8 @@ class Relation extends DataClass implements Insertable<Relation> {
     required this.weight,
     required this.properties,
     this.embedding,
+    this.embeddingModel,
+    this.embeddingDim,
     required this.createdAt,
     this.validAt,
     this.invalidAt,
@@ -1995,6 +2277,12 @@ class Relation extends DataClass implements Insertable<Relation> {
     map['properties'] = Variable<String>(properties);
     if (!nullToAbsent || embedding != null) {
       map['embedding'] = Variable<Uint8List>(embedding);
+    }
+    if (!nullToAbsent || embeddingModel != null) {
+      map['embedding_model'] = Variable<String>(embeddingModel);
+    }
+    if (!nullToAbsent || embeddingDim != null) {
+      map['embedding_dim'] = Variable<int>(embeddingDim);
     }
     map['created_at'] = Variable<int>(createdAt);
     if (!nullToAbsent || validAt != null) {
@@ -2028,6 +2316,12 @@ class Relation extends DataClass implements Insertable<Relation> {
       embedding: embedding == null && nullToAbsent
           ? const Value.absent()
           : Value(embedding),
+      embeddingModel: embeddingModel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(embeddingModel),
+      embeddingDim: embeddingDim == null && nullToAbsent
+          ? const Value.absent()
+          : Value(embeddingDim),
       createdAt: Value(createdAt),
       validAt: validAt == null && nullToAbsent
           ? const Value.absent()
@@ -2062,6 +2356,8 @@ class Relation extends DataClass implements Insertable<Relation> {
       weight: serializer.fromJson<double>(json['weight']),
       properties: serializer.fromJson<String>(json['properties']),
       embedding: serializer.fromJson<Uint8List?>(json['embedding']),
+      embeddingModel: serializer.fromJson<String?>(json['embedding_model']),
+      embeddingDim: serializer.fromJson<int?>(json['embedding_dim']),
       createdAt: serializer.fromJson<int>(json['created_at']),
       validAt: serializer.fromJson<int?>(json['valid_at']),
       invalidAt: serializer.fromJson<int?>(json['invalid_at']),
@@ -2085,6 +2381,8 @@ class Relation extends DataClass implements Insertable<Relation> {
       'weight': serializer.toJson<double>(weight),
       'properties': serializer.toJson<String>(properties),
       'embedding': serializer.toJson<Uint8List?>(embedding),
+      'embedding_model': serializer.toJson<String?>(embeddingModel),
+      'embedding_dim': serializer.toJson<int?>(embeddingDim),
       'created_at': serializer.toJson<int>(createdAt),
       'valid_at': serializer.toJson<int?>(validAt),
       'invalid_at': serializer.toJson<int?>(invalidAt),
@@ -2106,6 +2404,8 @@ class Relation extends DataClass implements Insertable<Relation> {
     double? weight,
     String? properties,
     Value<Uint8List?> embedding = const Value.absent(),
+    Value<String?> embeddingModel = const Value.absent(),
+    Value<int?> embeddingDim = const Value.absent(),
     int? createdAt,
     Value<int?> validAt = const Value.absent(),
     Value<int?> invalidAt = const Value.absent(),
@@ -2124,6 +2424,10 @@ class Relation extends DataClass implements Insertable<Relation> {
     weight: weight ?? this.weight,
     properties: properties ?? this.properties,
     embedding: embedding.present ? embedding.value : this.embedding,
+    embeddingModel: embeddingModel.present
+        ? embeddingModel.value
+        : this.embeddingModel,
+    embeddingDim: embeddingDim.present ? embeddingDim.value : this.embeddingDim,
     createdAt: createdAt ?? this.createdAt,
     validAt: validAt.present ? validAt.value : this.validAt,
     invalidAt: invalidAt.present ? invalidAt.value : this.invalidAt,
@@ -2146,6 +2450,12 @@ class Relation extends DataClass implements Insertable<Relation> {
           ? data.properties.value
           : this.properties,
       embedding: data.embedding.present ? data.embedding.value : this.embedding,
+      embeddingModel: data.embeddingModel.present
+          ? data.embeddingModel.value
+          : this.embeddingModel,
+      embeddingDim: data.embeddingDim.present
+          ? data.embeddingDim.value
+          : this.embeddingDim,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       validAt: data.validAt.present ? data.validAt.value : this.validAt,
       invalidAt: data.invalidAt.present ? data.invalidAt.value : this.invalidAt,
@@ -2179,6 +2489,8 @@ class Relation extends DataClass implements Insertable<Relation> {
           ..write('weight: $weight, ')
           ..write('properties: $properties, ')
           ..write('embedding: $embedding, ')
+          ..write('embeddingModel: $embeddingModel, ')
+          ..write('embeddingDim: $embeddingDim, ')
           ..write('createdAt: $createdAt, ')
           ..write('validAt: $validAt, ')
           ..write('invalidAt: $invalidAt, ')
@@ -2202,6 +2514,8 @@ class Relation extends DataClass implements Insertable<Relation> {
     weight,
     properties,
     $driftBlobEquality.hash(embedding),
+    embeddingModel,
+    embeddingDim,
     createdAt,
     validAt,
     invalidAt,
@@ -2224,6 +2538,8 @@ class Relation extends DataClass implements Insertable<Relation> {
           other.weight == this.weight &&
           other.properties == this.properties &&
           $driftBlobEquality.equals(other.embedding, this.embedding) &&
+          other.embeddingModel == this.embeddingModel &&
+          other.embeddingDim == this.embeddingDim &&
           other.createdAt == this.createdAt &&
           other.validAt == this.validAt &&
           other.invalidAt == this.invalidAt &&
@@ -2244,6 +2560,8 @@ class RelationsCompanion extends UpdateCompanion<Relation> {
   final Value<double> weight;
   final Value<String> properties;
   final Value<Uint8List?> embedding;
+  final Value<String?> embeddingModel;
+  final Value<int?> embeddingDim;
   final Value<int> createdAt;
   final Value<int?> validAt;
   final Value<int?> invalidAt;
@@ -2262,6 +2580,8 @@ class RelationsCompanion extends UpdateCompanion<Relation> {
     this.weight = const Value.absent(),
     this.properties = const Value.absent(),
     this.embedding = const Value.absent(),
+    this.embeddingModel = const Value.absent(),
+    this.embeddingDim = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.validAt = const Value.absent(),
     this.invalidAt = const Value.absent(),
@@ -2281,6 +2601,8 @@ class RelationsCompanion extends UpdateCompanion<Relation> {
     this.weight = const Value.absent(),
     this.properties = const Value.absent(),
     this.embedding = const Value.absent(),
+    this.embeddingModel = const Value.absent(),
+    this.embeddingDim = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.validAt = const Value.absent(),
     this.invalidAt = const Value.absent(),
@@ -2302,6 +2624,8 @@ class RelationsCompanion extends UpdateCompanion<Relation> {
     Expression<double>? weight,
     Expression<String>? properties,
     Expression<Uint8List>? embedding,
+    Expression<String>? embeddingModel,
+    Expression<int>? embeddingDim,
     Expression<int>? createdAt,
     Expression<int>? validAt,
     Expression<int>? invalidAt,
@@ -2321,6 +2645,8 @@ class RelationsCompanion extends UpdateCompanion<Relation> {
       if (weight != null) 'weight': weight,
       if (properties != null) 'properties': properties,
       if (embedding != null) 'embedding': embedding,
+      if (embeddingModel != null) 'embedding_model': embeddingModel,
+      if (embeddingDim != null) 'embedding_dim': embeddingDim,
       if (createdAt != null) 'created_at': createdAt,
       if (validAt != null) 'valid_at': validAt,
       if (invalidAt != null) 'invalid_at': invalidAt,
@@ -2342,6 +2668,8 @@ class RelationsCompanion extends UpdateCompanion<Relation> {
     Value<double>? weight,
     Value<String>? properties,
     Value<Uint8List?>? embedding,
+    Value<String?>? embeddingModel,
+    Value<int?>? embeddingDim,
     Value<int>? createdAt,
     Value<int?>? validAt,
     Value<int?>? invalidAt,
@@ -2361,6 +2689,8 @@ class RelationsCompanion extends UpdateCompanion<Relation> {
       weight: weight ?? this.weight,
       properties: properties ?? this.properties,
       embedding: embedding ?? this.embedding,
+      embeddingModel: embeddingModel ?? this.embeddingModel,
+      embeddingDim: embeddingDim ?? this.embeddingDim,
       createdAt: createdAt ?? this.createdAt,
       validAt: validAt ?? this.validAt,
       invalidAt: invalidAt ?? this.invalidAt,
@@ -2397,6 +2727,12 @@ class RelationsCompanion extends UpdateCompanion<Relation> {
     }
     if (embedding.present) {
       map['embedding'] = Variable<Uint8List>(embedding.value);
+    }
+    if (embeddingModel.present) {
+      map['embedding_model'] = Variable<String>(embeddingModel.value);
+    }
+    if (embeddingDim.present) {
+      map['embedding_dim'] = Variable<int>(embeddingDim.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
@@ -2441,6 +2777,8 @@ class RelationsCompanion extends UpdateCompanion<Relation> {
           ..write('weight: $weight, ')
           ..write('properties: $properties, ')
           ..write('embedding: $embedding, ')
+          ..write('embeddingModel: $embeddingModel, ')
+          ..write('embeddingDim: $embeddingDim, ')
           ..write('createdAt: $createdAt, ')
           ..write('validAt: $validAt, ')
           ..write('invalidAt: $invalidAt, ')
@@ -4062,6 +4400,8 @@ abstract class _$KnowledgeGraphDB extends GeneratedDatabase {
         summary: row.readNullable<String>('summary'),
         properties: row.read<String>('properties'),
         embedding: row.readNullable<Uint8List>('embedding'),
+        embeddingModel: row.readNullable<String>('embedding_model'),
+        embeddingDim: row.readNullable<int>('embedding_dim'),
         createdAt: row.read<int>('created_at'),
         validAt: row.readNullable<int>('valid_at'),
         invalidAt: row.readNullable<int>('invalid_at'),
@@ -4114,6 +4454,8 @@ abstract class _$KnowledgeGraphDB extends GeneratedDatabase {
         summary: row.readNullable<String>('summary'),
         properties: row.read<String>('properties'),
         embedding: row.readNullable<Uint8List>('embedding'),
+        embeddingModel: row.readNullable<String>('embedding_model'),
+        embeddingDim: row.readNullable<int>('embedding_dim'),
         createdAt: row.read<int>('created_at'),
         validAt: row.readNullable<int>('valid_at'),
         invalidAt: row.readNullable<int>('invalid_at'),
@@ -4303,6 +4645,8 @@ typedef $SummaryNodesCreateCompanionBuilder =
       Value<int> level,
       required String summaryText,
       Value<Uint8List?> embedding,
+      Value<String?> embeddingModel,
+      Value<int?> embeddingDim,
       Value<String> memberIds,
       Value<int?> clusterLabel,
       Value<int> createdAt,
@@ -4315,6 +4659,8 @@ typedef $SummaryNodesUpdateCompanionBuilder =
       Value<int> level,
       Value<String> summaryText,
       Value<Uint8List?> embedding,
+      Value<String?> embeddingModel,
+      Value<int?> embeddingDim,
       Value<String> memberIds,
       Value<int?> clusterLabel,
       Value<int> createdAt,
@@ -4379,6 +4725,16 @@ class $SummaryNodesFilterComposer
 
   ColumnFilters<Uint8List> get embedding => $composableBuilder(
     column: $table.embedding,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get embeddingModel => $composableBuilder(
+    column: $table.embeddingModel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get embeddingDim => $composableBuilder(
+    column: $table.embeddingDim,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4462,6 +4818,16 @@ class $SummaryNodesOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get embeddingModel => $composableBuilder(
+    column: $table.embeddingModel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get embeddingDim => $composableBuilder(
+    column: $table.embeddingDim,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get memberIds => $composableBuilder(
     column: $table.memberIds,
     builder: (column) => ColumnOrderings(column),
@@ -4508,6 +4874,16 @@ class $SummaryNodesAnnotationComposer
 
   GeneratedColumn<Uint8List> get embedding =>
       $composableBuilder(column: $table.embedding, builder: (column) => column);
+
+  GeneratedColumn<String> get embeddingModel => $composableBuilder(
+    column: $table.embeddingModel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get embeddingDim => $composableBuilder(
+    column: $table.embeddingDim,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get memberIds =>
       $composableBuilder(column: $table.memberIds, builder: (column) => column);
@@ -4584,6 +4960,8 @@ class $SummaryNodesTableManager
                 Value<int> level = const Value.absent(),
                 Value<String> summaryText = const Value.absent(),
                 Value<Uint8List?> embedding = const Value.absent(),
+                Value<String?> embeddingModel = const Value.absent(),
+                Value<int?> embeddingDim = const Value.absent(),
                 Value<String> memberIds = const Value.absent(),
                 Value<int?> clusterLabel = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
@@ -4594,6 +4972,8 @@ class $SummaryNodesTableManager
                 level: level,
                 summaryText: summaryText,
                 embedding: embedding,
+                embeddingModel: embeddingModel,
+                embeddingDim: embeddingDim,
                 memberIds: memberIds,
                 clusterLabel: clusterLabel,
                 createdAt: createdAt,
@@ -4606,6 +4986,8 @@ class $SummaryNodesTableManager
                 Value<int> level = const Value.absent(),
                 required String summaryText,
                 Value<Uint8List?> embedding = const Value.absent(),
+                Value<String?> embeddingModel = const Value.absent(),
+                Value<int?> embeddingDim = const Value.absent(),
                 Value<String> memberIds = const Value.absent(),
                 Value<int?> clusterLabel = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
@@ -4616,6 +4998,8 @@ class $SummaryNodesTableManager
                 level: level,
                 summaryText: summaryText,
                 embedding: embedding,
+                embeddingModel: embeddingModel,
+                embeddingDim: embeddingDim,
                 memberIds: memberIds,
                 clusterLabel: clusterLabel,
                 createdAt: createdAt,
@@ -4681,6 +5065,8 @@ typedef $EntitiesCreateCompanionBuilder =
       Value<String?> summary,
       Value<String> properties,
       Value<Uint8List?> embedding,
+      Value<String?> embeddingModel,
+      Value<int?> embeddingDim,
       Value<int> createdAt,
       Value<int?> validAt,
       Value<int?> invalidAt,
@@ -4701,6 +5087,8 @@ typedef $EntitiesUpdateCompanionBuilder =
       Value<String?> summary,
       Value<String> properties,
       Value<Uint8List?> embedding,
+      Value<String?> embeddingModel,
+      Value<int?> embeddingDim,
       Value<int> createdAt,
       Value<int?> validAt,
       Value<int?> invalidAt,
@@ -4811,6 +5199,16 @@ class $EntitiesFilterComposer extends Composer<_$KnowledgeGraphDB, Entities> {
 
   ColumnFilters<Uint8List> get embedding => $composableBuilder(
     column: $table.embedding,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get embeddingModel => $composableBuilder(
+    column: $table.embeddingModel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get embeddingDim => $composableBuilder(
+    column: $table.embeddingDim,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4976,6 +5374,16 @@ class $EntitiesOrderingComposer extends Composer<_$KnowledgeGraphDB, Entities> {
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get embeddingModel => $composableBuilder(
+    column: $table.embeddingModel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get embeddingDim => $composableBuilder(
+    column: $table.embeddingDim,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -5080,6 +5488,16 @@ class $EntitiesAnnotationComposer
 
   GeneratedColumn<Uint8List> get embedding =>
       $composableBuilder(column: $table.embedding, builder: (column) => column);
+
+  GeneratedColumn<String> get embeddingModel => $composableBuilder(
+    column: $table.embeddingModel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get embeddingDim => $composableBuilder(
+    column: $table.embeddingDim,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -5231,6 +5649,8 @@ class $EntitiesTableManager
                 Value<String?> summary = const Value.absent(),
                 Value<String> properties = const Value.absent(),
                 Value<Uint8List?> embedding = const Value.absent(),
+                Value<String?> embeddingModel = const Value.absent(),
+                Value<int?> embeddingDim = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int?> validAt = const Value.absent(),
                 Value<int?> invalidAt = const Value.absent(),
@@ -5249,6 +5669,8 @@ class $EntitiesTableManager
                 summary: summary,
                 properties: properties,
                 embedding: embedding,
+                embeddingModel: embeddingModel,
+                embeddingDim: embeddingDim,
                 createdAt: createdAt,
                 validAt: validAt,
                 invalidAt: invalidAt,
@@ -5269,6 +5691,8 @@ class $EntitiesTableManager
                 Value<String?> summary = const Value.absent(),
                 Value<String> properties = const Value.absent(),
                 Value<Uint8List?> embedding = const Value.absent(),
+                Value<String?> embeddingModel = const Value.absent(),
+                Value<int?> embeddingDim = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int?> validAt = const Value.absent(),
                 Value<int?> invalidAt = const Value.absent(),
@@ -5287,6 +5711,8 @@ class $EntitiesTableManager
                 summary: summary,
                 properties: properties,
                 embedding: embedding,
+                embeddingModel: embeddingModel,
+                embeddingDim: embeddingDim,
                 createdAt: createdAt,
                 validAt: validAt,
                 invalidAt: invalidAt,
@@ -5412,6 +5838,8 @@ typedef $RelationsCreateCompanionBuilder =
       Value<double> weight,
       Value<String> properties,
       Value<Uint8List?> embedding,
+      Value<String?> embeddingModel,
+      Value<int?> embeddingDim,
       Value<int> createdAt,
       Value<int?> validAt,
       Value<int?> invalidAt,
@@ -5432,6 +5860,8 @@ typedef $RelationsUpdateCompanionBuilder =
       Value<double> weight,
       Value<String> properties,
       Value<Uint8List?> embedding,
+      Value<String?> embeddingModel,
+      Value<int?> embeddingDim,
       Value<int> createdAt,
       Value<int?> validAt,
       Value<int?> invalidAt,
@@ -5513,6 +5943,16 @@ class $RelationsFilterComposer extends Composer<_$KnowledgeGraphDB, Relations> {
 
   ColumnFilters<Uint8List> get embedding => $composableBuilder(
     column: $table.embedding,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get embeddingModel => $composableBuilder(
+    column: $table.embeddingModel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get embeddingDim => $composableBuilder(
+    column: $table.embeddingDim,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5647,6 +6087,16 @@ class $RelationsOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get embeddingModel => $composableBuilder(
+    column: $table.embeddingModel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get embeddingDim => $composableBuilder(
+    column: $table.embeddingDim,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -5770,6 +6220,16 @@ class $RelationsAnnotationComposer
   GeneratedColumn<Uint8List> get embedding =>
       $composableBuilder(column: $table.embedding, builder: (column) => column);
 
+  GeneratedColumn<String> get embeddingModel => $composableBuilder(
+    column: $table.embeddingModel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get embeddingDim => $composableBuilder(
+    column: $table.embeddingDim,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -5892,6 +6352,8 @@ class $RelationsTableManager
                 Value<double> weight = const Value.absent(),
                 Value<String> properties = const Value.absent(),
                 Value<Uint8List?> embedding = const Value.absent(),
+                Value<String?> embeddingModel = const Value.absent(),
+                Value<int?> embeddingDim = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int?> validAt = const Value.absent(),
                 Value<int?> invalidAt = const Value.absent(),
@@ -5910,6 +6372,8 @@ class $RelationsTableManager
                 weight: weight,
                 properties: properties,
                 embedding: embedding,
+                embeddingModel: embeddingModel,
+                embeddingDim: embeddingDim,
                 createdAt: createdAt,
                 validAt: validAt,
                 invalidAt: invalidAt,
@@ -5930,6 +6394,8 @@ class $RelationsTableManager
                 Value<double> weight = const Value.absent(),
                 Value<String> properties = const Value.absent(),
                 Value<Uint8List?> embedding = const Value.absent(),
+                Value<String?> embeddingModel = const Value.absent(),
+                Value<int?> embeddingDim = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int?> validAt = const Value.absent(),
                 Value<int?> invalidAt = const Value.absent(),
@@ -5948,6 +6414,8 @@ class $RelationsTableManager
                 weight: weight,
                 properties: properties,
                 embedding: embedding,
+                embeddingModel: embeddingModel,
+                embeddingDim: embeddingDim,
                 createdAt: createdAt,
                 validAt: validAt,
                 invalidAt: invalidAt,
@@ -7087,6 +7555,8 @@ class SearchEntitiesResult {
   final String? summary;
   final String properties;
   final Uint8List? embedding;
+  final String? embeddingModel;
+  final int? embeddingDim;
   final int createdAt;
   final int? validAt;
   final int? invalidAt;
@@ -7106,6 +7576,8 @@ class SearchEntitiesResult {
     this.summary,
     required this.properties,
     this.embedding,
+    this.embeddingModel,
+    this.embeddingDim,
     required this.createdAt,
     this.validAt,
     this.invalidAt,
@@ -7157,6 +7629,8 @@ class FindNeighborsResult {
   final String? summary;
   final String properties;
   final Uint8List? embedding;
+  final String? embeddingModel;
+  final int? embeddingDim;
   final int createdAt;
   final int? validAt;
   final int? invalidAt;
@@ -7178,6 +7652,8 @@ class FindNeighborsResult {
     this.summary,
     required this.properties,
     this.embedding,
+    this.embeddingModel,
+    this.embeddingDim,
     required this.createdAt,
     this.validAt,
     this.invalidAt,

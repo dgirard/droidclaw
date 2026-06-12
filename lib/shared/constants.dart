@@ -97,7 +97,39 @@ class AppConstants {
 
   /// Minimum cosine similarity for an entity embedding to enter the
   /// retrieval candidate pool (vector path of [queryRelevant]).
+  ///
+  /// U3 calibration note: this value was tuned implicitly against the
+  /// 768-dim Gemini cosine distribution. The 256-dim MRL-truncated local
+  /// space (EmbeddingGemma) has a different similarity distribution, so it
+  /// may need on-device recalibration after the cutover. The trigger is the
+  /// "LOCAL EMBEDDING BENCHMARK VERDICT" log line emitted by the embedding
+  /// config screen: once the local space serves queries on a real KB,
+  /// compare golden-query recall against the cloud baseline and adjust here.
+  /// Deliberately NOT made space-aware yet — a per-space threshold map would
+  /// be speculative without on-device data.
   static const double knowledgeVectorSimilarityThreshold = 0.5;
+
+  /// Provenance marker stamped by the v3→v4 KG migration on embedding rows
+  /// written before per-row provenance existed. The SQL migration cannot
+  /// know the Dart-side embedding config, so legacy rows get this marker and
+  /// `embedding_dim = length(embedding) / 4` (Float32 LE — the blob byte
+  /// length is ground truth). The query guard treats the legacy space as the
+  /// best guess for "whatever provider was configured at migration time"
+  /// when it is the dominant space (see KnowledgeService.resolveQuerySpace).
+  static const String knowledgeLegacyEmbeddingModel = 'legacy:pre-v4';
+
+  /// Entities re-embedded per provider call during a backfill
+  /// (EmbeddingBackfillService) — one batched embed() per batch.
+  static const int knowledgeBackfillBatchSize = 32;
+
+  /// Max batches processed per backfill slice. A slice is one scheduled
+  /// charging-window wake (service isolate) or one UI progress step; the
+  /// job is resumable by construction, so slices can stay small.
+  static const int knowledgeBackfillSliceMaxBatches = 10;
+
+  /// Service-isolate check interval for the charger-gated backfill slice
+  /// (counter on the 1s onRepeatEvent tick, like KG decay/purge).
+  static const int knowledgeBackfillCheckIntervalSeconds = 1800;
 
   /// Number of top-ranked candidates used to seed spreading activation.
   static const int knowledgeActivationSeedCount = 5;

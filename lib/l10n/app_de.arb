@@ -617,5 +617,12 @@
   "@embeddingLocalBenchmarkResult": { "placeholders": { "ms": { "type": "int" }, "runs": { "type": "int" }, "verdict": { "type": "String" } } },
   "embeddingLocalVerdictFast": "schnell (als Standard geeignet)",
   "embeddingLocalVerdictAcceptable": "akzeptabel (Opt-in)",
-  "embeddingLocalVerdictSlow": "langsam (nur Offline-Fallback)"
+  "embeddingLocalVerdictSlow": "langsam (nur Offline-Fallback)",
+  "embeddingBackfillSection": "Neuberechnung der Wissensbasis-Embeddings",
+  "embeddingBackfillHint": "Berechnet gespeichertes Wissen im Embedding-Raum des gespeicherten Anbieters neu. Bis zum Abschluss nutzt die semantische Suche weiter den vorherigen Raum. Läuft auch automatisch beim Laden, wenn der lokale Anbieter ausgewählt ist.",
+  "embeddingBackfillStatus": "{done} / {total} Entitäten im aktiven Raum",
+  "@embeddingBackfillStatus": { "placeholders": { "done": { "type": "int" }, "total": { "type": "int" } } },
+  "embeddingBackfillComplete": "Alle Entitäten sind im aktiven Embedding-Raum",
+  "embeddingBackfillStart": "Jetzt neu berechnen",
+  "embeddingBackfillCancel": "Stoppen"
 }

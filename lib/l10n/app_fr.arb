@@ -582,5 +582,12 @@
   "@embeddingLocalBenchmarkResult": { "placeholders": { "ms": { "type": "int" }, "runs": { "type": "int" }, "verdict": { "type": "String" } } },
   "embeddingLocalVerdictFast": "rapide (utilisable par défaut)",
   "embeddingLocalVerdictAcceptable": "acceptable (en opt-in)",
-  "embeddingLocalVerdictSlow": "lent (repli hors ligne uniquement)"
+  "embeddingLocalVerdictSlow": "lent (repli hors ligne uniquement)",
+  "embeddingBackfillSection": "Ré-encodage de la base de connaissances",
+  "embeddingBackfillHint": "Ré-encode les connaissances enregistrées dans l'espace d'embedding du fournisseur sauvegardé. Tant que ce n'est pas terminé, la recherche sémantique continue d'utiliser l'espace précédent. S'exécute aussi automatiquement pendant la charge quand le fournisseur local est sélectionné.",
+  "embeddingBackfillStatus": "{done} / {total} entités dans l'espace actif",
+  "@embeddingBackfillStatus": { "placeholders": { "done": { "type": "int" }, "total": { "type": "int" } } },
+  "embeddingBackfillComplete": "Toutes les entités sont dans l'espace d'embedding actif",
+  "embeddingBackfillStart": "Ré-encoder maintenant",
+  "embeddingBackfillCancel": "Arrêter"
 }

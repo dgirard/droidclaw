@@ -626,5 +626,12 @@
   "@embeddingLocalBenchmarkResult": { "placeholders": { "ms": { "type": "int" }, "runs": { "type": "int" }, "verdict": { "type": "String" } } },
   "embeddingLocalVerdictFast": "fast (suitable as default)",
   "embeddingLocalVerdictAcceptable": "acceptable (opt-in)",
-  "embeddingLocalVerdictSlow": "slow (offline fallback only)"
+  "embeddingLocalVerdictSlow": "slow (offline fallback only)",
+  "embeddingBackfillSection": "Knowledge base re-embedding",
+  "embeddingBackfillHint": "Re-embeds stored knowledge into the saved provider's embedding space. Until it completes, semantic search keeps using the previous space. Also runs automatically while charging when the local provider is selected.",
+  "embeddingBackfillStatus": "{done} / {total} entities in the active space",
+  "@embeddingBackfillStatus": { "placeholders": { "done": { "type": "int" }, "total": { "type": "int" } } },
+  "embeddingBackfillComplete": "All entities are in the active embedding space",
+  "embeddingBackfillStart": "Backfill now",
+  "embeddingBackfillCancel": "Stop"
 }

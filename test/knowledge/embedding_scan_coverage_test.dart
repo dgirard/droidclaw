@@ -49,6 +49,8 @@ void main() {
       await db.updateEntityEmbedding(
         lastId,
         _blob(isLast ? [1.0, 0.0, 0.0, 0.0] : [0.0, 1.0, 0.0, 0.0]),
+        model: 'fake',
+        dim: 4,
       );
     }
     return lastId;
@@ -91,7 +93,9 @@ void main() {
     await service(pageSize: pageSize).queryRelevant('quantum banana smoothie');
 
     final pageQueries = counter.statements
-        .where((s) => s.contains('embedding IS NOT NULL'))
+        // Keyset page queries only (U3 added a space-counts query that also
+        // mentions 'embedding IS NOT NULL').
+        .where((s) => s.contains('embedding IS NOT NULL') && s.contains('id > ?'))
         .toList();
     // 7 entities at page size 3 → pages of 3, 3, 1 (last page short-circuits
     // the loop). Coverage is total: 3 page queries, not 1 capped load.

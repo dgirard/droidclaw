@@ -128,21 +128,36 @@ class IngestionPipeline {
     return storedCount;
   }
 
+  /// Build the canonical embedding text for an entity:
+  /// "Name (TYPE): summary" (type omitted for CONCEPT, summary if present).
+  ///
+  /// Single home for the text format — the versioned re-embed backfill
+  /// (EmbeddingBackfillService) MUST reconstruct exactly the same text, or
+  /// backfilled vectors would silently live in a differently-shaped space.
+  static String buildEmbeddingText({
+    required String name,
+    required String entityType,
+    String? summary,
+  }) {
+    final parts = [name];
+    if (entityType != 'CONCEPT') parts.add('($entityType)');
+    if (summary != null && summary.isNotEmpty) parts.add(': $summary');
+    return parts.join(' ');
+  }
+
   /// Compute embeddings for resolved entities and store in DB.
   Future<void> _embedEntities(
     List<ExtractedEntity> entities,
     Map<String, int> entityIds,
   ) async {
     try {
-      // Build embedding texts: "Name (TYPE): summary" for rich context
-      final texts = entities.map((e) {
-        final parts = [e.name];
-        if (e.type != 'CONCEPT') parts.add('(${e.type})');
-        if (e.summary != null && e.summary!.isNotEmpty) {
-          parts.add(': ${e.summary}');
-        }
-        return parts.join(' ');
-      }).toList();
+      final texts = entities
+          .map((e) => buildEmbeddingText(
+                name: e.name,
+                entityType: e.type,
+                summary: e.summary,
+              ))
+          .toList();
 
       final result = await embeddingProvider!.embed(
         texts: texts,
@@ -151,13 +166,19 @@ class IngestionPipeline {
         taskType: 'RETRIEVAL_DOCUMENT',
       );
 
-      // Store each embedding as a Float32 BLOB
+      // Store each embedding as a Float32 BLOB stamped with its space
+      // (provider id + actual vector length — U3 provenance).
       for (var i = 0; i < entities.length; i++) {
         final entityId = entityIds[entities[i].name.toLowerCase()];
         if (entityId == null || i >= result.embeddings.length) continue;
 
-        final blob = EmbeddingCodec.encode(result.embeddings[i]);
-        await db.updateEntityEmbedding(entityId, blob);
+        final vector = result.embeddings[i];
+        await db.updateEntityEmbedding(
+          entityId,
+          EmbeddingCodec.encode(vector),
+          model: embeddingProvider!.providerId,
+          dim: vector.length,
+        );
       }
 
       AppLogger.instance.info(
