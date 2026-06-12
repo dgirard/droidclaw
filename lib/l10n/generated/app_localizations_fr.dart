@@ -1711,4 +1711,78 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get embeddingSaved => 'Fournisseur d\'embedding enregistré';
+
+  @override
+  String get embeddingProviderLocal => 'Local (sur l\'appareil)';
+
+  @override
+  String get embeddingLocalSection => 'Modèle embarqué';
+
+  @override
+  String get embeddingLocalConsent =>
+      'EmbeddingGemma 300M sera téléchargé depuis Hugging Face (~330 Mo). Le téléchargement utilise uniquement le Wi-Fi sauf si vous autorisez les données mobiles. Une fois téléchargé, la recherche sémantique fonctionne entièrement hors ligne, sans clé API.';
+
+  @override
+  String get embeddingLocalDimensionsNote =>
+      'Les dimensions de sortie sont fixées à 256 (troncature Matryoshka).';
+
+  @override
+  String get embeddingLocalAllowMetered => 'Autoriser les données mobiles';
+
+  @override
+  String get embeddingLocalAllowMeteredSubtitle =>
+      'Désactivé = Wi-Fi uniquement';
+
+  @override
+  String get embeddingLocalDownload => 'Télécharger le modèle';
+
+  @override
+  String get embeddingLocalCancel => 'Annuler le téléchargement';
+
+  @override
+  String get embeddingLocalRetry => 'Réessayer le téléchargement';
+
+  @override
+  String get embeddingLocalDelete => 'Supprimer le modèle';
+
+  @override
+  String get embeddingLocalDeleteConfirm =>
+      'Supprimer le modèle téléchargé (~330 Mo) ? La recherche sémantique cessera de fonctionner jusqu\'à son nouveau téléchargement.';
+
+  @override
+  String get embeddingLocalStateAbsent => 'Modèle non téléchargé';
+
+  @override
+  String embeddingLocalStateDownloading(int pct) {
+    return 'Téléchargement… $pct%';
+  }
+
+  @override
+  String get embeddingLocalStateVerifying =>
+      'Vérification des sommes de contrôle…';
+
+  @override
+  String get embeddingLocalStateReady => 'Modèle prêt';
+
+  @override
+  String embeddingLocalStateFailed(String error) {
+    return 'Échec du téléchargement : $error';
+  }
+
+  @override
+  String get embeddingLocalBenchmark => 'Lancer le benchmark de latence';
+
+  @override
+  String embeddingLocalBenchmarkResult(int ms, int runs, String verdict) {
+    return 'Médiane $ms ms sur $runs exécutions — $verdict';
+  }
+
+  @override
+  String get embeddingLocalVerdictFast => 'rapide (utilisable par défaut)';
+
+  @override
+  String get embeddingLocalVerdictAcceptable => 'acceptable (en opt-in)';
+
+  @override
+  String get embeddingLocalVerdictSlow => 'lent (repli hors ligne uniquement)';
 }

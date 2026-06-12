@@ -6,6 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/local/storage_service.dart';
 import '../../shared/constants.dart';
 import '../config/app_config.dart';
+import '../config/log_entry.dart';
+import '../services/app_logger.dart';
+import '../services/model_download_manager.dart';
 import '../knowledge/database/knowledge_graph_db.dart';
 import '../knowledge/services/entity_extractor.dart';
 import '../knowledge/services/entity_resolver.dart';
@@ -171,9 +174,38 @@ class ServiceAgentFactory {
     // - VolumeControlTool (MethodChannel registered on Activity FlutterEngine only)
     // - RadioTool (MediaSessionService requires Activity FlutterEngine)
 
-    // 4b. Embedding provider (pure HTTP — works in service isolate)
+    // 4b. Embedding provider. Cloud providers are pure HTTP and always work
+    // here. The 'local' provider needs the flutter_onnxruntime plugin, which
+    // is registered on the service FlutterEngine via GeneratedPluginRegistrant
+    // but is NOT documented to work there — so creation (and the disk check)
+    // is wrapped in try/catch with a null fallback: cron turns degrade to
+    // lexical-only KG search instead of failing. Note the ONNX session loads
+    // lazily, so a plugin failure can also surface at first embed() — those
+    // land in the existing degraded-retrieval paths.
     EmbeddingProvider? embeddingProviderInstance;
-    if (embeddingProvider.isNotEmpty) {
+    if (embeddingProvider == AppConstants.localEmbeddingProviderName) {
+      try {
+        final modelsRoot =
+            ModelDownloadManager.rootFromWorkspace(workspacePath);
+        const spec = ModelSpec.embeddingGemmaInt8;
+        if (ModelDownloadManager.isReadySync(
+            modelsRootDir: modelsRoot, spec: spec)) {
+          embeddingProviderInstance = EmbeddingProviderFactory.create(
+            providerName: embeddingProvider,
+            dimensions: embeddingDimensions,
+            localModelDir: p.join(modelsRoot, spec.id),
+          );
+        } else {
+          AppLogger.instance.warning(LogSource.service,
+              'Local embedding model not downloaded — KG search is '
+              'lexical-only in the service isolate');
+        }
+      } catch (e) {
+        AppLogger.instance.warning(LogSource.service,
+            'Local embedding provider unavailable in service isolate: $e');
+        embeddingProviderInstance = null;
+      }
+    } else if (embeddingProvider.isNotEmpty) {
       final embKey = embeddingUseOwnKey ? embeddingApiKey : apiKey;
       if (embKey != null && embKey.isNotEmpty) {
         embeddingProviderInstance = EmbeddingProviderFactory.create(

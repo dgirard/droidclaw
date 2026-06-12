@@ -1713,4 +1713,77 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get embeddingSaved => 'Proveedor de embedding guardado';
+
+  @override
+  String get embeddingProviderLocal => 'Local (en el dispositivo)';
+
+  @override
+  String get embeddingLocalSection => 'Modelo en el dispositivo';
+
+  @override
+  String get embeddingLocalConsent =>
+      'EmbeddingGemma 300M se descargará desde Hugging Face (~330 MB). La descarga usa solo Wi-Fi a menos que permitas datos móviles. Una vez descargado, la búsqueda semántica funciona completamente sin conexión y sin clave API.';
+
+  @override
+  String get embeddingLocalDimensionsNote =>
+      'Las dimensiones de salida están fijadas en 256 (truncamiento Matryoshka).';
+
+  @override
+  String get embeddingLocalAllowMetered => 'Permitir datos móviles';
+
+  @override
+  String get embeddingLocalAllowMeteredSubtitle => 'Desactivado = solo Wi-Fi';
+
+  @override
+  String get embeddingLocalDownload => 'Descargar modelo';
+
+  @override
+  String get embeddingLocalCancel => 'Cancelar descarga';
+
+  @override
+  String get embeddingLocalRetry => 'Reintentar descarga';
+
+  @override
+  String get embeddingLocalDelete => 'Eliminar modelo';
+
+  @override
+  String get embeddingLocalDeleteConfirm =>
+      '¿Eliminar el modelo descargado (~330 MB)? La búsqueda semántica dejará de funcionar hasta que se descargue de nuevo.';
+
+  @override
+  String get embeddingLocalStateAbsent => 'Modelo no descargado';
+
+  @override
+  String embeddingLocalStateDownloading(int pct) {
+    return 'Descargando… $pct%';
+  }
+
+  @override
+  String get embeddingLocalStateVerifying =>
+      'Verificando sumas de comprobación…';
+
+  @override
+  String get embeddingLocalStateReady => 'Modelo listo';
+
+  @override
+  String embeddingLocalStateFailed(String error) {
+    return 'Error de descarga: $error';
+  }
+
+  @override
+  String get embeddingLocalBenchmark => 'Ejecutar benchmark de latencia';
+
+  @override
+  String embeddingLocalBenchmarkResult(int ms, int runs, String verdict) {
+    return 'Mediana $ms ms en $runs ejecuciones — $verdict';
+  }
+
+  @override
+  String get embeddingLocalVerdictFast => 'rápido (apto como predeterminado)';
+
+  @override
+  String get embeddingLocalVerdictAcceptable => 'aceptable (opcional)';
+
+  @override
+  String get embeddingLocalVerdictSlow => 'lento (solo respaldo sin conexión)';
 }

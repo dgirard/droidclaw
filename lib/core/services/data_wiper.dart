@@ -14,6 +14,12 @@ import '../session/session_manager.dart';
 ///
 /// Every step is best-effort: a failure in one store must not prevent the
 /// others from being wiped.
+///
+/// Deliberately NOT wiped: downloaded model files (`droidclaw_models/`, next
+/// to the workspace — see `AppConstants.modelsDirName`). They are cached
+/// public assets (e.g. the EmbeddingGemma ONNX export), contain no user data,
+/// and cost ~330 MB to re-download. Deleting a model is an explicit action in
+/// Settings → Embeddings (ModelDownloadManager.delete).
 class DataWiper {
   DataWiper({
     required this.storage,

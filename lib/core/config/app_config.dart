@@ -233,7 +233,8 @@ class ToolsConfig {
 
 /// Embedding provider configuration.
 class EmbeddingConfig {
-  /// Provider name: 'gemini', 'openai', 'openrouter', '' (disabled).
+  /// Provider name: 'gemini', 'openai', 'openrouter', 'local' (on-device
+  /// EmbeddingGemma — no API key, dimensions fixed at 256), '' (disabled).
   final String provider;
 
   /// Model identifier (e.g. 'gemini-embedding-001').

@@ -1685,4 +1685,76 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get embeddingSaved => 'Embedding provider saved';
+
+  @override
+  String get embeddingProviderLocal => 'Local (on-device)';
+
+  @override
+  String get embeddingLocalSection => 'On-device model';
+
+  @override
+  String get embeddingLocalConsent =>
+      'EmbeddingGemma 300M will be downloaded from Hugging Face (~330 MB). The download uses Wi-Fi only unless you allow mobile data. Once downloaded, semantic search works fully offline, without any API key.';
+
+  @override
+  String get embeddingLocalDimensionsNote =>
+      'Output dimensions are fixed at 256 (Matryoshka truncation).';
+
+  @override
+  String get embeddingLocalAllowMetered => 'Allow mobile data';
+
+  @override
+  String get embeddingLocalAllowMeteredSubtitle => 'Off = Wi-Fi only';
+
+  @override
+  String get embeddingLocalDownload => 'Download model';
+
+  @override
+  String get embeddingLocalCancel => 'Cancel download';
+
+  @override
+  String get embeddingLocalRetry => 'Retry download';
+
+  @override
+  String get embeddingLocalDelete => 'Delete model';
+
+  @override
+  String get embeddingLocalDeleteConfirm =>
+      'Delete the downloaded model (~330 MB)? Semantic search will stop working until it is downloaded again.';
+
+  @override
+  String get embeddingLocalStateAbsent => 'Model not downloaded';
+
+  @override
+  String embeddingLocalStateDownloading(int pct) {
+    return 'Downloading… $pct%';
+  }
+
+  @override
+  String get embeddingLocalStateVerifying => 'Verifying checksums…';
+
+  @override
+  String get embeddingLocalStateReady => 'Model ready';
+
+  @override
+  String embeddingLocalStateFailed(String error) {
+    return 'Download failed: $error';
+  }
+
+  @override
+  String get embeddingLocalBenchmark => 'Run latency benchmark';
+
+  @override
+  String embeddingLocalBenchmarkResult(int ms, int runs, String verdict) {
+    return 'Median $ms ms over $runs runs — $verdict';
+  }
+
+  @override
+  String get embeddingLocalVerdictFast => 'fast (suitable as default)';
+
+  @override
+  String get embeddingLocalVerdictAcceptable => 'acceptable (opt-in)';
+
+  @override
+  String get embeddingLocalVerdictSlow => 'slow (offline fallback only)';
 }

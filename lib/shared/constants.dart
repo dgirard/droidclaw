@@ -265,4 +265,90 @@ class AppConstants {
     'de': 'de-DE',
     'it': 'it-IT',
   };
+
+  // Local embedding provider (U2 — EmbeddingGemma 308M ONNX, on-device)
+
+  /// EmbeddingConfig.provider value selecting the on-device provider.
+  static const String localEmbeddingProviderName = 'local';
+
+  /// Provenance id stored alongside vectors produced by the local provider.
+  static const String localEmbeddingProviderId =
+      'local:embeddinggemma-300m-int8';
+
+  /// Model identifier shown in config (also the on-disk model directory name).
+  static const String localEmbeddingModelId = 'embeddinggemma-300m-int8';
+
+  /// MRL-truncated output dimensionality of the local provider. EmbeddingGemma
+  /// natively outputs 768 dims; Matryoshka truncation to 256 + L2 renorm is
+  /// the documented efficient configuration (HF model card).
+  static const int localEmbeddingDimensions = 256;
+
+  /// Native (pre-truncation) output dimensionality of EmbeddingGemma.
+  static const int localEmbeddingFullDimensions = 768;
+
+  /// Max token ids fed to the encoder (EmbeddingGemma context length).
+  static const int localEmbeddingMaxTokens = 2048;
+
+  /// EmbeddingGemma prompt prefixes (HF model card,
+  /// onnx-community/embeddinggemma-300m-ONNX "Usage" section):
+  /// queries use "task: search result | query: ", documents use
+  /// "title: none | text: ".
+  static const String localEmbeddingQueryPrefix =
+      'task: search result | query: ';
+  static const String localEmbeddingDocumentPrefix = 'title: none | text: ';
+
+  /// Latency thresholds (ms, median over the integrated benchmark) deciding
+  /// the verdict for the local provider on this device:
+  /// < [localEmbeddingLatencyGoodMs] → fast enough to be a default;
+  /// < [localEmbeddingLatencyAcceptableMs] → acceptable as opt-in;
+  /// above → offline fallback only.
+  static const int localEmbeddingLatencyGoodMs = 150;
+  static const int localEmbeddingLatencyAcceptableMs = 300;
+
+  /// Integrated benchmark: warmup runs (excluded) + measured runs (median).
+  static const int localEmbeddingBenchmarkWarmupRuns = 3;
+  static const int localEmbeddingBenchmarkRuns = 20;
+
+  // Model download manager (large cached assets, shared with future models)
+
+  /// Root directory name for downloaded models. Lives NEXT TO the workspace
+  /// (in the app documents dir), not inside it: DataWiper wipes workspace
+  /// contents, and models are cached assets, not user data.
+  static const String modelsDirName = 'droidclaw_models';
+
+  /// SHA-256 placeholder marker: verification runs in log-only warn mode and
+  /// prints the computed hash so it can be pinned here after the first
+  /// verified download. A real (pinned) hash mismatch rejects the file.
+  static const String modelSha256Placeholder =
+      'TODO-pin-on-first-verified-download';
+
+  // EmbeddingGemma int8 ONNX export — onnx-community/embeddinggemma-300m-ONNX.
+  // int8 (model_quantized) preferred per HF discussion #15 (q4 exports target
+  // transformers.js and may not load on ORT mobile); q4f16 is the alternate.
+  static const String embeddingGemmaRepoBase =
+      'https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main';
+  static const String embeddingGemmaModelFilename = 'model_quantized.onnx';
+  static const String embeddingGemmaModelDataFilename =
+      'model_quantized.onnx_data';
+  static const String embeddingGemmaTokenizerFilename = 'tokenizer.json';
+  static const String embeddingGemmaModelUrl =
+      '$embeddingGemmaRepoBase/onnx/model_quantized.onnx';
+  static const String embeddingGemmaModelDataUrl =
+      '$embeddingGemmaRepoBase/onnx/model_quantized.onnx_data';
+  static const String embeddingGemmaTokenizerUrl =
+      '$embeddingGemmaRepoBase/tokenizer.json';
+
+  // Exact sizes from the HF repo tree (used for download progress weighting
+  // and the consent text).
+  static const int embeddingGemmaModelBytes = 567874;
+  static const int embeddingGemmaModelDataBytes = 308890624;
+  static const int embeddingGemmaTokenizerBytes = 20323312;
+  static const int embeddingGemmaTotalBytes = embeddingGemmaModelBytes +
+      embeddingGemmaModelDataBytes +
+      embeddingGemmaTokenizerBytes;
+
+  // SHA-256 hashes — log-only until pinned (see modelSha256Placeholder).
+  static const String embeddingGemmaModelSha256 = modelSha256Placeholder;
+  static const String embeddingGemmaModelDataSha256 = modelSha256Placeholder;
+  static const String embeddingGemmaTokenizerSha256 = modelSha256Placeholder;
 }

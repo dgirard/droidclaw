@@ -3097,6 +3097,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Embedding provider saved'**
   String get embeddingSaved;
+
+  /// No description provided for @embeddingProviderLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'Local (on-device)'**
+  String get embeddingProviderLocal;
+
+  /// No description provided for @embeddingLocalSection.
+  ///
+  /// In en, this message translates to:
+  /// **'On-device model'**
+  String get embeddingLocalSection;
+
+  /// No description provided for @embeddingLocalConsent.
+  ///
+  /// In en, this message translates to:
+  /// **'EmbeddingGemma 300M will be downloaded from Hugging Face (~330 MB). The download uses Wi-Fi only unless you allow mobile data. Once downloaded, semantic search works fully offline, without any API key.'**
+  String get embeddingLocalConsent;
+
+  /// No description provided for @embeddingLocalDimensionsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Output dimensions are fixed at 256 (Matryoshka truncation).'**
+  String get embeddingLocalDimensionsNote;
+
+  /// No description provided for @embeddingLocalAllowMetered.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow mobile data'**
+  String get embeddingLocalAllowMetered;
+
+  /// No description provided for @embeddingLocalAllowMeteredSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Off = Wi-Fi only'**
+  String get embeddingLocalAllowMeteredSubtitle;
+
+  /// No description provided for @embeddingLocalDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download model'**
+  String get embeddingLocalDownload;
+
+  /// No description provided for @embeddingLocalCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel download'**
+  String get embeddingLocalCancel;
+
+  /// No description provided for @embeddingLocalRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry download'**
+  String get embeddingLocalRetry;
+
+  /// No description provided for @embeddingLocalDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete model'**
+  String get embeddingLocalDelete;
+
+  /// No description provided for @embeddingLocalDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the downloaded model (~330 MB)? Semantic search will stop working until it is downloaded again.'**
+  String get embeddingLocalDeleteConfirm;
+
+  /// No description provided for @embeddingLocalStateAbsent.
+  ///
+  /// In en, this message translates to:
+  /// **'Model not downloaded'**
+  String get embeddingLocalStateAbsent;
+
+  /// No description provided for @embeddingLocalStateDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading… {pct}%'**
+  String embeddingLocalStateDownloading(int pct);
+
+  /// No description provided for @embeddingLocalStateVerifying.
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying checksums…'**
+  String get embeddingLocalStateVerifying;
+
+  /// No description provided for @embeddingLocalStateReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Model ready'**
+  String get embeddingLocalStateReady;
+
+  /// No description provided for @embeddingLocalStateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Download failed: {error}'**
+  String embeddingLocalStateFailed(String error);
+
+  /// No description provided for @embeddingLocalBenchmark.
+  ///
+  /// In en, this message translates to:
+  /// **'Run latency benchmark'**
+  String get embeddingLocalBenchmark;
+
+  /// No description provided for @embeddingLocalBenchmarkResult.
+  ///
+  /// In en, this message translates to:
+  /// **'Median {ms} ms over {runs} runs — {verdict}'**
+  String embeddingLocalBenchmarkResult(int ms, int runs, String verdict);
+
+  /// No description provided for @embeddingLocalVerdictFast.
+  ///
+  /// In en, this message translates to:
+  /// **'fast (suitable as default)'**
+  String get embeddingLocalVerdictFast;
+
+  /// No description provided for @embeddingLocalVerdictAcceptable.
+  ///
+  /// In en, this message translates to:
+  /// **'acceptable (opt-in)'**
+  String get embeddingLocalVerdictAcceptable;
+
+  /// No description provided for @embeddingLocalVerdictSlow.
+  ///
+  /// In en, this message translates to:
+  /// **'slow (offline fallback only)'**
+  String get embeddingLocalVerdictSlow;
 }
 
 class _AppLocalizationsDelegate

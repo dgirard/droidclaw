@@ -133,6 +133,7 @@ Both chat UI and Telegram consume the same `Stream<AgentEvent>`.
 Multi-provider embedding abstraction mirroring the LLM provider pattern:
 
 - `EmbeddingProvider` (interface) → `BaseCloudEmbeddingProvider` (shared retry) → `GeminiEmbeddingProvider` / `OpenAIEmbeddingProvider`
+- `LocalEmbeddingProvider` (`provider: 'local'`, opt-in): on-device EmbeddingGemma 308M int8 ONNX (flutter_onnxruntime + dart_sentencepiece_tokenizer), no API key, 256-dim MRL output, EmbeddingGemma prompt prefixes by taskType; the 3 model files (~330 MB) are downloaded + SHA-256-verified by `ModelDownloadManager` into `droidclaw_models/` next to the workspace (DataWiper never deletes them — deletion is an explicit settings action)
 - `EmbeddingProviderFactory.create()` routes by provider name
 - Gemini uses native REST API (`generativelanguage.googleapis.com/v1beta`), NOT the OpenAI-compatible chat endpoint
 - Config in `AppConfig.embedding` (`EmbeddingConfig`: provider, model, dimensions, useOwnApiKey)
