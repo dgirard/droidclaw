@@ -442,6 +442,13 @@
   "@chatSpeechError": { "placeholders": { "error": { "type": "String" } } },
   "chatSpeechUnavailable": "Riconoscimento vocale non disponibile su questo dispositivo",
 
+  "voiceSpeaking": "Lettura ad alta voce...",
+  "voiceStopSpeaking": "Interrompi la lettura",
+  "voiceLinkWord": "link",
+  "voiceLanguageUnavailable": "Nessuna voce disponibile per \"{language}\" — verrà usata la voce predefinita",
+  "@voiceLanguageUnavailable": { "placeholders": { "language": { "type": "String" } } },
+  "voiceTtsUnavailable": "La sintesi vocale non è disponibile su questo dispositivo",
+
   "agentSummarizeInstructions": "Write the summary in Italian.",
 
   "settingsExportConversations": "Esporta conversazioni",

@@ -1267,6 +1267,24 @@ class AppLocalizationsDe extends AppLocalizations {
       'Spracherkennung auf diesem Gerät nicht verfügbar';
 
   @override
+  String get voiceSpeaking => 'Sprachausgabe...';
+
+  @override
+  String get voiceStopSpeaking => 'Vorlesen stoppen';
+
+  @override
+  String get voiceLinkWord => 'Link';
+
+  @override
+  String voiceLanguageUnavailable(String language) {
+    return 'Keine Stimme für \"$language\" verfügbar — Standardstimme wird verwendet';
+  }
+
+  @override
+  String get voiceTtsUnavailable =>
+      'Sprachausgabe ist auf diesem Gerät nicht verfügbar';
+
+  @override
   String get agentSummarizeInstructions => 'Write the summary in German.';
 
   @override

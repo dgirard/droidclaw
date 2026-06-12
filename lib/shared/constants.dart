@@ -244,4 +244,25 @@ class AppConstants {
 
   // file tool: cap on a single write so the LLM cannot fill the workspace.
   static const int fileWriteMaxChars = 2000000;
+
+  // Voice narration (U1 — TTS for voice-initiated turns, main isolate only)
+
+  /// Max characters of a single narrated utterance (same cap as the speak
+  /// tool — Android TTS rejects longer input).
+  static const int ttsNarrationMaxChars = 5000;
+
+  /// Errors are spoken briefly: cap on narrated error text.
+  static const int ttsErrorNarrationMaxChars = 300;
+
+  /// TTS speech rate (matches the speak tool).
+  static const double ttsSpeechRate = 0.5;
+
+  /// App locale code → BCP-47 tag for the platform TTS engine.
+  static const Map<String, String> ttsLocaleTags = {
+    'en': 'en-US',
+    'fr': 'fr-FR',
+    'es': 'es-ES',
+    'de': 'de-DE',
+    'it': 'it-IT',
+  };
 }

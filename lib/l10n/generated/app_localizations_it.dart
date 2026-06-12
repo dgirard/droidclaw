@@ -1267,6 +1267,24 @@ class AppLocalizationsIt extends AppLocalizations {
       'Riconoscimento vocale non disponibile su questo dispositivo';
 
   @override
+  String get voiceSpeaking => 'Lettura ad alta voce...';
+
+  @override
+  String get voiceStopSpeaking => 'Interrompi la lettura';
+
+  @override
+  String get voiceLinkWord => 'link';
+
+  @override
+  String voiceLanguageUnavailable(String language) {
+    return 'Nessuna voce disponibile per \"$language\" — verrà usata la voce predefinita';
+  }
+
+  @override
+  String get voiceTtsUnavailable =>
+      'La sintesi vocale non è disponibile su questo dispositivo';
+
+  @override
   String get agentSummarizeInstructions => 'Write the summary in Italian.';
 
   @override

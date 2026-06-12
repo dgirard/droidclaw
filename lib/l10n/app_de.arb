@@ -442,6 +442,13 @@
   "@chatSpeechError": { "placeholders": { "error": { "type": "String" } } },
   "chatSpeechUnavailable": "Spracherkennung auf diesem Gerät nicht verfügbar",
 
+  "voiceSpeaking": "Sprachausgabe...",
+  "voiceStopSpeaking": "Vorlesen stoppen",
+  "voiceLinkWord": "Link",
+  "voiceLanguageUnavailable": "Keine Stimme für \"{language}\" verfügbar — Standardstimme wird verwendet",
+  "@voiceLanguageUnavailable": { "placeholders": { "language": { "type": "String" } } },
+  "voiceTtsUnavailable": "Sprachausgabe ist auf diesem Gerät nicht verfügbar",
+
   "agentSummarizeInstructions": "Write the summary in German.",
 
   "settingsExportConversations": "Unterhaltungen exportieren",

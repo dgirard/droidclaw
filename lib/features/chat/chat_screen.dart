@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+import '../../core/services/voice_narrator.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/chat_provider.dart';
@@ -19,17 +22,57 @@ class ChatScreen extends ConsumerStatefulWidget {
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends ConsumerState<ChatScreen> {
+class _ChatScreenState extends ConsumerState<ChatScreen>
+    with WidgetsBindingObserver {
   final _scrollController = ScrollController();
   final _inputBarKey = GlobalKey<InputBarState>();
   final SpeechToText _speech = SpeechToText();
   bool _speechAvailable = false;
   bool _isListening = false;
 
+  /// True when the input field was last filled by speech-to-text: the next
+  /// send is a voice turn. Any keyboard edit demotes it back to typed.
+  bool _pendingVoiceSend = false;
+
+  StreamSubscription<VoiceNarratorState>? _narratorSub;
+  VoiceDegradation _lastDegradation = VoiceDegradation.none;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initSpeech();
+    // Surface narrator degradation (no voice for locale / no TTS engine) as
+    // a one-shot snackbar on each transition into a degraded state (U11
+    // pattern: never fail silently — the text answer is always displayed).
+    _narratorSub =
+        ref.read(voiceNarratorProvider).states.listen(_onNarratorState);
+  }
+
+  void _onNarratorState(VoiceNarratorState state) {
+    if (!mounted) return;
+    if (state.degradation != _lastDegradation &&
+        state.degradation != VoiceDegradation.none) {
+      final l = AppLocalizations.of(context);
+      final message = switch (state.degradation) {
+        VoiceDegradation.languageUnavailable => l.voiceLanguageUnavailable(
+            ref.read(appConfigProvider).resolvedLocale),
+        _ => l.voiceTtsUnavailable,
+      };
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    }
+    _lastDegradation = state.degradation;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Interruption (R2): backgrounding the app (incoming call, home button)
+    // stops narration. Audio-focus loss and AUDIO_BECOMING_NOISY are not
+    // exposed by flutter_tts — documented gap in VoiceNarrator.
+    if (state == AppLifecycleState.paused) {
+      ref.read(voiceNarratorProvider).stop();
+    }
   }
 
   Future<void> _initSpeech() async {
@@ -60,6 +103,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _onSpeechResult(SpeechRecognitionResult result) {
     _inputBarKey.currentState?.setText(result.recognizedWords);
+    // Field content came from voice — the next send is a voice turn
+    // (demoted to typed if the user edits with the keyboard first).
+    _pendingVoiceSend = result.recognizedWords.trim().isNotEmpty;
   }
 
   void _onSpeechStatus(String status) {
@@ -86,6 +132,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _narratorSub?.cancel();
     _scrollController.dispose();
     _speech.stop();
     super.dispose();
@@ -158,6 +206,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           if (chatState.isProcessing)
             AgentStatusIndicator(event: chatState.currentEvent),
 
+          // Voice narration indicator (tap stop to cut speech)
+          _SpeakingIndicator(narrator: ref.watch(voiceNarratorProvider)),
+
           // Input bar
           InputBar(
             key: _inputBarKey,
@@ -167,9 +218,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 _speech.stop();
                 setState(() => _isListening = false);
               }
-              chatNotifier.sendMessage(text);
+              final modality = _pendingVoiceSend
+                  ? ChatTurnModality.voice
+                  : ChatTurnModality.typed;
+              _pendingVoiceSend = false;
+              chatNotifier.sendMessage(text, modality: modality);
             },
             onMicToggle: _speechAvailable ? _toggleListening : null,
+            onUserTyped: () {
+              // Keyboard edit: demote the pending voice turn to typed and
+              // stop any ongoing narration (R2).
+              _pendingVoiceSend = false;
+              ref.read(voiceNarratorProvider).stop();
+            },
             isListening: _isListening,
             enabled: !chatState.isProcessing,
           ),
@@ -210,6 +271,53 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Minimal "speaking" indicator shown while the narrator reads a voice
+/// turn aloud, with a stop button (mirrors AgentStatusIndicator styling).
+class _SpeakingIndicator extends StatelessWidget {
+  final VoiceNarrator narrator;
+
+  const _SpeakingIndicator({required this.narrator});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<VoiceNarratorState>(
+      stream: narrator.states,
+      initialData: narrator.state,
+      builder: (context, snapshot) {
+        if (!(snapshot.data?.isSpeaking ?? false)) {
+          return const SizedBox.shrink();
+        }
+        final theme = Theme.of(context);
+        final l = AppLocalizations.of(context);
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.volume_up_outlined,
+                  size: 16, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Text(
+                l.voiceSpeaking,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.stop_circle_outlined, size: 20),
+                color: theme.colorScheme.primary,
+                visualDensity: VisualDensity.compact,
+                tooltip: l.voiceStopSpeaking,
+                onPressed: () => narrator.stop(),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

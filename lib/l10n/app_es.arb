@@ -442,6 +442,13 @@
   "@chatSpeechError": { "placeholders": { "error": { "type": "String" } } },
   "chatSpeechUnavailable": "Reconocimiento de voz no disponible en este dispositivo",
 
+  "voiceSpeaking": "Leyendo en voz alta...",
+  "voiceStopSpeaking": "Detener la lectura",
+  "voiceLinkWord": "enlace",
+  "voiceLanguageUnavailable": "No hay voz disponible para \"{language}\" — se usará la voz predeterminada",
+  "@voiceLanguageUnavailable": { "placeholders": { "language": { "type": "String" } } },
+  "voiceTtsUnavailable": "La síntesis de voz no está disponible en este dispositivo",
+
   "agentSummarizeInstructions": "Write the summary in Spanish.",
 
   "settingsExportConversations": "Exportar conversaciones",

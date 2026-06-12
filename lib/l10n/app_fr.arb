@@ -407,6 +407,13 @@
   "@chatSpeechError": { "placeholders": { "error": { "type": "String" } } },
   "chatSpeechUnavailable": "Reconnaissance vocale non disponible sur cet appareil",
 
+  "voiceSpeaking": "Lecture à voix haute...",
+  "voiceStopSpeaking": "Arrêter la lecture",
+  "voiceLinkWord": "lien",
+  "voiceLanguageUnavailable": "Aucune voix disponible pour « {language} » — voix par défaut utilisée",
+  "@voiceLanguageUnavailable": { "placeholders": { "language": { "type": "String" } } },
+  "voiceTtsUnavailable": "La synthèse vocale est indisponible sur cet appareil",
+
   "agentSummarizeInstructions": "Write the summary in French.",
 
   "settingsExportConversations": "Exporter les conversations",

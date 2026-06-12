@@ -18,6 +18,7 @@ import '../core/providers/embedding_provider.dart';
 import '../core/providers/embedding_provider_factory.dart';
 import '../core/providers/llm_provider.dart';
 import '../core/providers/provider_factory.dart';
+import '../core/services/voice_narrator.dart';
 import '../core/session/session_manager.dart';
 import '../core/tools/knowledge_query_tool.dart';
 import '../core/tools/knowledge_search_tool.dart';
@@ -89,6 +90,15 @@ final sessionManagerProvider = FutureProvider<SessionManager>((ref) async {
   await manager.init();
   ref.onDispose(() => manager.flush());
   return manager;
+});
+
+/// Voice narrator — speaks agent output for voice-initiated turns (U1).
+/// Main isolate only; lives for the app lifetime so the TTS engine is
+/// initialized once. Tests override it with a fake [TtsEngine].
+final voiceNarratorProvider = Provider<VoiceNarrator>((ref) {
+  final narrator = VoiceNarrator(engine: FlutterTtsEngine());
+  ref.onDispose(narrator.dispose);
+  return narrator;
 });
 
 /// Memory manager.

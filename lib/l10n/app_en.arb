@@ -442,6 +442,13 @@
   "@chatSpeechError": { "placeholders": { "error": { "type": "String" } } },
   "chatSpeechUnavailable": "Speech recognition unavailable on this device",
 
+  "voiceSpeaking": "Speaking...",
+  "voiceStopSpeaking": "Stop speaking",
+  "voiceLinkWord": "link",
+  "voiceLanguageUnavailable": "No voice available for \"{language}\" — using the default voice",
+  "@voiceLanguageUnavailable": { "placeholders": { "language": { "type": "String" } } },
+  "voiceTtsUnavailable": "Text-to-speech is unavailable on this device",
+
   "agentSummarizeInstructions": "Write the summary in English.",
 
   "settingsExportConversations": "Export Conversations",

@@ -1248,6 +1248,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'Speech recognition unavailable on this device';
 
   @override
+  String get voiceSpeaking => 'Speaking...';
+
+  @override
+  String get voiceStopSpeaking => 'Stop speaking';
+
+  @override
+  String get voiceLinkWord => 'link';
+
+  @override
+  String voiceLanguageUnavailable(String language) {
+    return 'No voice available for \"$language\" — using the default voice';
+  }
+
+  @override
+  String get voiceTtsUnavailable =>
+      'Text-to-speech is unavailable on this device';
+
+  @override
   String get agentSummarizeInstructions => 'Write the summary in English.';
 
   @override

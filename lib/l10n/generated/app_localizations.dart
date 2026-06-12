@@ -2330,6 +2330,36 @@ abstract class AppLocalizations {
   /// **'Speech recognition unavailable on this device'**
   String get chatSpeechUnavailable;
 
+  /// No description provided for @voiceSpeaking.
+  ///
+  /// In en, this message translates to:
+  /// **'Speaking...'**
+  String get voiceSpeaking;
+
+  /// No description provided for @voiceStopSpeaking.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop speaking'**
+  String get voiceStopSpeaking;
+
+  /// No description provided for @voiceLinkWord.
+  ///
+  /// In en, this message translates to:
+  /// **'link'**
+  String get voiceLinkWord;
+
+  /// No description provided for @voiceLanguageUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No voice available for \"{language}\" — using the default voice'**
+  String voiceLanguageUnavailable(String language);
+
+  /// No description provided for @voiceTtsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Text-to-speech is unavailable on this device'**
+  String get voiceTtsUnavailable;
+
   /// No description provided for @agentSummarizeInstructions.
   ///
   /// In en, this message translates to:
