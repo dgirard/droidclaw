@@ -1,5 +1,18 @@
 # Spike S2 — Wake word (sherpa_onnx) on-device viability
 
+> **Dependency note (build collision):** `sherpa_onnx` is NOT in `pubspec.yaml`.
+> It bundles its own `libonnxruntime.so`, which collides with the copy shipped
+> by `flutter_onnxruntime` (U2 embeddings) and fails the release
+> `:app:mergeReleaseNativeLibs` task ("2 files found with path
+> lib/arm64-v8a/libonnxruntime.so"). Because U7's native binding is gated on
+> this spike, the dep is added back only when the spike confirms viability — at
+> which point the collision must be resolved deliberately: an
+> `android { packaging { jniLibs { pickFirsts += ['lib/**/libonnxruntime.so'] } } }`
+> rule in `android/app/build.gradle`, ONLY after verifying the two ONNX Runtime
+> builds are ABI/version compatible, or by excluding one package's bundled ORT.
+> U7's Dart arbitration layer and tests use injectable seams, so they compile
+> and pass without the sherpa dependency until the binding is wired.
+
 U7 is **gated** on this spike. The wake word ships behind a toggle that stays
 **OFF by default** (Settings → Voice & wake word). This spike produces the
 verdict that decides whether the wake word can be recommended/enabled — a
