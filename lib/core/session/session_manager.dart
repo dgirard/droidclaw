@@ -120,7 +120,20 @@ class SessionManager {
       );
     }
 
-    _reader = SyncSessionReader.open(dbPath);
+    // Opening the sync reader can fail if the migration above left
+    // sessions.db absent or unopenable. Degrade to cache-only rather than
+    // permanently erroring the whole FutureProvider: get()/_rebuildIndex()
+    // already guard `_reader == null`.
+    try {
+      _reader = SyncSessionReader.open(dbPath);
+    } catch (e) {
+      _reader = null;
+      AppLogger.instance.error(
+        LogSource.app,
+        'sessions.db read-only reader failed to open (${e.runtimeType}: $e) '
+        '— SessionManager starts in cache-only degraded mode',
+      );
+    }
     _rebuildIndex();
   }
 

@@ -26,6 +26,10 @@ class FakeTtsEngine implements TtsEngine {
   /// When set, speak() blocks until the gate completes (or stop() is called).
   Completer<void>? speakGate;
 
+  /// When false, stop() does NOT release a pending speakGate — models a TTS
+  /// engine whose stop() is itself a no-op/hung, so the drain stays blocked.
+  bool stopUnblocksSpeak = true;
+
   @override
   Future<void> init() async {
     if (throwOnInit) throw StateError('no TTS engine installed');
@@ -50,10 +54,10 @@ class FakeTtsEngine implements TtsEngine {
   @override
   Future<void> stop() async {
     stopCalls++;
-    if (speakGate != null && !speakGate!.isCompleted) {
+    if (stopUnblocksSpeak && speakGate != null && !speakGate!.isCompleted) {
       speakGate!.complete();
+      speakGate = null;
     }
-    speakGate = null;
   }
 }
 
@@ -233,6 +237,28 @@ void main() {
       await narrator.beginTurn('en');
       await narrator.stop();
       expect(engine.stopCalls, 0); // no channel spam on every keystroke
+    });
+
+    test('dispose() while a drain is hung completes the idle future', () async {
+      await narrator.beginTurn('en');
+      // Engine.speak() hangs and its stop() does NOT release the gate, so the
+      // in-flight _drain() can never reach its finally block on its own.
+      engine.stopUnblocksSpeak = false;
+      engine.speakGate = Completer<void>();
+      narrator.narrateResponse('hung utterance');
+
+      // Let the drain start and block on speak().
+      await Future<void>.delayed(Duration.zero);
+      final idleFuture = narrator.idle;
+
+      narrator.dispose();
+
+      // Must not hang: dispose completes the pending idle waiter.
+      await idleFuture.timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => fail('dispose() did not complete idle — deadlock'),
+      );
+      expect(engine.stopCalls, greaterThanOrEqualTo(1));
     });
 
     test('speaking state is emitted while draining and cleared after',

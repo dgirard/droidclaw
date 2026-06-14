@@ -327,7 +327,7 @@ class AgentLoop {
         if (episode != null) {
           final ageMin =
               DateTime.now().difference(episode.createdAt).inMinutes;
-          result = ToolResult(
+          result = ToolResult.dual(
             forLLM: '(cached result from $ageMin min ago — pass '
                 'force_fresh=true if staleness matters)\n'
                 '${episode.resultRedacted}',

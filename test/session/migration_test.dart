@@ -183,6 +183,32 @@ void main() {
           isTrue);
     });
 
+    test('kill between commit and rename → marker==done fast path heals the '
+        'orphaned .hive file by renaming it to .backup', () async {
+      // Simulate a process kill in the commit→rename window: the marker was
+      // committed as `done` but the live .hive file was never renamed.
+      await seedHiveBox(2);
+      final hiveFile = File('${hive.dir.path}/sessions.hive');
+      expect(hiveFile.existsSync(), isTrue);
+      final backupFile =
+          File('${hive.dir.path}/sessions.hive.backup');
+      expect(backupFile.existsSync(), isFalse);
+
+      final db = openDb();
+      await db.writeAppState(AppConstants.sessionsMigrationMarkerKey,
+          AppConstants.sessionsMigrationDone);
+
+      // Fast path (marker==done): no copy, but the rename heal must run.
+      final migrator = HiveToSqliteMigrator(db: db, directory: hive.dir.path);
+      expect(await migrator.migrate(), isFalse,
+          reason: 'marker already done — no copy performed');
+
+      expect(hiveFile.existsSync(), isFalse,
+          reason: 'the orphaned .hive file was renamed');
+      expect(backupFile.existsSync(), isTrue,
+          reason: 'the heal renamed it to .backup');
+    });
+
     test('failed verification (corrupted row injected pre-verify) → marker '
         'not set, Hive remains the truth (no rename), error surfaced',
         () async {

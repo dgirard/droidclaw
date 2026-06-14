@@ -361,6 +361,10 @@ class AppConstants {
   /// TTS speech rate (matches the speak tool).
   static const double ttsSpeechRate = 0.5;
 
+  /// Android TextToSpeech.QUEUE_ADD — if utterances ever overlap they queue
+  /// instead of cutting each other (VoiceNarrator already serializes them).
+  static const int ttsQueueModeAdd = 1;
+
   /// App locale code → BCP-47 tag for the platform TTS engine.
   static const Map<String, String> ttsLocaleTags = {
     'en': 'en-US',

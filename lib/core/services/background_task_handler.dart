@@ -457,15 +457,12 @@ class BackgroundTaskHandler extends TaskHandler {
             AppConstants.localEmbeddingModelId,
       );
 
+      // charging / localProviderConfigured / localModelReady were all verified
+      // by the early-return above; only the backfill-incomplete precondition
+      // remains to check here. (shouldRunBackfillSlice is kept as the tested
+      // helper encoding the full predicate.)
       final before = await service.progress();
-      if (!shouldRunBackfillSlice(
-        charging: charging,
-        localProviderConfigured: localProviderConfigured,
-        localModelReady: localModelReady,
-        backfillIncomplete: !before.isComplete,
-      )) {
-        return;
-      }
+      if (before.isComplete) return;
 
       final after = await service.runSlice();
       if (after.isComplete) {

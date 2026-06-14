@@ -30,14 +30,10 @@ abstract class TtsEngine {
 class FlutterTtsEngine implements TtsEngine {
   final FlutterTts _tts = FlutterTts();
 
-  /// Android TextToSpeech.QUEUE_ADD — if utterances ever overlap they queue
-  /// instead of cutting each other (VoiceNarrator already serializes them).
-  static const int _queueModeAdd = 1;
-
   @override
   Future<void> init() async {
     await _tts.awaitSpeakCompletion(true);
-    await _tts.setQueueMode(_queueModeAdd);
+    await _tts.setQueueMode(AppConstants.ttsQueueModeAdd);
     await _tts.setSpeechRate(AppConstants.ttsSpeechRate);
     await _tts.setVolume(1.0);
   }
@@ -215,6 +211,15 @@ class VoiceNarrator {
   void dispose() {
     _queue.clear();
     _muted = true;
+    // Best-effort stop so a hung _engine.speak() in an in-flight _drain()
+    // doesn't keep blocking; ignore failures (engine may be broken/gone).
+    unawaited(_engine.stop().catchError((_) {}));
+    // Complete any pending idle waiter (VoiceConversationController awaits
+    // narrator.idle): if _drain() is stuck on a hung speak(), its finally
+    // block can never run, so release the waiter here to avoid a deadlock.
+    final completer = _idleCompleter;
+    _idleCompleter = null;
+    if (completer != null && !completer.isCompleted) completer.complete();
     _stateController.close();
   }
 

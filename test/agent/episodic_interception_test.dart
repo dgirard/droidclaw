@@ -14,7 +14,8 @@ import 'package:droidclaw/core/agent/agent_loop.dart';
 import 'package:droidclaw/core/agent/context_builder.dart';
 import 'package:droidclaw/core/agent/memory_manager.dart';
 import 'package:droidclaw/core/config/app_config.dart';
-import 'package:droidclaw/core/knowledge/database/knowledge_graph_db.dart';
+import 'package:droidclaw/core/knowledge/database/knowledge_graph_db.dart'
+    hide Episode;
 import 'package:droidclaw/core/knowledge/services/entity_extractor.dart';
 import 'package:droidclaw/core/knowledge/services/entity_resolver.dart';
 import 'package:droidclaw/core/knowledge/services/episode_store.dart';
@@ -88,6 +89,17 @@ class _CapturingPipeline extends IngestionPipeline {
     ));
     if (!completer.isCompleted) completer.complete();
     return 0;
+  }
+}
+
+/// An EpisodeStore whose lookup() always throws — models a corrupt/unreadable
+/// episodes table so the agent loop's degrade-to-normal-execution path runs.
+class _ThrowingLookupEpisodeStore extends EpisodeStore {
+  _ThrowingLookupEpisodeStore(super.db);
+
+  @override
+  Future<Episode?> lookup(String tool, Map<String, dynamic> args) async {
+    throw StateError('episode lookup boom');
   }
 }
 
@@ -222,6 +234,31 @@ void main() {
           reason: 'force_fresh must bypass the fresh episode');
       expect(weather.receivedArgs.last.containsKey('force_fresh'), isFalse,
           reason: 'the cache-control param must be stripped before execute');
+    });
+
+    test('a throwing episode lookup degrades to normal execution (no '
+        'ErrorEvent, real output returned)', () async {
+      final throwingStore = _ThrowingLookupEpisodeStore(kgDb);
+      throwingStore.setLocationContext(48.8566, 2.3522);
+      final weather = _CountingTool('weather', response: 'sunny, 21°C');
+      final provider = FakeLLMProvider([
+        toolCallResponse('weather', {'city': 'Paris'}),
+        textResponse('done'),
+      ]);
+      final loop = await buildLoop(provider, [weather],
+          episodeStore: throwingStore);
+
+      final events =
+          await loop.processMessage('weather?', 'lookup-boom').toList();
+
+      // The lookup failure is swallowed; the tool still runs exactly once.
+      expect(weather.callCount, 1);
+      // No ErrorEvent leaks from the swallowed lookup failure.
+      expect(events.whereType<ErrorEvent>(), isEmpty);
+      // The real (uncached) tool output is what's returned.
+      final resultEvent = events.whereType<ToolResultEvent>().single;
+      expect(resultEvent.result.forLLM, 'sunny, 21°C');
+      expect(resultEvent.result.forLLM, isNot(contains('cached result from')));
     });
 
     test('cacheable tool schemas gain force_fresh; side-effecting tools do '

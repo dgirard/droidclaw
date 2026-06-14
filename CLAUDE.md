@@ -40,11 +40,10 @@ lib/
 │   ├── skills/                  # Three-tier loader + installer
 │   └── tools/                   # Tool interface + 31 implementations
 ├── features/                    # Screens and platform features
-│   ├── chat/                    # Chat screen, message bubbles, history
+│   ├── chat/                    # Chat screen, message bubbles, history, VoiceConversationController + SpeechToTextSttEngine
 │   ├── onboarding/              # First-launch setup
 │   ├── settings/                # Provider, tools, skills, cron, Telegram, routing
-│   ├── telegram/                # Bot API, bot manager, rate limiter
-│   └── voice/                   # Voice input (STT via Groq Whisper)
+│   └── telegram/                # Bot API, bot manager, rate limiter
 ├── providers/                   # Riverpod: app, chat, background service, Telegram
 ├── data/local/                  # StorageService (SharedPrefs + SecureStorage)
 └── shared/                      # Constants
@@ -127,6 +126,16 @@ sealed class AgentEvent {}
 ```
 
 Both chat UI and Telegram consume the same `Stream<AgentEvent>`.
+
+### Voice (U1/U5/U7)
+
+On-device, main-isolate-only voice loop (Telegram/cron/subagent paths never reach it). STT is `package:speech_to_text` (NOT Groq Whisper). Three testable seams keep the platform engines + mic out of unit tests:
+
+- **TtsEngine → `VoiceNarrator`** (`lib/core/services/voice_narrator.dart`): narrates a voice turn's tool results + final response. Utterances are queued in an internal FIFO and spoken sequentially; `narrate*` methods enqueue and return immediately. `FlutterTtsEngine` is the production seam impl. Degradations (no voice for locale, broken engine) are surfaced as `VoiceNarratorState`, never thrown.
+- **SttEngine → `VoiceConversationController`** (`lib/features/chat/voice_conversation_controller.dart`): drives the listen→transcribe→respond→re-listen loop. `SpeechToTextSttEngine` is the production seam impl.
+- **KeywordDetector + AudioSource → `WakeWordService`** (`lib/core/services/wake_word_service.dart`): hands-free wake-word activation; both the detector engine and the mic source are injected seams.
+
+**Half-duplex invariant:** narration (TTS) and listening (STT) never run at once. The controller awaits `narrator.idle` before re-listening (`_reListenAfterTurn`), and any user input (tap / first keystroke) or lifecycle pause calls `narrator.stop()`. A hung TTS must therefore never block the idle completer — `VoiceNarrator.dispose()` best-effort stops the engine and completes any pending idle waiter.
 
 ### Embedding Provider Architecture
 
