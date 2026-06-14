@@ -80,6 +80,7 @@ dependencies:
   dart_sentencepiece_tokenizer: ^1.3.2
   background_downloader: ^9.5.5
   crypto: ^3.0.7
+  sherpa_onnx: ^1.13.2
 
 dev_dependencies:
   flutter_test:

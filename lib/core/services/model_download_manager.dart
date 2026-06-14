@@ -71,6 +71,45 @@ class ModelSpec {
       ),
     ],
   );
+
+  /// sherpa-onnx open-vocabulary KWS model (U7 — wake word). Encoder /
+  /// decoder / joiner / tokens MUST share a directory (they refer to each
+  /// other by sibling filename). URLs/hashes pinned once the spike picks the
+  /// final model; until then verification is log-only (placeholder hashes).
+  static const ModelSpec wakeWordKws = ModelSpec(
+    id: AppConstants.wakeWordModelId,
+    totalBytes: AppConstants.wakeWordTotalBytes,
+    files: [
+      ModelFileSpec(
+        url: '${AppConstants.wakeWordModelRepoBase}/'
+            '${AppConstants.wakeWordEncoderFilename}',
+        filename: AppConstants.wakeWordEncoderFilename,
+        sha256: AppConstants.wakeWordEncoderSha256,
+        bytes: AppConstants.wakeWordEncoderBytes,
+      ),
+      ModelFileSpec(
+        url: '${AppConstants.wakeWordModelRepoBase}/'
+            '${AppConstants.wakeWordDecoderFilename}',
+        filename: AppConstants.wakeWordDecoderFilename,
+        sha256: AppConstants.wakeWordDecoderSha256,
+        bytes: AppConstants.wakeWordDecoderBytes,
+      ),
+      ModelFileSpec(
+        url: '${AppConstants.wakeWordModelRepoBase}/'
+            '${AppConstants.wakeWordJoinerFilename}',
+        filename: AppConstants.wakeWordJoinerFilename,
+        sha256: AppConstants.wakeWordJoinerSha256,
+        bytes: AppConstants.wakeWordJoinerBytes,
+      ),
+      ModelFileSpec(
+        url: '${AppConstants.wakeWordModelRepoBase}/'
+            '${AppConstants.wakeWordTokensFilename}',
+        filename: AppConstants.wakeWordTokensFilename,
+        sha256: AppConstants.wakeWordTokensSha256,
+        bytes: AppConstants.wakeWordTokensBytes,
+      ),
+    ],
+  );
 }
 
 /// Lifecycle of a model on this device.

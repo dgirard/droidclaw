@@ -1828,4 +1828,82 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get embeddingBackfillCancel => 'Arrêter';
+
+  @override
+  String get settingsVoice => 'Voix et mot de réveil';
+
+  @override
+  String get settingsVoiceSubtitle =>
+      '« Hey Claw » mains libres (expérimental)';
+
+  @override
+  String get voiceTitle => 'Voix et mot de réveil';
+
+  @override
+  String get voiceSave => 'Enregistrer';
+
+  @override
+  String get voiceSaved => 'Réglages vocaux enregistrés';
+
+  @override
+  String get voiceWakeWordDescription =>
+      'Une fois activé, l\'assistant écoute un mot-clé parlé et se réveille mains libres, puis entre en mode conversation vocale. Fonction expérimentale, désactivée par défaut.';
+
+  @override
+  String get voiceWakeWordEnable => 'Activer le mot de réveil';
+
+  @override
+  String get voiceWakeWordEnableSubtitle =>
+      'Désactivé par défaut. L\'activer démarre un service micro dédié.';
+
+  @override
+  String get voiceWakeWordKeyword => 'Mot de réveil';
+
+  @override
+  String get voiceWakeWordKeywordHint => 'ex. Hey Claw';
+
+  @override
+  String get voiceWakeWordKeywordHelp =>
+      'N\'importe quelle courte phrase parlée. Une phrase courte et distinctive déclenche moins de faux réveils.';
+
+  @override
+  String get voiceWakeWordMicIndicator =>
+      'Tant que le mot de réveil est actif, Android affiche un point micro vert permanent dans la barre d\'état — votre téléphone écoute sur l\'appareil uniquement le mot-clé. Rien n\'est enregistré ni envoyé. Il n\'y a pas de bouton « stop » dans la notification ; le seul interrupteur est cette bascule.';
+
+  @override
+  String get voiceWakeWordRebootLimitation =>
+      'Après un redémarrage, le mot de réveil reste inactif jusqu\'à ce que vous ouvriez l\'app une fois. Android n\'autorise pas un service micro à démarrer en arrière-plan ; il ne peut être (re)démarré que depuis le premier plan.';
+
+  @override
+  String get voiceWakeWordRebootStatus =>
+      'Mot de réveil inactif jusqu\'à l\'ouverture de l\'app';
+
+  @override
+  String get voiceWakeWordUnavailable =>
+      'Le mot de réveil est indisponible sur cette version.';
+
+  @override
+  String get voiceWakeWordModelSection => 'Modèle de mot de réveil';
+
+  @override
+  String get voiceWakeWordModelConsent =>
+      'Un petit modèle de mots-clés sur l\'appareil (~25 Mo) est téléchargé depuis les releases sherpa-onnx. Wi-Fi uniquement sauf si vous autorisez les données mobiles. La détection est entièrement hors ligne.';
+
+  @override
+  String get voiceWakeWordSpikeNote =>
+      'La viabilité sur l\'appareil (batterie, faux réveils, comportement du service micro) est validée par un spike sur l\'appareil avant activation. Voir le guide du spike pour lire le verdict.';
+
+  @override
+  String get voiceWakeWordRunGuidance => 'Guide du spike';
+
+  @override
+  String voiceWakeWordStatusListening(String keyword) {
+    return 'À l\'écoute de « $keyword »';
+  }
+
+  @override
+  String get voiceWakeWordStatusSuspended => 'En pause (audio utilisé)';
+
+  @override
+  String get voiceWakeWordStatusStopped => 'Arrêté';
 }

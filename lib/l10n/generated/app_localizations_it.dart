@@ -1823,4 +1823,81 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get embeddingBackfillCancel => 'Interrompi';
+
+  @override
+  String get settingsVoice => 'Voce e parola di attivazione';
+
+  @override
+  String get settingsVoiceSubtitle => '«Hey Claw» a mani libere (sperimentale)';
+
+  @override
+  String get voiceTitle => 'Voce e parola di attivazione';
+
+  @override
+  String get voiceSave => 'Salva';
+
+  @override
+  String get voiceSaved => 'Impostazioni vocali salvate';
+
+  @override
+  String get voiceWakeWordDescription =>
+      'Quando è attivo, l\'assistente ascolta una parola chiave pronunciata e si attiva a mani libere, entrando poi in modalità conversazione vocale. Funzione sperimentale, disattivata per impostazione predefinita.';
+
+  @override
+  String get voiceWakeWordEnable => 'Attiva la parola di attivazione';
+
+  @override
+  String get voiceWakeWordEnableSubtitle =>
+      'Disattivata di default. Attivarla avvia un servizio microfono dedicato.';
+
+  @override
+  String get voiceWakeWordKeyword => 'Parola di attivazione';
+
+  @override
+  String get voiceWakeWordKeywordHint => 'es. Hey Claw';
+
+  @override
+  String get voiceWakeWordKeywordHelp =>
+      'Qualsiasi breve frase pronunciata. Frasi corte e distintive provocano meno falsi risvegli.';
+
+  @override
+  String get voiceWakeWordMicIndicator =>
+      'Mentre la parola di attivazione è attiva, Android mostra un puntino verde del microfono permanente nella barra di stato — il telefono ascolta sul dispositivo solo la parola chiave. Nulla viene registrato o inviato. Non c\'è un pulsante «stop» nella notifica; l\'unico interruttore è questo selettore.';
+
+  @override
+  String get voiceWakeWordRebootLimitation =>
+      'Dopo un riavvio, la parola di attivazione resta inattiva finché non apri l\'app una volta. Android non consente a un servizio microfono di avviarsi in background; può essere (ri)avviato solo dal primo piano.';
+
+  @override
+  String get voiceWakeWordRebootStatus =>
+      'Parola di attivazione inattiva fino all\'apertura dell\'app';
+
+  @override
+  String get voiceWakeWordUnavailable =>
+      'La parola di attivazione non è disponibile in questa build.';
+
+  @override
+  String get voiceWakeWordModelSection => 'Modello della parola di attivazione';
+
+  @override
+  String get voiceWakeWordModelConsent =>
+      'Un piccolo modello di parole chiave sul dispositivo (~25 MB) viene scaricato dalle release di sherpa-onnx. Solo Wi-Fi salvo che tu consenta i dati mobili. Il rilevamento è completamente offline.';
+
+  @override
+  String get voiceWakeWordSpikeNote =>
+      'La fattibilità sul dispositivo (batteria, falsi risvegli, comportamento del servizio microfono) è convalidata da uno spike sul dispositivo prima dell\'attivazione. Vedi la guida allo spike per leggere il verdetto.';
+
+  @override
+  String get voiceWakeWordRunGuidance => 'Guida allo spike';
+
+  @override
+  String voiceWakeWordStatusListening(String keyword) {
+    return 'In ascolto di «$keyword»';
+  }
+
+  @override
+  String get voiceWakeWordStatusSuspended => 'In pausa (audio in uso)';
+
+  @override
+  String get voiceWakeWordStatusStopped => 'Fermato';
 }

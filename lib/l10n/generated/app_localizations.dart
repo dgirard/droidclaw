@@ -3295,6 +3295,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Stop'**
   String get embeddingBackfillCancel;
+
+  /// No description provided for @settingsVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice & wake word'**
+  String get settingsVoice;
+
+  /// No description provided for @settingsVoiceSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hands-free \"Hey Claw\" (experimental)'**
+  String get settingsVoiceSubtitle;
+
+  /// No description provided for @voiceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice & wake word'**
+  String get voiceTitle;
+
+  /// No description provided for @voiceSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get voiceSave;
+
+  /// No description provided for @voiceSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice settings saved'**
+  String get voiceSaved;
+
+  /// No description provided for @voiceWakeWordDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'When enabled, the assistant listens for a spoken keyword and wakes hands-free, then enters voice conversation mode. This is an experimental feature, off by default.'**
+  String get voiceWakeWordDescription;
+
+  /// No description provided for @voiceWakeWordEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable wake word'**
+  String get voiceWakeWordEnable;
+
+  /// No description provided for @voiceWakeWordEnableSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Off by default. Turning it on starts a dedicated microphone service.'**
+  String get voiceWakeWordEnableSubtitle;
+
+  /// No description provided for @voiceWakeWordKeyword.
+  ///
+  /// In en, this message translates to:
+  /// **'Wake keyword'**
+  String get voiceWakeWordKeyword;
+
+  /// No description provided for @voiceWakeWordKeywordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Hey Claw'**
+  String get voiceWakeWordKeywordHint;
+
+  /// No description provided for @voiceWakeWordKeywordHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Any short spoken phrase. Shorter, distinctive phrases trigger fewer false wakes.'**
+  String get voiceWakeWordKeywordHelp;
+
+  /// No description provided for @voiceWakeWordMicIndicator.
+  ///
+  /// In en, this message translates to:
+  /// **'While the wake word is active, Android shows a permanent green microphone dot in the status bar — your phone is listening on-device for the keyword only. Nothing is recorded or sent anywhere. There is no \"stop\" button in the notification; the only off switch is this toggle.'**
+  String get voiceWakeWordMicIndicator;
+
+  /// No description provided for @voiceWakeWordRebootLimitation.
+  ///
+  /// In en, this message translates to:
+  /// **'After a reboot, the wake word stays inactive until you open the app once. Android does not allow a microphone service to start in the background, so it can only be (re)started from the foreground.'**
+  String get voiceWakeWordRebootLimitation;
+
+  /// No description provided for @voiceWakeWordRebootStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Wake word inactive until the app is opened'**
+  String get voiceWakeWordRebootStatus;
+
+  /// No description provided for @voiceWakeWordUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Wake word is unavailable on this build.'**
+  String get voiceWakeWordUnavailable;
+
+  /// No description provided for @voiceWakeWordModelSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Wake word model'**
+  String get voiceWakeWordModelSection;
+
+  /// No description provided for @voiceWakeWordModelConsent.
+  ///
+  /// In en, this message translates to:
+  /// **'A small on-device keyword model (~25 MB) is downloaded from the sherpa-onnx releases. Wi-Fi only unless you allow mobile data. Detection runs fully offline.'**
+  String get voiceWakeWordModelConsent;
+
+  /// No description provided for @voiceWakeWordSpikeNote.
+  ///
+  /// In en, this message translates to:
+  /// **'On-device viability (battery, false wakes, mic service behavior) is validated by an on-device spike before this ships enabled. See the spike guidance for how to read the verdict.'**
+  String get voiceWakeWordSpikeNote;
+
+  /// No description provided for @voiceWakeWordRunGuidance.
+  ///
+  /// In en, this message translates to:
+  /// **'Spike guidance'**
+  String get voiceWakeWordRunGuidance;
+
+  /// No description provided for @voiceWakeWordStatusListening.
+  ///
+  /// In en, this message translates to:
+  /// **'Listening for \"{keyword}\"'**
+  String voiceWakeWordStatusListening(String keyword);
+
+  /// No description provided for @voiceWakeWordStatusSuspended.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused (audio in use)'**
+  String get voiceWakeWordStatusSuspended;
+
+  /// No description provided for @voiceWakeWordStatusStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get voiceWakeWordStatusStopped;
 }
 
 class _AppLocalizationsDelegate

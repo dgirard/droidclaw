@@ -486,4 +486,67 @@ class AppConstants {
   static const String embeddingGemmaModelSha256 = modelSha256Placeholder;
   static const String embeddingGemmaModelDataSha256 = modelSha256Placeholder;
   static const String embeddingGemmaTokenizerSha256 = modelSha256Placeholder;
+
+  // Wake word (U7 — sherpa_onnx KeywordSpotter, gated on spike S2)
+
+  /// SharedPreferences key mirroring [VoiceConfig.wakeWordEnabled] for the
+  /// service isolate (NOT a secret — a feature flag, mirrored so the
+  /// background task handler can decide whether to host the KWS listener
+  /// without reading the JSON config blob). Cleartext is fine.
+  static const String cachedWakeWordEnabledKey = 'cached_wake_word_enabled';
+
+  /// SharedPreferences key mirroring [VoiceConfig.wakeWordKeyword].
+  static const String cachedWakeWordKeywordKey = 'cached_wake_word_keyword';
+
+  /// Default wake keyword (free-text, user-editable). Open-vocabulary KWS, so
+  /// any short phrase works; this is the product default ("Hey Claw").
+  static const String wakeWordDefaultKeyword = 'hey claw';
+
+  /// PCM sample rate the KeywordSpotter expects (sherpa streaming models are
+  /// trained at 16 kHz mono int16).
+  static const int wakeWordSampleRate = 16000;
+
+  /// Audio frame size (samples) fed to the spotter per accept-waveform call.
+  /// 100 ms at 16 kHz — small enough for low detection latency, large enough
+  /// to keep the FFI call rate modest.
+  static const int wakeWordFrameSamples = 1600;
+
+  /// Battery budget gate for the spike verdict: if the 24 h duty-cycle costs
+  /// MORE than this percentage of battery per day, the wake word fails the
+  /// spike and falls back to "screen-on only" mode or is abandoned
+  /// (documented in tool/SPIKE_WAKE_WORD.md).
+  static const double wakeWordMaxBatteryPctPerDay = 3.0;
+
+  /// On-device KWS model (sherpa-onnx open-vocabulary keyword spotter). The
+  /// files MUST live in the same directory (the encoder/decoder/joiner refer
+  /// to each other and to tokens.txt by sibling filename). URLs and hashes
+  /// are pinned once the spike picks the final model; until then the manager
+  /// runs in log-only hash mode (modelSha256Placeholder).
+  static const String wakeWordModelId = 'sherpa-kws-zipformer-en';
+  static const String wakeWordModelRepoBase =
+      'https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models';
+
+  static const String wakeWordEncoderFilename =
+      'encoder-epoch-12-avg-2-chunk-16-left-64.onnx';
+  static const String wakeWordDecoderFilename =
+      'decoder-epoch-12-avg-2-chunk-16-left-64.onnx';
+  static const String wakeWordJoinerFilename =
+      'joiner-epoch-12-avg-2-chunk-16-left-64.onnx';
+  static const String wakeWordTokensFilename = 'tokens.txt';
+
+  /// Placeholder asset sizes (progress weighting only — refined at spike).
+  static const int wakeWordEncoderBytes = 13107200;
+  static const int wakeWordDecoderBytes = 2097152;
+  static const int wakeWordJoinerBytes = 9437184;
+  static const int wakeWordTokensBytes = 4096;
+  static const int wakeWordTotalBytes = wakeWordEncoderBytes +
+      wakeWordDecoderBytes +
+      wakeWordJoinerBytes +
+      wakeWordTokensBytes;
+
+  // SHA-256 hashes — log-only until pinned by the spike (modelSha256Placeholder).
+  static const String wakeWordEncoderSha256 = modelSha256Placeholder;
+  static const String wakeWordDecoderSha256 = modelSha256Placeholder;
+  static const String wakeWordJoinerSha256 = modelSha256Placeholder;
+  static const String wakeWordTokensSha256 = modelSha256Placeholder;
 }

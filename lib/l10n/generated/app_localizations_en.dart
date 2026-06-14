@@ -1799,4 +1799,81 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get embeddingBackfillCancel => 'Stop';
+
+  @override
+  String get settingsVoice => 'Voice & wake word';
+
+  @override
+  String get settingsVoiceSubtitle => 'Hands-free \"Hey Claw\" (experimental)';
+
+  @override
+  String get voiceTitle => 'Voice & wake word';
+
+  @override
+  String get voiceSave => 'Save';
+
+  @override
+  String get voiceSaved => 'Voice settings saved';
+
+  @override
+  String get voiceWakeWordDescription =>
+      'When enabled, the assistant listens for a spoken keyword and wakes hands-free, then enters voice conversation mode. This is an experimental feature, off by default.';
+
+  @override
+  String get voiceWakeWordEnable => 'Enable wake word';
+
+  @override
+  String get voiceWakeWordEnableSubtitle =>
+      'Off by default. Turning it on starts a dedicated microphone service.';
+
+  @override
+  String get voiceWakeWordKeyword => 'Wake keyword';
+
+  @override
+  String get voiceWakeWordKeywordHint => 'e.g. Hey Claw';
+
+  @override
+  String get voiceWakeWordKeywordHelp =>
+      'Any short spoken phrase. Shorter, distinctive phrases trigger fewer false wakes.';
+
+  @override
+  String get voiceWakeWordMicIndicator =>
+      'While the wake word is active, Android shows a permanent green microphone dot in the status bar — your phone is listening on-device for the keyword only. Nothing is recorded or sent anywhere. There is no \"stop\" button in the notification; the only off switch is this toggle.';
+
+  @override
+  String get voiceWakeWordRebootLimitation =>
+      'After a reboot, the wake word stays inactive until you open the app once. Android does not allow a microphone service to start in the background, so it can only be (re)started from the foreground.';
+
+  @override
+  String get voiceWakeWordRebootStatus =>
+      'Wake word inactive until the app is opened';
+
+  @override
+  String get voiceWakeWordUnavailable =>
+      'Wake word is unavailable on this build.';
+
+  @override
+  String get voiceWakeWordModelSection => 'Wake word model';
+
+  @override
+  String get voiceWakeWordModelConsent =>
+      'A small on-device keyword model (~25 MB) is downloaded from the sherpa-onnx releases. Wi-Fi only unless you allow mobile data. Detection runs fully offline.';
+
+  @override
+  String get voiceWakeWordSpikeNote =>
+      'On-device viability (battery, false wakes, mic service behavior) is validated by an on-device spike before this ships enabled. See the spike guidance for how to read the verdict.';
+
+  @override
+  String get voiceWakeWordRunGuidance => 'Spike guidance';
+
+  @override
+  String voiceWakeWordStatusListening(String keyword) {
+    return 'Listening for \"$keyword\"';
+  }
+
+  @override
+  String get voiceWakeWordStatusSuspended => 'Paused (audio in use)';
+
+  @override
+  String get voiceWakeWordStatusStopped => 'Stopped';
 }

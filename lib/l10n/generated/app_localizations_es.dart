@@ -1829,4 +1829,81 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get embeddingBackfillCancel => 'Detener';
+
+  @override
+  String get settingsVoice => 'Voz y palabra de activación';
+
+  @override
+  String get settingsVoiceSubtitle => '«Hey Claw» manos libres (experimental)';
+
+  @override
+  String get voiceTitle => 'Voz y palabra de activación';
+
+  @override
+  String get voiceSave => 'Guardar';
+
+  @override
+  String get voiceSaved => 'Ajustes de voz guardados';
+
+  @override
+  String get voiceWakeWordDescription =>
+      'Cuando está activado, el asistente escucha una palabra clave hablada y se activa con manos libres, entrando luego en modo conversación por voz. Función experimental, desactivada por defecto.';
+
+  @override
+  String get voiceWakeWordEnable => 'Activar palabra de activación';
+
+  @override
+  String get voiceWakeWordEnableSubtitle =>
+      'Desactivado por defecto. Activarlo inicia un servicio de micrófono dedicado.';
+
+  @override
+  String get voiceWakeWordKeyword => 'Palabra de activación';
+
+  @override
+  String get voiceWakeWordKeywordHint => 'p. ej. Hey Claw';
+
+  @override
+  String get voiceWakeWordKeywordHelp =>
+      'Cualquier frase corta hablada. Frases cortas y distintivas provocan menos falsas activaciones.';
+
+  @override
+  String get voiceWakeWordMicIndicator =>
+      'Mientras la palabra de activación está activa, Android muestra un punto verde de micrófono permanente en la barra de estado — el teléfono escucha en el dispositivo solo la palabra clave. Nada se graba ni se envía. No hay botón «detener» en la notificación; el único interruptor es este ajuste.';
+
+  @override
+  String get voiceWakeWordRebootLimitation =>
+      'Tras reiniciar, la palabra de activación queda inactiva hasta que abras la app una vez. Android no permite que un servicio de micrófono se inicie en segundo plano; solo puede (re)iniciarse desde el primer plano.';
+
+  @override
+  String get voiceWakeWordRebootStatus =>
+      'Palabra de activación inactiva hasta abrir la app';
+
+  @override
+  String get voiceWakeWordUnavailable =>
+      'La palabra de activación no está disponible en esta versión.';
+
+  @override
+  String get voiceWakeWordModelSection => 'Modelo de palabra de activación';
+
+  @override
+  String get voiceWakeWordModelConsent =>
+      'Se descarga un pequeño modelo de palabras clave en el dispositivo (~25 MB) desde las releases de sherpa-onnx. Solo Wi-Fi salvo que permitas datos móviles. La detección es totalmente sin conexión.';
+
+  @override
+  String get voiceWakeWordSpikeNote =>
+      'La viabilidad en el dispositivo (batería, falsas activaciones, comportamiento del servicio de micrófono) se valida con una prueba en el dispositivo antes de activarse. Consulta la guía de la prueba para leer el veredicto.';
+
+  @override
+  String get voiceWakeWordRunGuidance => 'Guía de la prueba';
+
+  @override
+  String voiceWakeWordStatusListening(String keyword) {
+    return 'Escuchando «$keyword»';
+  }
+
+  @override
+  String get voiceWakeWordStatusSuspended => 'En pausa (audio en uso)';
+
+  @override
+  String get voiceWakeWordStatusStopped => 'Detenido';
 }

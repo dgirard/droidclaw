@@ -125,6 +125,14 @@ class SettingsScreen extends ConsumerWidget {
                 Navigator.pushNamed(context, '/settings/embedding'),
           ),
 
+          ListTile(
+            leading: const Icon(Icons.record_voice_over_outlined),
+            title: Text(l.settingsVoice),
+            subtitle: Text(l.settingsVoiceSubtitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.pushNamed(context, '/settings/voice'),
+          ),
+
           const Divider(),
 
           // Channels section

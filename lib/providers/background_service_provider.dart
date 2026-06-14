@@ -133,7 +133,17 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
     state = state.copyWith(isRunning: true);
   }
 
-  /// Stop the service if nothing needs it (no crons, no Telegram).
+  /// Stop the service if nothing needs it (no crons, no Telegram, no wake
+  /// word). The wake word is a first-class service consumer: toggling Telegram
+  /// or cron off must NOT kill an active wake word listener, and disabling the
+  /// wake word with no other consumer stops the service cleanly.
+  ///
+  /// Note: the wake word uses its OWN dedicated microphone foreground service
+  /// (separate from this flutter_foreground_task service — see
+  /// AndroidManifest WakeWordService). The accounting here keeps the shared
+  /// service alive while the wake word is enabled so the two services have a
+  /// consistent "is any background feature on" view; the dedicated mic service
+  /// is managed by the wake word controller itself.
   Future<void> stopServiceIfIdle() async {
     final configStorage = ref.read(configStorageProvider);
     final storage = ref.read(storageServiceProvider);
@@ -142,12 +152,27 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
     final hasActiveCrons = crons.any((c) => c.enabled);
     final telegramEnabled =
         storage.getBool(AppConstants.telegramBotEnabledKey) ?? false;
+    final wakeWordEnabled = ref.read(appConfigProvider).voice.wakeWordEnabled;
 
-    if (!hasActiveCrons && !telegramEnabled) {
+    if (!hasServiceConsumer(
+      hasActiveCrons: hasActiveCrons,
+      telegramEnabled: telegramEnabled,
+      wakeWordEnabled: wakeWordEnabled,
+    )) {
       await FlutterForegroundTask.stopService();
       state = state.copyWith(isRunning: false);
     }
   }
+
+  /// Whether ANY feature still needs the shared foreground service. Pure
+  /// predicate so the consumer accounting (incl. the wake word as a
+  /// first-class consumer) is unit-testable without platform channels.
+  static bool hasServiceConsumer({
+    required bool hasActiveCrons,
+    required bool telegramEnabled,
+    required bool wakeWordEnabled,
+  }) =>
+      hasActiveCrons || telegramEnabled || wakeWordEnabled;
 
   /// Refresh the SharedPreferences cache the service isolate reads at init.
   /// Secrets are only mirrored when the service isolate's capability probe

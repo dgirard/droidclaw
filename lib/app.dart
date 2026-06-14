@@ -8,6 +8,7 @@ import 'features/onboarding/onboard_screen.dart';
 import 'features/settings/cron_config_screen.dart';
 import 'features/settings/cron_edit_screen.dart';
 import 'features/settings/embedding_config_screen.dart';
+import 'features/settings/voice_config_screen.dart';
 import 'features/settings/knowledge_browser_screen.dart';
 import 'features/settings/knowledge_config_screen.dart';
 import 'features/settings/knowledge_entity_detail_screen.dart';
@@ -98,6 +99,7 @@ class _DroidClawAppState extends ConsumerState<DroidClawApp> {
         '/settings/crons/edit': (context) => const CronEditScreen(),
         '/settings/knowledge': (context) => const KnowledgeConfigScreen(),
         '/settings/embedding': (context) => const EmbeddingConfigScreen(),
+        '/settings/voice': (context) => const VoiceConfigScreen(),
         '/settings/knowledge-browser': (context) => const KnowledgeBrowserScreen(),
         '/settings/knowledge-entity': (context) => const KnowledgeEntityDetailScreen(),
         '/settings/locale': (context) => const LocaleConfigScreen(),
