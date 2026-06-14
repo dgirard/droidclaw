@@ -374,12 +374,11 @@ class AgentLoop {
           name: toolCall.name,
         ));
       }
-      // Persist once after the tool batch, WITHOUT fsync (~10-50ms each on
-      // Android): the awaited Hive put survives a process kill via the OS
-      // page cache; the residual power-loss window is accepted for
-      // reproducible tool results. The turn always ends in a flushed save
-      // (final response / error / max-iterations). See the flush policy on
-      // SessionManager.
+      // Persist once after the tool batch, marked mid-turn (flush: false).
+      // The awaited WAL commit survives a process kill; the residual
+      // power-loss window is accepted for reproducible tool results. The
+      // turn always ends in a turn-ending save (final response / error /
+      // max-iterations). See the durability policy on SessionManager.
       await sessions.save(session, flush: false);
     }
 

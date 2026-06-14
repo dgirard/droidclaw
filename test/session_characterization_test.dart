@@ -1,49 +1,58 @@
-// Characterization tests: pin the CURRENT behavior of the session-persistence
-// layer before U10 consolidates the dual-isolate glue. Each test encodes a
-// fix from a past field incident (see docs/solutions/*); they must keep
-// passing unchanged after the consolidation to prove it preserved behavior.
+// Characterization tests: the acceptance spec of the session-persistence
+// layer, ported from the Hive implementation to SQLite (U6) per R14. Each
+// test encodes a fix from a past field incident (see docs/solutions/*);
+// they keep passing against sessions.db to prove the migration preserved
+// behavior.
+//
+// Conscious retirements from the Hive era (R14):
+// - "flush-on-save" wording: reload() no longer closes/reopens anything —
+//   the survival assertion now goes through a SECOND manager doing a cold
+//   read of the same database file, which is a STRONGER durability check
+//   (the bytes must be committed, not merely in this manager's cache).
 
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:droidclaw/core/providers/llm_response.dart';
 import 'package:droidclaw/core/session/session.dart';
-import 'package:droidclaw/core/session/session_manager.dart';
 
-import 'support/hive_test_harness.dart';
+import 'support/session_db_test_harness.dart';
 
 void main() {
-  group('SessionManager persistence (Hive flush durability)', () {
-    late HiveTestHarness hive;
+  group('SessionManager persistence (commit durability)', () {
+    late SessionDbTestHarness store;
 
-    setUp(() async => hive = await HiveTestHarness.create());
-    tearDown(() => hive.dispose());
+    setUp(() async => store = await SessionDbTestHarness.create());
+    tearDown(() => store.dispose());
 
-    test('a saved session survives a reload (flush-on-save)', () async {
-      final mgr = SessionManager();
-      await mgr.init();
+    test('a saved session survives a reload (durable-on-save)', () async {
+      final mgr = await store.manager();
 
       final s = mgr.getOrCreate('s1');
       s.addMessage(const Message(role: 'user', content: 'hello'));
       await mgr.save(s);
 
-      // reload() closes and reopens the box, forcing a disk re-read — the
-      // message must survive, which it only does because save() flushes.
+      // reload() evicts the in-memory cache, forcing a re-read from the
+      // database — the message must survive, which it only does because
+      // save() committed it.
       await mgr.reload();
 
       final reloaded = mgr.get('s1');
       expect(reloaded, isNotNull);
       expect(reloaded!.messages.single.content, 'hello');
+
+      // Stronger than the Hive-era close/reopen: a COLD second manager on
+      // the same file (own connections, empty cache) sees the same data.
+      final cold = await store.manager();
+      expect(cold.get('s1')!.messages.single.content, 'hello');
     });
 
     test('getOrCreate returns the same cached instance for a key', () async {
-      final mgr = SessionManager();
-      await mgr.init();
+      final mgr = await store.manager();
       expect(identical(mgr.getOrCreate('k'), mgr.getOrCreate('k')), isTrue);
     });
 
     test('deleted sessions do not reappear after reload', () async {
-      final mgr = SessionManager();
-      await mgr.init();
+      final mgr = await store.manager();
       final s = mgr.getOrCreate('gone');
       s.addMessage(const Message(role: 'user', content: 'x'));
       await mgr.save(s);
@@ -105,7 +114,11 @@ void main() {
     });
   });
 
-  group('Session.absorbPersistedHistory (rehydration merge)', () {
+  group('Session.absorbPersistedHistory (history merge)', () {
+    // The SessionManager rehydration queue that used this method died with
+    // the migration (a sync row-existence check made fabrication-over-
+    // persisted impossible by construction), but the merge semantics remain
+    // part of Session's public API and stay pinned.
     test('both sides carry a summary: merged with the persisted one FIRST',
         () {
       final fabricated = Session(key: 'k', summary: 'own summary');

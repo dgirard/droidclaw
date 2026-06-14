@@ -215,7 +215,10 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
     try {
       final prefs = ref.read(sharedPreferencesProvider);
       await prefs.reload();
-      // Reload session manager to pick up cron sessions from service isolate
+      // Refresh the session metadata index so the cron session written by
+      // the service isolate appears in list screens. With sessions.db (WAL)
+      // the row itself is already readable by a plain get() — this only
+      // rebuilds the in-memory index (cheap, no close/reopen).
       final sm = await ref.read(sessionManagerProvider.future);
       await sm.reload();
       state = state.copyWith(

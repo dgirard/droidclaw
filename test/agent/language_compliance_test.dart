@@ -17,7 +17,7 @@ import 'package:droidclaw/data/local/storage_service.dart';
 import 'package:droidclaw/l10n/l10n.dart';
 
 import '../support/fake_llm_provider.dart';
-import '../support/hive_test_harness.dart';
+import '../support/session_db_test_harness.dart';
 import '../support/in_memory_kg.dart';
 
 /// U19 — model-aware language enforcement contract.
@@ -40,20 +40,21 @@ import '../support/in_memory_kg.dart';
 /// unknown locale codes yield 'English' everywhere, including the KB
 /// cleanup prompt (which previously echoed the raw code).
 void main() {
-  late HiveTestHarness hive;
+  late SessionDbTestHarness store;
   late Directory workspace;
   late SessionManager sessions;
 
   setUp(() async {
-    hive = await HiveTestHarness.create();
+    store = await SessionDbTestHarness.create();
     workspace = await Directory.systemTemp.createTemp('lang_ws_');
     sessions = SessionManager();
-    await sessions.init();
+    await sessions.init(directory: store.dir.path);
+    store.track(sessions);
   });
 
   tearDown(() async {
     if (await workspace.exists()) await workspace.delete(recursive: true);
-    await hive.dispose();
+    await store.dispose();
   });
 
   Future<AgentLoop> buildLoop(LLMProvider provider,

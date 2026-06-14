@@ -18,7 +18,7 @@ import '../knowledge/services/knowledge_service.dart';
 import '../providers/embedding_provider.dart';
 import '../providers/embedding_provider_factory.dart';
 import '../providers/provider_factory.dart';
-import '../session/isolate_persistence/hive_path_resolver.dart';
+import '../session/database/sessions_db_path.dart';
 import '../session/session_manager.dart';
 import '../skills/skill_loader.dart';
 import '../tools/datetime_tool.dart';
@@ -58,8 +58,9 @@ class ServiceAgentFactory {
   /// Create a fully-initialized AgentLoop.
   ///
   /// All parameters come from SharedPreferences (cached by the main isolate).
-  /// The Hive directory is derived from [workspacePath] by [SessionManager]
-  /// via `HivePathResolver`, so both isolates share the same session data.
+  /// The sessions.db directory is derived from [workspacePath] by
+  /// [SessionManager] via `SessionsDbPath`, so both isolates open their own
+  /// WAL connection on the same database file.
   static Future<AgentLoop> create({
     required SharedPreferences prefs,
     required String apiKey,
@@ -78,8 +79,10 @@ class ServiceAgentFactory {
     String embeddingApiBase = '',
     bool embeddingUseOwnKey = false,
   }) async {
-    // 1. Initialize Hive (plain Dart — no initFlutter): SessionManager
-    //    resolves the shared Hive directory from the workspace path.
+    // 1. Open the sessions database: SessionManager resolves the shared
+    //    sessions.db directory from the workspace path (and runs the
+    //    one-shot Hive→SQLite migration if this isolate is first — e.g.
+    //    autoRunOnBoot started the service before the app).
     final sessionManager = SessionManager();
     await sessionManager.init(workspacePath: workspacePath);
 
@@ -153,7 +156,7 @@ class ServiceAgentFactory {
     }
     if (!disabled.contains('proof_editor')) {
       final proofStorePath = p.join(
-          HivePathResolver.hiveDirFromWorkspace(workspacePath),
+          SessionsDbPath.dirFromWorkspace(workspacePath),
           'proof_documents.json');
       registry.register(ProofEditorTool(
         store: ProofDocumentStore(proofStorePath),
@@ -289,7 +292,7 @@ class ServiceAgentFactory {
     final memoryManager = MemoryManager(storageService);
     final skillLoader = SkillLoader(storageService);
     final proofStorePath = p.join(
-        HivePathResolver.hiveDirFromWorkspace(workspacePath),
+        SessionsDbPath.dirFromWorkspace(workspacePath),
         'proof_documents.json');
     final contextBuilder = ContextBuilder(
       memoryManager: memoryManager,

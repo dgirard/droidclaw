@@ -88,10 +88,15 @@ class AppConfigNotifier extends Notifier<AppConfig> {
   void update(AppConfig config) => state = config;
 }
 
-/// Session manager — initialized asynchronously (opens Hive box).
+/// Session manager — initialized asynchronously (opens sessions.db and runs
+/// the one-shot Hive→SQLite migration when needed). The workspace path
+/// gives the SAME directory derivation as the service isolate
+/// (single-source, see SessionsDbPath), so both FlutterEngines open the
+/// same database file.
 final sessionManagerProvider = FutureProvider<SessionManager>((ref) async {
+  final workspacePath = await ref.watch(storageServiceProvider).workspacePath;
   final manager = SessionManager();
-  await manager.init();
+  await manager.init(workspacePath: workspacePath);
   ref.onDispose(() => manager.flush());
   return manager;
 });

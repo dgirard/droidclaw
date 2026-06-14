@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,10 +17,11 @@ Future<void> main() async {
   // Initialize communication port for background service
   FlutterForegroundTask.initCommunicationPort();
 
-  // Initialize Hive for session storage
-  await Hive.initFlutter();
+  // Sessions live in sessions.db (U6). Hive is only opened by the one-shot
+  // migrator with an explicit path — no ambient Hive init needed anymore.
 
-  // Initialize persistent logger (same directory as Hive)
+  // Initialize persistent logger (app documents directory — the same
+  // directory sessions.db lives in)
   final appDir = await getApplicationDocumentsDirectory();
   AppLogger.init(dirPath: appDir.path, isolateName: 'main');
   await AppLogger.instance.purge();

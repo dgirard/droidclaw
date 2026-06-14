@@ -3,15 +3,15 @@ import 'session.dart';
 
 /// Lightweight, list-screen-sized view of a [Session].
 ///
-/// Stored as a sidecar record in the `sessions` Hive box under
-/// `AppConstants.sessionMetaKeyPrefix + sessionKey`, written on every
-/// [Session] save. It lets `SessionManager` build the History/cron lists at
-/// startup WITHOUT decoding every session's full message history — full
-/// decode happens lazily on first access of a specific session.
+/// Persisted as dedicated columns of the `sessions` table in sessions.db
+/// (formerly a `__meta__:`-prefixed sidecar record in the Hive box),
+/// written by the same UPSERT as the payload on every [Session] save. It
+/// lets `SessionManager` build the History/cron lists at startup WITHOUT
+/// decoding every session's full message history — full decode happens
+/// lazily on first access of a specific session.
 ///
-/// Metadata is always derivable from the session record, so losing or
-/// corrupting a metadata record is harmless: `SessionManager` falls back to
-/// a one-time full decode and rewrites it.
+/// Metadata is always derivable from the session payload, so these columns
+/// are an index, never a source of truth.
 class SessionMetadata {
   final String key;
   final DateTime created;

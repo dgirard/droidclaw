@@ -27,7 +27,7 @@ adb logcat -s flutter | grep '\[AgentLoop\]'
 
 ```
 lib/
-├── main.dart                    # Entry point (init Hive + SharedPrefs)
+├── main.dart                    # Entry point (init loggers + SharedPrefs)
 ├── app.dart                     # MaterialApp, routing, Material 3 theme
 ├── core/                        # Business logic (NO Flutter UI imports)
 │   ├── agent/                   # AgentLoop, ContextBuilder, MemoryManager, ServiceAgentFactory
@@ -36,7 +36,7 @@ lib/
 │   ├── net/                     # RetryingHttpClient (shared retry policy), UrlGuard
 │   ├── providers/               # LLM + Embedding abstraction (Anthropic, HTTP, Gemini, factory)
 │   ├── services/                # BackgroundTaskHandler, AudioManagerChannel
-│   ├── session/                 # Session + SessionManager (Hive persistence)
+│   ├── session/                 # Session + SessionManager (SQLite/WAL sessions.db, sync reader, Hive migrator)
 │   ├── skills/                  # Three-tier loader + installer
 │   └── tools/                   # Tool interface + 31 implementations
 ├── features/                    # Screens and platform features
@@ -70,7 +70,7 @@ final fooProvider = StateNotifierProvider<FooNotifier, FooState>(...);
 
 ### Async Providers
 
-`sessionManagerProvider` and `toolRegistryProvider` are `FutureProvider` (Hive init, workspace path). Access with `.future`:
+`sessionManagerProvider` and `toolRegistryProvider` are `FutureProvider` (sessions.db open + migration, workspace path). Access with `.future`:
 
 ```dart
 final sessions = await ref.watch(sessionManagerProvider.future);
@@ -201,7 +201,7 @@ For tools needing an API key that must work in both isolates:
 
 - **No shell execution** on Android — no exec/shell tools
 - **Summarization**: triggers at 20+ messages OR estimated tokens > 75% of maxTokens, keeps last 4 messages
-- **Sessions**: the Hive `sessions` box stores session JSON (key = sessionKey) AND lightweight metadata sidecars (key = `__meta__:` + sessionKey, `AppConstants.sessionMetaKeyPrefix`) used for lazy history loading; session keys must never start with `__meta__:`
+- **Sessions**: `sessions.db` (Drift/SQLite WAL, `lib/core/session/database/`) stores one row per session: full JSON payload + metadata columns used for lazy history loading. Sync reads go through a read-only `package:sqlite3` connection (`SyncSessionReader`) — Drift is async-only but `get`/`getOrCreate` are sync. Both isolates open independent WAL connections (KG pattern). NEVER add `VACUUM` (heir of the Hive `compact()` ban). The legacy Hive box is migrated one-shot by `HiveToSqliteMigrator` (race-safe via in-DB marker); `.hive.backup` files are kept 2-3 releases
 - **Web scraping**: try `web_scrape` first (lightweight HTTP), fall back to `web_scrape_js` (WebView) for JS-rendered pages. Max 15K chars.
 - **Telegram**: long polling (not webhook) via foreground service with `remoteMessaging|location` types (no 6h limit). Dual-isolate architecture.
 - **API keys**: stored in `FlutterSecureStorage`, never in `SharedPreferences` or config JSON
@@ -213,6 +213,6 @@ For tools needing an API key that must work in both isolates:
 - Manual `fromJson()` / `toJson()` — no code generation (freezed/hive_generator removed)
 - `AppConstants` in `lib/shared/constants.dart` for all magic values
 - `AppLogger.instance.debug/info/warning/error(LogSource.xxx, ...)` for logging (`lib/core/services/app_logger.dart`) — `print` only inside the logger sinks, with `// ignore: avoid_print`
-- Config persisted in `SharedPreferences`, secrets in `FlutterSecureStorage`, sessions in Hive
+- Config persisted in `SharedPreferences`, secrets in `FlutterSecureStorage`, sessions in SQLite (`sessions.db`)
 - `docs/solutions/` — documented solutions to past problems (bugs, architecture patterns, design decisions), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
 - All tool names are snake_case: `web_search`, `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`, `get_directions`, `geocode`, `get_transit`, `weather`, `get_datetime`, `knowledge_search`, `knowledge_store`, `kb_query`, `radio`, `proof_editor`, `dream`

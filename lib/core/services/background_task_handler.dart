@@ -16,8 +16,8 @@ import '../../shared/constants.dart';
 import '../../features/telegram/telegram_api.dart';
 import '../knowledge/services/embedding_backfill_service.dart';
 import '../providers/embedding_provider_factory.dart';
+import '../session/database/sessions_db_path.dart';
 import '../session/isolate_persistence/durable_trigger_queue.dart';
-import '../session/isolate_persistence/hive_path_resolver.dart';
 import '../session/session_manager.dart';
 import 'app_logger.dart';
 import 'llm_trace_logger.dart';
@@ -91,7 +91,7 @@ class BackgroundTaskHandler extends TaskHandler {
     // result below is visible in the persistent log)
     final workspacePath = prefs.getString(AppConstants.cachedWorkspacePathKey);
     if (workspacePath != null) {
-      final appDir = HivePathResolver.hiveDirFromWorkspace(workspacePath);
+      final appDir = SessionsDbPath.dirFromWorkspace(workspacePath);
       AppLogger.init(dirPath: appDir, isolateName: 'service');
       await AppLogger.instance.purge();
 
@@ -647,16 +647,18 @@ class BackgroundTaskHandler extends TaskHandler {
   }
 
   /// Persist-then-notify invariant for the cron-session cross-isolate
-  /// handoff. The session save (an awaited write + fsync) MUST complete
-  /// before the main isolate is notified: if the notification raced ahead of
-  /// the disk flush, the main isolate would re-read the box *before* the
-  /// bytes land and the cron session would be invisible until the next
-  /// reload — a field incident class that is otherwise unreproducible
-  /// locally (see docs/solutions/database-issues/
-  /// session-data-loss-hive-flush-and-destructive-reads.md). If the save
-  /// throws, [notify] is never invoked — the main isolate must never be told
-  /// to reload state that was never written. The same invariant applies to
-  /// the pending-trigger handoff in [_checkCrons].
+  /// handoff. The session save (an awaited, committed write) MUST complete
+  /// before the main isolate is notified: if the notification raced ahead
+  /// of the commit, the main isolate would refresh its index *before* the
+  /// row lands and the cron session would be invisible until the next
+  /// refresh — a field incident class from the Hive era that is otherwise
+  /// unreproducible locally (see docs/solutions/database-issues/
+  /// session-data-loss-hive-flush-and-destructive-reads.md; sessions.db/WAL
+  /// makes a committed row immediately visible cross-isolate, but the
+  /// ordering invariant stays load-bearing). If the save throws, [notify]
+  /// is never invoked — the main isolate must never be told to refresh
+  /// state that was never written. The same invariant applies to the
+  /// pending-trigger handoff in [_checkCrons].
   ///
   /// Static and injectable so the invariant is unit-testable without a
   /// FlutterForegroundTask harness ([notify] is

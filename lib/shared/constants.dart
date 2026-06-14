@@ -45,10 +45,33 @@ class AppConstants {
   // Session
   static const String defaultSessionKey = 'default';
 
-  /// Reserved Hive key prefix for per-session metadata records in the
-  /// `sessions` box (lazy load: list/history screens read these instead of
-  /// decoding full message histories). Session keys must never start with it.
+  /// Reserved key prefix of the per-session metadata sidecar records in the
+  /// LEGACY `sessions` Hive box. Only read by the Hive→SQLite migrator (U6),
+  /// which skips these sidecars when copying session records. Session keys
+  /// must never start with it.
   static const String sessionMetaKeyPrefix = '__meta__:';
+
+  /// File name of the sessions SQLite database (U6 — successor of the Hive
+  /// `sessions` box). Lives in the directory the Hive box lived in
+  /// (the workspace parent = the app documents directory).
+  static const String sessionsDbFilename = 'sessions.db';
+
+  /// `app_state` key of the one-shot Hive→SQLite migration marker inside
+  /// sessions.db. Value [sessionsMigrationDone] once the copy is verified.
+  static const String sessionsMigrationMarkerKey = 'hive_to_sqlite_migration';
+
+  /// Marker value meaning the Hive→SQLite session migration completed and
+  /// was verified — sessions.db is the single source of truth.
+  static const String sessionsMigrationDone = 'done';
+
+  /// Suffix appended to the legacy Hive box files after a verified
+  /// migration (`sessions.hive` → `sessions.hive.backup`). Kept for 2-3
+  /// releases as a recovery escape hatch, then deleted in a follow-up.
+  static const String sessionsHiveBackupSuffix = '.backup';
+
+  /// Number of migrated sessions spot-checked (decode + content comparison
+  /// against the Hive source) before the migration marker is set.
+  static const int sessionsMigrationSpotCheckCount = 5;
 
   /// Max characters of message/summary text kept in a session metadata
   /// preview (the History screen itself truncates further for display).

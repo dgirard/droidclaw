@@ -28,7 +28,7 @@ import 'package:droidclaw/data/local/storage_service.dart';
 import 'package:droidclaw/shared/constants.dart';
 
 import '../support/fake_llm_provider.dart';
-import '../support/hive_test_harness.dart';
+import '../support/session_db_test_harness.dart';
 import '../support/in_memory_kg.dart';
 
 /// A counting fake tool: records every execution and its arguments.
@@ -92,17 +92,18 @@ class _CapturingPipeline extends IngestionPipeline {
 }
 
 void main() {
-  late HiveTestHarness hive;
+  late SessionDbTestHarness sessionStore;
   late Directory workspace;
   late SessionManager sessions;
   late KnowledgeGraphDB kgDb;
   late EpisodeStore store;
 
   setUp(() async {
-    hive = await HiveTestHarness.create();
+    sessionStore = await SessionDbTestHarness.create();
     workspace = await Directory.systemTemp.createTemp('episodic_ws_');
     sessions = SessionManager();
-    await sessions.init();
+    await sessions.init(directory: sessionStore.dir.path);
+    sessionStore.track(sessions);
     kgDb = inMemoryKnowledgeGraphDB();
     store = EpisodeStore(kgDb);
   });
@@ -110,7 +111,7 @@ void main() {
   tearDown(() async {
     await kgDb.close();
     if (await workspace.exists()) await workspace.delete(recursive: true);
-    await hive.dispose();
+    await sessionStore.dispose();
   });
 
   Future<AgentLoop> buildLoop(

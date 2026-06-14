@@ -11,7 +11,7 @@ import '../../core/knowledge/services/knowledge_service.dart';
 import '../../core/services/app_logger.dart';
 import '../../core/services/data_wiper.dart';
 import '../../core/services/llm_trace_logger.dart';
-import '../../core/session/isolate_persistence/hive_path_resolver.dart';
+import '../../core/session/database/sessions_db_path.dart';
 import '../../core/session/session.dart';
 import '../../core/session/session_manager.dart';
 import '../../l10n/l10n.dart';
@@ -258,7 +258,7 @@ Future<void> _resetAllData(BuildContext context, WidgetRef ref) async {
     try {
       sessions = await ref.read(sessionManagerProvider.future);
     } catch (_) {
-      // If sessions can't be opened (e.g. corrupt Hive box), wipe proceeds
+      // If sessions can't be opened (e.g. corrupt database), wipe proceeds
       // without graceful close; DataWiper removes the files directly.
     }
 
@@ -274,11 +274,10 @@ Future<void> _resetAllData(BuildContext context, WidgetRef ref) async {
       storage: storage,
       configStorage: ref.read(configStorageProvider),
       sessions: sessions,
-      // File-level fallback for a degraded sessions box (same rationale as
-      // knowledgeDbPath): the box file lives in the Hive home directory.
-      sessionsBoxPath:
-          '${HivePathResolver.hiveDirFromWorkspace(workspacePath)}'
-          '/${SessionManager.boxName}',
+      // File-level fallback for a degraded sessions database (same
+      // rationale as knowledgeDbPath). DataWiper also removes the legacy
+      // Hive box files and their .backup set from the same directory.
+      sessionsDbPath: SessionsDbPath.fileFromWorkspace(workspacePath),
       knowledge: knowledge,
       knowledgeDbPath: '$workspacePath/${AppConstants.knowledgeDbFilename}',
       workspacePath: workspacePath,

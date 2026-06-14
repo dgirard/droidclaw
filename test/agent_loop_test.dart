@@ -21,7 +21,7 @@ import 'package:droidclaw/shared/constants.dart';
 
 import 'support/fake_embedding_provider.dart';
 import 'support/fake_llm_provider.dart';
-import 'support/hive_test_harness.dart';
+import 'support/session_db_test_harness.dart';
 import 'support/in_memory_kg.dart';
 
 class _EchoTool extends Tool {
@@ -88,7 +88,7 @@ class _ThrowingProvider implements LLMProvider {
 }
 
 void main() {
-  late HiveTestHarness hive;
+  late SessionDbTestHarness store;
   late Directory workspace;
   late SessionManager sessions;
 
@@ -116,15 +116,16 @@ void main() {
   }
 
   setUp(() async {
-    hive = await HiveTestHarness.create();
+    store = await SessionDbTestHarness.create();
     workspace = await Directory.systemTemp.createTemp('agent_ws_');
     sessions = SessionManager();
-    await sessions.init();
+    await sessions.init(directory: store.dir.path);
+    store.track(sessions);
   });
 
   tearDown(() async {
     if (await workspace.exists()) await workspace.delete(recursive: true);
-    await hive.dispose();
+    await store.dispose();
   });
 
   test('happy path: tool call, tool result, then final response', () async {
