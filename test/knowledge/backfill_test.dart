@@ -251,6 +251,26 @@ void main() {
       expect(gate(incomplete: false), isFalse,
           reason: 'a complete backfill must not burn battery re-checking');
     });
+
+    test('the cached backfill service is rebuilt when embedding dims change '
+        'mid-run, but not otherwise (C2/A4/R3)', () {
+      // No service cached yet → nothing to rebuild.
+      expect(
+          BackgroundTaskHandler.backfillServiceDimsStale(
+              serviceDims: null, currentDims: 256),
+          isFalse);
+      // Same dims → keep the cached service.
+      expect(
+          BackgroundTaskHandler.backfillServiceDimsStale(
+              serviceDims: 256, currentDims: 256),
+          isFalse);
+      // Dims changed in settings mid-run → rebuild so the new provider writes
+      // at the new dim (no OLD-dim vectors → no mixed-space provenance).
+      expect(
+          BackgroundTaskHandler.backfillServiceDimsStale(
+              serviceDims: 768, currentDims: 256),
+          isTrue);
+    });
   });
 
   group('golden cutover (space A → space B)', () {

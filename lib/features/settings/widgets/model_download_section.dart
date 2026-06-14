@@ -122,6 +122,7 @@ class _ModelDownloadSectionState extends State<ModelDownloadSection> {
               switch (state) {
                 ModelState.ready => Icons.check_circle,
                 ModelState.failed => Icons.error,
+                ModelState.unverified => Icons.gpp_maybe,
                 ModelState.downloading ||
                 ModelState.verifying =>
                   Icons.downloading,
@@ -131,6 +132,7 @@ class _ModelDownloadSectionState extends State<ModelDownloadSection> {
               color: switch (state) {
                 ModelState.ready => Colors.green,
                 ModelState.failed => theme.colorScheme.error,
+                ModelState.unverified => theme.colorScheme.error,
                 _ => theme.colorScheme.onSurfaceVariant,
               },
             ),
@@ -142,6 +144,7 @@ class _ModelDownloadSectionState extends State<ModelDownloadSection> {
                     ((status?.progress ?? 0) * 100).round()),
                 ModelState.verifying => l.modelDownloadStateVerifying,
                 ModelState.ready => l.modelDownloadStateReady,
+                ModelState.unverified => l.modelDownloadStateUnverified,
                 ModelState.failed =>
                   l.modelDownloadStateFailed(status?.error ?? ''),
               }),
@@ -173,7 +176,7 @@ class _ModelDownloadSectionState extends State<ModelDownloadSection> {
                 icon: const Icon(Icons.download),
                 label: Text(l.modelDownloadDownload),
               ),
-            if (state == ModelState.failed)
+            if (state == ModelState.failed || state == ModelState.unverified)
               FilledButton.icon(
                 onPressed: widget.manager == null ? null : _download,
                 icon: const Icon(Icons.refresh),

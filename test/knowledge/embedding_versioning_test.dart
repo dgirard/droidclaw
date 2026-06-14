@@ -136,6 +136,23 @@ sqlite3.Database _seededV3Database() {
   return raw;
 }
 
+/// A v3-seeded database left in a PARTIALLY-applied v4 state, simulating a
+/// process kill after the first `ALTER TABLE ... ADD COLUMN embedding_model`
+/// but before the rest of the v4 block, on a build that ran the ALTERs
+/// OUTSIDE a transaction (DM-01 belt-and-suspenders). Re-opening through
+/// [KnowledgeGraphDB] must HEAL this rather than crash with
+/// "duplicate column name": user_version is still 3, so the migration
+/// re-runs, and the PRAGMA-guarded ADD COLUMNs skip the column that already
+/// exists.
+sqlite3.Database _seededV3WithPartialV4() {
+  final raw = _seededV3Database();
+  // Half-applied: only entities.embedding_model was added before the kill.
+  raw.execute('ALTER TABLE entities ADD COLUMN embedding_model TEXT');
+  // user_version stays at 3 (the kill happened mid-block, before the bump).
+  raw.execute('PRAGMA user_version = 3');
+  return raw;
+}
+
 void main() {
   group('v3→v4 migration', () {
     late KnowledgeGraphDB db;
@@ -216,6 +233,62 @@ void main() {
       expect(service.lastQueryVectorPathFailed, isFalse);
       // 'Four Dims' [1,0,0,0] matches the query vector via the legacy space.
       expect(results.map((r) => r.entity.name), contains('Four Dims'));
+    });
+
+    test(
+        'a half-applied v4 (one ADD COLUMN done, then killed) re-opens and '
+        'HEALS instead of crashing with "duplicate column name" (DM-01)',
+        () async {
+      // A separate DB left in the partial state (the group's `db` is the
+      // clean path); the PRAGMA-guarded ADD COLUMN must skip the column
+      // that already exists and finish the migration cleanly.
+      final healed = KnowledgeGraphDB.forExecutor(
+          NativeDatabase.opened(_seededV3WithPartialV4()));
+      addTearDown(healed.close);
+
+      // No crash on open; provenance backfilled exactly as the clean path.
+      final entities = await healed.customSelect(
+          'SELECT name, embedding_model, embedding_dim FROM entities '
+          'ORDER BY id').get();
+      expect(entities[0].read<String>('embedding_model'),
+          AppConstants.knowledgeLegacyEmbeddingModel);
+      expect(entities[0].read<int>('embedding_dim'), 4);
+      expect(entities[1].read<int>('embedding_dim'), 768);
+
+      // The migration chain ran to completion: user_version landed at 5.
+      final version =
+          await healed.customSelect('PRAGMA user_version').getSingle();
+      expect(version.data.values.first, 5);
+    });
+
+    test(
+        'the v4 provenance guard backfills every embedded row with a model '
+        'and a dim = length(embedding)/4, leaving no unlabeled vector (DM-03)',
+        () async {
+      // Every embedded row across the three tables must carry a label and a
+      // dimension matching its blob; rows without a vector stay unlabeled.
+      for (final table in ['entities', 'relations', 'summary_nodes']) {
+        final unlabeled = await db.customSelect(
+            'SELECT COUNT(*) AS cnt FROM $table '
+            'WHERE embedding IS NOT NULL AND embedding_model IS NULL').getSingle();
+        expect(unlabeled.read<int>('cnt'), 0,
+            reason: '$table must have no embedded-but-unlabeled rows');
+
+        final mismatched = await db.customSelect(
+            'SELECT COUNT(*) AS cnt FROM $table '
+            'WHERE embedding IS NOT NULL '
+            'AND embedding_dim != length(embedding) / 4').getSingle();
+        expect(mismatched.read<int>('cnt'), 0,
+            reason: '$table dims must equal blob byte length / 4');
+
+        final mislabeled = await db.customSelect(
+            "SELECT COUNT(*) AS cnt FROM $table "
+            "WHERE embedding IS NOT NULL "
+            "AND embedding_model != '${AppConstants.knowledgeLegacyEmbeddingModel}'")
+            .getSingle();
+        expect(mislabeled.read<int>('cnt'), 0,
+            reason: '$table legacy rows must carry the legacy marker');
+      }
     });
   });
 

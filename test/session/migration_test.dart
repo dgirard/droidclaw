@@ -209,6 +209,36 @@ void main() {
           reason: 'the heal renamed it to .backup');
     });
 
+    test('spot-check catches a mapping bug affecting only the NEWEST session '
+        '(DM-02 sampling spans oldest + newest)', () async {
+      // Seed more than the spot-check count so the old `take(n)` would only
+      // ever check the OLDEST sessions and miss a newest-only corruption.
+      final count = AppConstants.sessionsMigrationSpotCheckCount + 1;
+      final seeded = await seedHiveBox(count);
+      final newestKey = seeded.last.key; // last inserted → newest in keys order
+      final db = openDb();
+
+      final sabotaged = HiveToSqliteMigrator(
+        db: db,
+        directory: hive.dir.path,
+        beforeVerifyHook: (db) async {
+          // Corrupt ONLY the newest migrated session's payload. The old
+          // oldest-only sample would pass; the oldest+newest sample catches it.
+          await db.customStatement(
+              "UPDATE sessions SET payload = 'garbage' WHERE session_key = ?",
+              [newestKey]);
+        },
+      );
+      await expectLater(sabotaged.migrate(),
+          throwsA(isA<SessionMigrationVerificationException>()));
+
+      // All-or-nothing rollback: marker absent, Hive still the truth.
+      expect(await db.readAppState(AppConstants.sessionsMigrationMarkerKey),
+          isNull);
+      expect(await db.countSessions(), 0);
+      expect(File('${hive.dir.path}/sessions.hive').existsSync(), isTrue);
+    });
+
     test('failed verification (corrupted row injected pre-verify) → marker '
         'not set, Hive remains the truth (no rename), error surfaced',
         () async {

@@ -145,6 +145,40 @@ void main() {
     });
   });
 
+  group('ContextBuilder.buildSystemPrompt — KB degradation status (AN2)', () {
+    test('semanticSearchAvailable=false injects the <kb_status> note, '
+        'placed before the language requirement', () async {
+      final prompt = await builder(locale: 'fr').buildSystemPrompt(
+        semanticSearchAvailable: false,
+      );
+
+      final note = tr('fr').agentKbStatusSemanticUnavailable;
+      expect(prompt, contains(note));
+      expect(prompt, contains('<kb_status>'));
+      // The language requirement must still be LAST: the note comes before it.
+      final noteIndex = prompt.indexOf(note);
+      final langIndex =
+          prompt.indexOf(tr('fr').agentRespondInstructions.trimRight());
+      expect(noteIndex, greaterThanOrEqualTo(0));
+      expect(langIndex, greaterThan(noteIndex));
+      expect(prompt.trimRight(),
+          endsWith(tr('fr').agentRespondInstructions.trimRight()));
+    });
+
+    test('semanticSearchAvailable=true (default) omits the <kb_status> note',
+        () async {
+      final explicitTrue = await builder(locale: 'fr').buildSystemPrompt(
+        semanticSearchAvailable: true,
+      );
+      final defaulted = await builder(locale: 'fr').buildSystemPrompt();
+
+      expect(explicitTrue, isNot(contains('<kb_status>')));
+      expect(defaulted, isNot(contains('<kb_status>')));
+      expect(defaulted.trimRight(),
+          endsWith(tr('fr').agentRespondInstructions.trimRight()));
+    });
+  });
+
   group('ContextBuilder.buildSystemPrompt — knowledge context injection', () {
     test('KB facts are present when supplied', () async {
       final prompt = await builder().buildSystemPrompt(

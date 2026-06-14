@@ -79,6 +79,14 @@ class BackgroundTaskHandler extends TaskHandler {
   bool _kgBackfillRunning = false;
   EmbeddingBackfillService? _backfillService;
 
+  /// Embedding dimensions [_backfillService] was created with (C2/A4/R3).
+  /// If the user changes embedding dims in settings mid-run, the cached
+  /// service (and its LocalEmbeddingProvider) would keep writing vectors at
+  /// the OLD dim, producing mixed-space provenance the query guard rejects.
+  /// We compare this against the current cached dims each slice and rebuild
+  /// the service when they differ. Null until the service is first created.
+  int? _backfillServiceDims;
+
   static const _maxBackoff = Duration(seconds: 60);
   static const _baseBackoff = Duration(seconds: 2);
   static const _disconnectedThreshold = 10;
@@ -401,6 +409,20 @@ class BackgroundTaskHandler extends TaskHandler {
       localModelReady &&
       backfillIncomplete;
 
+  /// Whether a cached backfill service built for [serviceDims] is stale
+  /// relative to the [currentDims] now configured (C2/A4/R3). A null
+  /// [serviceDims] means no service is cached yet (nothing to rebuild). When
+  /// this returns true the caller must drop the cached service so it (and its
+  /// dimension-bound LocalEmbeddingProvider) is re-created at the new dims —
+  /// otherwise it would keep writing OLD-dim vectors, producing the
+  /// mixed-space provenance the query guard rejects.
+  @visibleForTesting
+  static bool backfillServiceDimsStale({
+    required int? serviceDims,
+    required int currentDims,
+  }) =>
+      serviceDims != null && serviceDims != currentDims;
+
   /// Check the charger+idle gate and run one backfill slice if it passes.
   ///
   /// The scheduled job specifically targets the LOCAL embedding space (the
@@ -417,6 +439,9 @@ class BackgroundTaskHandler extends TaskHandler {
 
     try {
       final prefs = await SharedPreferences.getInstance();
+      // SharedPreferences is mirror-written by the main isolate; reload so a
+      // dimension change made in settings mid-run is visible here (C2/A4/R3).
+      await prefs.reload();
       final workspacePath =
           prefs.getString(AppConstants.cachedWorkspacePathKey);
       final localProviderConfigured =
@@ -445,17 +470,33 @@ class BackgroundTaskHandler extends TaskHandler {
 
       if (!localProviderConfigured || !localModelReady || !charging) return;
 
+      final currentDims =
+          prefs.getInt(AppConstants.cachedEmbeddingDimensionsKey) ??
+              AppConstants.localEmbeddingDimensions;
+
+      // C2/A4/R3: if the configured dims changed since the cached service was
+      // built, drop it so it (and its dimension-bound provider) is re-created
+      // at the new dims — never keep writing OLD-dim vectors mid-run.
+      if (backfillServiceDimsStale(
+          serviceDims: _backfillServiceDims, currentDims: currentDims)) {
+        AppLogger.instance.info(LogSource.service,
+            'Embedding dimensions changed '
+            '($_backfillServiceDims → $currentDims) — rebuilding backfill '
+            'service to avoid mixed-space provenance');
+        _backfillService = null;
+      }
+
       final service = _backfillService ??= EmbeddingBackfillService(
         db: knowledgeService.db,
         provider: EmbeddingProviderFactory.create(
           providerName: AppConstants.localEmbeddingProviderName,
-          dimensions: prefs.getInt(AppConstants.cachedEmbeddingDimensionsKey) ??
-              AppConstants.localEmbeddingDimensions,
+          dimensions: currentDims,
           localModelDir: p.join(modelsRoot!, spec.id),
         ),
         embeddingModel: prefs.getString(AppConstants.cachedEmbeddingModelKey) ??
             AppConstants.localEmbeddingModelId,
       );
+      _backfillServiceDims = currentDims;
 
       // charging / localProviderConfigured / localModelReady were all verified
       // by the early-return above; only the backfill-incomplete precondition
@@ -469,6 +510,14 @@ class BackgroundTaskHandler extends TaskHandler {
         // The long-lived KnowledgeService caches its query-space selection;
         // coverage just flipped, so re-resolve (and log) the new space.
         await knowledgeService.resolveQuerySpace(refresh: true);
+        // A1: the MAIN isolate's long-lived KnowledgeService caches its own
+        // query-space selection and would keep serving the stale/lexical
+        // space until app restart. Mirror the cron-completion cross-isolate
+        // signal so the main isolate can refresh its query space (invalidate
+        // knowledgeServiceProvider) and chat picks up the new embedding space.
+        FlutterForegroundTask.sendDataToMain({
+          'type': 'backfill_complete',
+        });
       }
     } catch (e) {
       AppLogger.instance.warning(LogSource.service,
@@ -484,7 +533,7 @@ class BackgroundTaskHandler extends TaskHandler {
               .subtract(Duration(days: AppConstants.knowledgeDecayHalfLifeDays))
               .millisecondsSinceEpoch ~/
           1000;
-      final purged = await _agentLoop!.knowledgeService!.db.purgeColdEntities(cutoff);
+      final purged = await _agentLoop!.knowledgeService!.purgeColdEntities(cutoff);
       if (purged > 0) {
         AppLogger.instance.info(LogSource.service,
             'KG purge: $purged cold entities deactivated');

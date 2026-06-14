@@ -6,6 +6,8 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
 import '../../../shared/constants.dart';
+import '../../config/log_entry.dart';
+import '../../services/app_logger.dart';
 
 part 'knowledge_graph_db.g.dart';
 
@@ -68,37 +70,39 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
             // configured before the upgrade". The dimension IS knowable from
             // the data itself: blobs are Float32 little-endian, so
             // length(embedding) / 4 is ground truth.
-            for (final table in ['entities', 'relations', 'summary_nodes']) {
-              await customStatement(
-                  'ALTER TABLE $table ADD COLUMN embedding_model TEXT');
-              await customStatement(
-                  'ALTER TABLE $table ADD COLUMN embedding_dim INTEGER');
-              await customStatement(
-                "UPDATE $table SET "
-                "embedding_model = '${AppConstants.knowledgeLegacyEmbeddingModel}', "
-                'embedding_dim = length(embedding) / 4 '
-                'WHERE embedding IS NOT NULL');
-            }
+            //
+            // Atomicity (DM-01): the whole block runs in ONE transaction so a
+            // process kill mid-block leaves user_version at 3 and the upgrade
+            // retries cleanly instead of bricking the KB with a half-applied
+            // column add. Belt-and-suspenders: PRAGMA table_info() guards each
+            // ADD COLUMN so a half-applied state from an OLDER (pre-transaction)
+            // build still heals rather than throwing "duplicate column name".
+            await _migrateV4EmbeddingProvenance();
           }
           if (from < 5) {
             // v5: episodic tool-result cache (U4). Mirrors the episodes
-            // definition in schema.drift.
-            await customStatement('''
-              CREATE TABLE episodes (
-                id              INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                tool            TEXT    NOT NULL,
-                args_digest     TEXT    NOT NULL,
-                context_key     TEXT,
-                result_redacted TEXT    NOT NULL,
-                is_error        INTEGER NOT NULL DEFAULT 0,
-                session_key     TEXT,
-                created_at      INTEGER NOT NULL,
-                expires_at      INTEGER NOT NULL,
-                UNIQUE(tool, args_digest, context_key)
-              )
-            ''');
-            await customStatement(
-                'CREATE INDEX idx_episodes_expires ON episodes(expires_at)');
+            // definition in schema.drift. Wrapped in a transaction so a kill
+            // between the CREATE TABLE and the CREATE INDEX cannot leave a
+            // table without its index and still bump user_version to 5.
+            await transaction(() async {
+              await customStatement('''
+                CREATE TABLE IF NOT EXISTS episodes (
+                  id              INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                  tool            TEXT    NOT NULL,
+                  args_digest     TEXT    NOT NULL,
+                  context_key     TEXT,
+                  result_redacted TEXT    NOT NULL,
+                  is_error        INTEGER NOT NULL DEFAULT 0,
+                  session_key     TEXT,
+                  created_at      INTEGER NOT NULL,
+                  expires_at      INTEGER NOT NULL,
+                  UNIQUE(tool, args_digest, context_key)
+                )
+              ''');
+              await customStatement(
+                  'CREATE INDEX IF NOT EXISTS idx_episodes_expires '
+                  'ON episodes(expires_at)');
+            });
           }
         },
         beforeOpen: (details) async {
@@ -107,6 +111,62 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
           await customStatement('PRAGMA busy_timeout = 5000');
         },
       );
+
+  /// v4 embedding-provenance migration, atomic + idempotent (DM-01, DM-03).
+  ///
+  /// All statements run in ONE transaction: a kill mid-block rolls back and
+  /// leaves user_version at 3, so the next open retries cleanly. Each
+  /// ADD COLUMN is guarded by [_columnExists] so a half-applied state left by
+  /// an OLDER (pre-transaction) build heals instead of throwing
+  /// "duplicate column name". After the legacy backfill, a provenance guard
+  /// (DM-03) asserts no embedded row was left without a model label — if it
+  /// finds one, it throws, rolling the whole transaction back so the marker
+  /// never advances to 4 with unlabeled vectors.
+  Future<void> _migrateV4EmbeddingProvenance() async {
+    await transaction(() async {
+      for (final table in ['entities', 'relations', 'summary_nodes']) {
+        if (!await _columnExists(table, 'embedding_model')) {
+          await customStatement(
+              'ALTER TABLE $table ADD COLUMN embedding_model TEXT');
+        }
+        if (!await _columnExists(table, 'embedding_dim')) {
+          await customStatement(
+              'ALTER TABLE $table ADD COLUMN embedding_dim INTEGER');
+        }
+        await customStatement(
+          "UPDATE $table SET "
+          "embedding_model = '${AppConstants.knowledgeLegacyEmbeddingModel}', "
+          'embedding_dim = length(embedding) / 4 '
+          'WHERE embedding IS NOT NULL AND embedding_model IS NULL');
+      }
+
+      // DM-03 provenance guard: a botched backfill must never set
+      // user_version=4 with embedding vectors that lack a space label.
+      for (final table in ['entities', 'relations', 'summary_nodes']) {
+        final row = await customSelect(
+          'SELECT COUNT(*) AS cnt FROM $table '
+          'WHERE embedding IS NOT NULL AND embedding_model IS NULL',
+        ).getSingle();
+        final unlabeled = row.read<int>('cnt');
+        if (unlabeled != 0) {
+          AppLogger.instance.error(
+            LogSource.app,
+            'KG v4 migration aborted: $unlabeled embedded $table row(s) '
+            'left without an embedding_model — rolling back.',
+          );
+          throw StateError(
+              'KG v4 migration: $unlabeled unlabeled embedding(s) in $table');
+        }
+      }
+    });
+  }
+
+  /// True if [table] already has a column named [column] (via
+  /// `PRAGMA table_info`). Used to make the v4 ADD COLUMN steps idempotent.
+  Future<bool> _columnExists(String table, String column) async {
+    final rows = await customSelect('PRAGMA table_info($table)').get();
+    return rows.any((r) => r.read<String>('name') == column);
+  }
 
   /// Drop FTS5 triggers and virtual tables (inverse of [_createFts5Tables]).
   Future<void> _dropFts5TablesAndTriggers() async {

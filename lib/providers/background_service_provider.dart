@@ -222,6 +222,18 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
         // bump counter so CronConfigScreen can react via ref.watch().
         _reloadAfterCronCompletion();
 
+      case 'backfill_complete':
+        // The service isolate finished the charger-gated embedding backfill
+        // and the KB coverage flipped to the new embedding space. The main
+        // isolate's long-lived KnowledgeService caches its own query-space
+        // selection and would keep serving the stale/lexical space until app
+        // restart — invalidate it (mirrors the cron-completion refresh) so
+        // chat picks up the new embedding space on the next query.
+        AppLogger.instance.info(LogSource.service,
+            'Service isolate reported embedding backfill complete — '
+            'refreshing main-isolate knowledge service');
+        _refreshKnowledgeServiceAfterBackfill();
+
       case 'service_error':
         // Service isolate could not initialize its AgentLoop (e.g. missing
         // cached config). Surface it so the UI does not show a healthy
@@ -231,6 +243,20 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
             'Service isolate reported init failure: $message');
         state = state.copyWith(error: message);
 
+    }
+  }
+
+  /// Invalidate the long-lived main-isolate KnowledgeService so its cached
+  /// query-space selection is recomputed against the now-complete embedding
+  /// space written by the service isolate's backfill (A1). Invalidating the
+  /// provider (rather than calling a refresh hook) keeps the cross-isolate
+  /// signal handling entirely in this file.
+  void _refreshKnowledgeServiceAfterBackfill() {
+    try {
+      ref.invalidate(knowledgeServiceProvider);
+    } catch (e) {
+      AppLogger.instance.warning(LogSource.service,
+          'Failed to refresh knowledge service after backfill: $e');
     }
   }
 

@@ -113,7 +113,14 @@ class ModelSpec {
 }
 
 /// Lifecycle of a model on this device.
-enum ModelState { absent, downloading, verifying, ready, failed }
+///
+/// [unverified] is a terminal, NOT-ready state: the files downloaded and were
+/// hashed, but at least one file's pinned hash is still the placeholder
+/// ([AppConstants.modelSha256Placeholder]). The file(s) are kept in staging so
+/// the dev can read the logged real hash and pin it; the model is deliberately
+/// NOT promoted to [ready] (no `.ready` marker), so nothing loads an
+/// integrity-unverified model. See the SHA-256 policy on [ModelDownloadManager].
+enum ModelState { absent, downloading, verifying, ready, unverified, failed }
 
 /// Snapshot of a model's state, emitted on [ModelDownloadManager.statusStream].
 class ModelStatus {
@@ -216,11 +223,24 @@ class ModelDownloadException implements Exception {
 /// deletes or degrades a model that is already `ready` (ProofEditor-404
 /// lesson: ambiguous failures must not destroy working state).
 ///
-/// SHA-256 policy: a pinned hash mismatch rejects the file (deleted from
-/// staging, state `failed`). A placeholder hash
-/// ([AppConstants.modelSha256Placeholder]) runs in log-only warn mode and
-/// logs the computed hash prominently so it can be pinned in constants after
-/// the first verified download.
+/// SHA-256 policy (security posture — supply-chain integrity):
+/// - A pinned hash mismatch rejects the file (deleted from staging, state
+///   `failed`).
+/// - A placeholder hash ([AppConstants.modelSha256Placeholder]) logs the
+///   computed hash prominently ("PIN-ME sha256(...)=...") so it can be pinned
+///   in AppConstants — BUT the model is NOT promoted to `ready`. Promotion to
+///   `ready` (writing the `.ready` marker) requires EVERY file to have a
+///   non-placeholder pinned hash AND to match it. While any file is on the
+///   placeholder, the download still COMPLETES (so the dev can obtain the file
+///   and read its logged hash), but the terminal state is `unverified`: the
+///   files stay in staging and no consumer (LocalEmbeddingProvider, the
+///   service isolate, the embedding settings test button) ever loads an
+///   integrity-unverified model.
+///
+/// Consequence: a model with placeholder hashes is "downloadable but not
+/// usable". Pinning the logged hashes in AppConstants (one verified download)
+/// is REQUIRED before the local-embedding feature is usable. This is the
+/// correct security default — see the residual S1 review note.
 class ModelDownloadManager {
   /// Absolute root for all models, derived from the app documents directory
   /// (the workspace's parent — see [AppConstants.modelsDirName] for why it
@@ -366,9 +386,12 @@ class ModelDownloadManager {
         _checkCancelled(spec);
       }
 
-      // 2. Verify all files (streamed SHA-256).
+      // 2. Verify all files (streamed SHA-256). A pinned mismatch rejects the
+      // file outright; a placeholder hash logs the computed digest so it can
+      // be pinned, and flags the model as not-yet-verifiable.
       _emit(ModelStatus(
           modelId: spec.id, state: ModelState.verifying, progress: 1));
+      var allPinnedAndMatched = true;
       for (final file in spec.files) {
         final staged = File(p.join(staging.path, file.filename));
         if (!staged.existsSync()) {
@@ -385,8 +408,11 @@ class ModelDownloadManager {
                 'expected ${file.sha256}, got $computed');
           }
         } else {
-          // Placeholder hash: warn-only mode. Log the computed hash
-          // prominently so it can be pinned in AppConstants.
+          // Placeholder hash: log the computed hash prominently so it can be
+          // pinned in AppConstants. The download is allowed to COMPLETE, but
+          // the model will NOT be promoted to ready (security: never load an
+          // integrity-unverified model).
+          allPinnedAndMatched = false;
           AppLogger.instance.warning(
               LogSource.app,
               'PIN-ME sha256(${spec.id}/${file.filename}) = $computed '
@@ -394,7 +420,26 @@ class ModelDownloadManager {
         }
       }
 
-      // 3. Promote: move verified files into the final dir, set the marker.
+      // 3a. Unverified terminal state: at least one file is on a placeholder
+      // hash. Keep the staged files (so the dev can read the logged hashes and
+      // pin them) but do NOT write the .ready marker — isReady() stays false,
+      // so no consumer loads this model. This is a deliberate security gate.
+      if (!allPinnedAndMatched) {
+        AppLogger.instance.warning(
+            LogSource.app,
+            'Model ${spec.id} downloaded but NOT promoted to ready: one or '
+            'more files have a placeholder SHA-256. Pin the logged "PIN-ME" '
+            'hashes in AppConstants, then re-download to verify and enable.');
+        _emit(ModelStatus(
+          modelId: spec.id,
+          state: ModelState.unverified,
+          progress: 1,
+          error: 'unverified: pin the logged SHA-256 hashes to enable',
+        ));
+        return;
+      }
+
+      // 3b. Promote: move verified files into the final dir, set the marker.
       final finalDir = Directory(modelDir(spec));
       await finalDir.create(recursive: true);
       for (final file in spec.files) {

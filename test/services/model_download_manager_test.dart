@@ -126,13 +126,37 @@ void main() {
       m.dispose();
     });
 
-    test('placeholder hash is log-only and still promotes to ready', () async {
+    test(
+        'placeholder hash logs the computed digest but does NOT promote to '
+        'ready — terminal state is unverified (S1 security gate)', () async {
       final s = spec(shaOverrides: {
         'model.onnx_data': AppConstants.modelSha256Placeholder,
       });
       final m = manager(FakeFetcher(contents));
       await m.download(s);
+
+      // Integrity gate: a file on the placeholder hash must NOT be promoted.
+      expect(await m.isReady(s), isFalse);
+      expect(m.statusOf(s)!.state, ModelState.unverified);
+      // The download still COMPLETED: files are kept in staging so the dev can
+      // read the logged hash and pin it (file-level resume on re-download).
+      final staging = p.join(tempDir.path, '${s.id}.staging');
+      for (final name in contents.keys) {
+        expect(File(p.join(staging, name)).existsSync(), isTrue,
+            reason: '$name should remain staged for pinning');
+      }
+      // No final dir / .ready marker was written.
+      expect(File(p.join(m.modelDir(s), '.ready')).existsSync(), isFalse);
+      m.dispose();
+    });
+
+    test('fully-pinned matching download still promotes to ready', () async {
+      // All three files carry their real (non-placeholder) hashes.
+      final s = spec();
+      final m = manager(FakeFetcher(contents));
+      await m.download(s);
       expect(await m.isReady(s), isTrue);
+      expect(m.statusOf(s)!.state, ModelState.ready);
       m.dispose();
     });
 

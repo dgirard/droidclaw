@@ -502,6 +502,14 @@ class KnowledgeService {
     return updates.length;
   }
 
+  /// Deactivate cold entities last accessed before [olderThanEpoch] (the
+  /// scheduled KG purge). Thin delegate so callers (e.g. the background task
+  /// handler's `_runKgPurge`) never reach through [db] directly — mirrors how
+  /// [recalculateDecay] wraps a db op.
+  Future<int> purgeColdEntities(int olderThanEpoch) async {
+    return await db.purgeColdEntities(olderThanEpoch);
+  }
+
   /// Get entity count (active only).
   Future<int> entityCount() async {
     return await db.countEntities().getSingle();

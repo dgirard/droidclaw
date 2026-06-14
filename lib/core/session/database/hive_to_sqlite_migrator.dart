@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:drift/drift.dart';
 import 'package:hive/hive.dart';
@@ -242,9 +241,18 @@ class HiveToSqliteMigrator {
           'row count $count != Hive session count ${source.length}');
     }
 
+    // Spot-check sample spanning oldest + newest (DM-02): `keys` is in Hive
+    // insertion order, so a plain `take(n)` only ever checked the OLDEST
+    // sessions and would miss a mapping bug affecting only recent ones.
+    // Combine the first n/2 (oldest) and last n/2 (newest) into a Set so the
+    // newest sessions are always covered.
     final keys = source.keys.toList();
-    final sample =
-        keys.take(min(AppConstants.sessionsMigrationSpotCheckCount, keys.length));
+    final n = AppConstants.sessionsMigrationSpotCheckCount;
+    final half = n ~/ 2;
+    final sample = <String>{
+      ...keys.take(half == 0 ? n : half),
+      ...keys.reversed.take(n - half),
+    };
     for (final key in sample) {
       final row = await (db.select(db.sessions)
             ..where((t) => t.sessionKey.equals(key)))

@@ -170,9 +170,16 @@ class AgentLoop {
       }
     }
 
-    // Build system prompt (with optional KG context)
+    // Build system prompt (with optional KG context). When the KG is
+    // configured but its embedder isn't ready, retrieval silently degrades to
+    // lexical-only — surface that to the agent via a <kb_status> note so it
+    // doesn't answer as if it had full semantic recall. (No KG at all → no
+    // degradation note; nothing changes.)
+    final semanticSearchAvailable =
+        knowledgeService == null || knowledgeService!.hasEmbedder;
     final systemPrompt = await contextBuilder.buildSystemPrompt(
       knowledgeContext: kgContext,
+      semanticSearchAvailable: semanticSearchAvailable,
     );
 
     // Add user message to session
