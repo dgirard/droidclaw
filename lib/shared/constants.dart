@@ -418,9 +418,6 @@ class AppConstants {
   /// the documented efficient configuration (HF model card).
   static const int localEmbeddingDimensions = 256;
 
-  /// Native (pre-truncation) output dimensionality of EmbeddingGemma.
-  static const int localEmbeddingFullDimensions = 768;
-
   /// Max token ids fed to the encoder (EmbeddingGemma context length).
   static const int localEmbeddingMaxTokens = 2048;
 

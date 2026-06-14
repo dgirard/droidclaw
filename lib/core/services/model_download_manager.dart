@@ -294,10 +294,11 @@ class ModelDownloadManager {
             current.state == ModelState.verifying)) {
       return current;
     }
+    final ready = await isReady(spec);
     final status = ModelStatus(
       modelId: spec.id,
-      state: await isReady(spec) ? ModelState.ready : ModelState.absent,
-      progress: await isReady(spec) ? 1 : 0,
+      state: ready ? ModelState.ready : ModelState.absent,
+      progress: ready ? 1 : 0,
     );
     _emit(status);
     return status;

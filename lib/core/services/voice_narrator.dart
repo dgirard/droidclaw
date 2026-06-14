@@ -262,22 +262,25 @@ class VoiceNarrator {
   /// [linkWord], markdown punctuation (`*_#\``) is dropped, whitespace is
   /// collapsed, and the result is capped at
   /// [AppConstants.ttsNarrationMaxChars].
+  static final RegExp _fencedCodeRe = RegExp(r'```[\s\S]*?(```|$)');
+  static final RegExp _markdownLinkRe = RegExp(r'\[([^\]]*)\]\(([^)]*)\)');
+  static final RegExp _bareUrlRe = RegExp(r'(https?://|www\.)\S+');
+  static final RegExp _markdownPunctRe = RegExp(r'[*_`#]+');
+  static final RegExp _whitespaceRe = RegExp(r'\s+');
+
   static String cleanForSpeech(String text, {String linkWord = 'link'}) {
     var s = text;
     // Fenced code blocks: skipped (not read aloud).
-    s = s.replaceAll(RegExp(r'```[\s\S]*?(```|$)'), ' ');
+    s = s.replaceAll(_fencedCodeRe, ' ');
     // Markdown links [label](url) → label.
-    s = s.replaceAllMapped(
-      RegExp(r'\[([^\]]*)\]\(([^)]*)\)'),
-      (m) => m[1] ?? '',
-    );
+    s = s.replaceAllMapped(_markdownLinkRe, (m) => m[1] ?? '');
     // Bare URLs → localized "link" word.
-    s = s.replaceAll(RegExp(r'(https?://|www\.)\S+'), linkWord);
+    s = s.replaceAll(_bareUrlRe, linkWord);
     // Markdown punctuation: bold/italic/inline code/headings. Underscores in
     // snake_case identifiers become spaces — better for speech anyway.
-    s = s.replaceAll(RegExp(r'[*_`#]+'), ' ');
+    s = s.replaceAll(_markdownPunctRe, ' ');
     // Collapse whitespace.
-    s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+    s = s.replaceAll(_whitespaceRe, ' ').trim();
     if (s.length > AppConstants.ttsNarrationMaxChars) {
       s = s.substring(0, AppConstants.ttsNarrationMaxChars);
     }

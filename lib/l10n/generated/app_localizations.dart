@@ -3158,36 +3158,6 @@ abstract class AppLocalizations {
   /// **'Output dimensions are fixed at 256 (Matryoshka truncation).'**
   String get embeddingLocalDimensionsNote;
 
-  /// No description provided for @embeddingLocalAllowMetered.
-  ///
-  /// In en, this message translates to:
-  /// **'Allow mobile data'**
-  String get embeddingLocalAllowMetered;
-
-  /// No description provided for @embeddingLocalAllowMeteredSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Off = Wi-Fi only'**
-  String get embeddingLocalAllowMeteredSubtitle;
-
-  /// No description provided for @embeddingLocalDownload.
-  ///
-  /// In en, this message translates to:
-  /// **'Download model'**
-  String get embeddingLocalDownload;
-
-  /// No description provided for @embeddingLocalCancel.
-  ///
-  /// In en, this message translates to:
-  /// **'Cancel download'**
-  String get embeddingLocalCancel;
-
-  /// No description provided for @embeddingLocalRetry.
-  ///
-  /// In en, this message translates to:
-  /// **'Retry download'**
-  String get embeddingLocalRetry;
-
   /// No description provided for @embeddingLocalDelete.
   ///
   /// In en, this message translates to:
@@ -3200,35 +3170,65 @@ abstract class AppLocalizations {
   /// **'Delete the downloaded model (~330 MB)? Semantic search will stop working until it is downloaded again.'**
   String get embeddingLocalDeleteConfirm;
 
-  /// No description provided for @embeddingLocalStateAbsent.
+  /// No description provided for @modelDownloadAllowMetered.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow mobile data'**
+  String get modelDownloadAllowMetered;
+
+  /// No description provided for @modelDownloadAllowMeteredSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Off = Wi-Fi only'**
+  String get modelDownloadAllowMeteredSubtitle;
+
+  /// No description provided for @modelDownloadDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download model'**
+  String get modelDownloadDownload;
+
+  /// No description provided for @modelDownloadCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel download'**
+  String get modelDownloadCancel;
+
+  /// No description provided for @modelDownloadRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry download'**
+  String get modelDownloadRetry;
+
+  /// No description provided for @modelDownloadStateAbsent.
   ///
   /// In en, this message translates to:
   /// **'Model not downloaded'**
-  String get embeddingLocalStateAbsent;
+  String get modelDownloadStateAbsent;
 
-  /// No description provided for @embeddingLocalStateDownloading.
+  /// No description provided for @modelDownloadStateDownloading.
   ///
   /// In en, this message translates to:
   /// **'Downloading… {pct}%'**
-  String embeddingLocalStateDownloading(int pct);
+  String modelDownloadStateDownloading(int pct);
 
-  /// No description provided for @embeddingLocalStateVerifying.
+  /// No description provided for @modelDownloadStateVerifying.
   ///
   /// In en, this message translates to:
   /// **'Verifying checksums…'**
-  String get embeddingLocalStateVerifying;
+  String get modelDownloadStateVerifying;
 
-  /// No description provided for @embeddingLocalStateReady.
+  /// No description provided for @modelDownloadStateReady.
   ///
   /// In en, this message translates to:
   /// **'Model ready'**
-  String get embeddingLocalStateReady;
+  String get modelDownloadStateReady;
 
-  /// No description provided for @embeddingLocalStateFailed.
+  /// No description provided for @modelDownloadStateFailed.
   ///
   /// In en, this message translates to:
   /// **'Download failed: {error}'**
-  String embeddingLocalStateFailed(String error);
+  String modelDownloadStateFailed(String error);
 
   /// No description provided for @embeddingLocalBenchmark.
   ///

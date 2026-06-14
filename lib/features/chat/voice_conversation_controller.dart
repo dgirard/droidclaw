@@ -386,11 +386,14 @@ class VoiceConversationController {
     return phrases.any((p) => _normalize(p) == normalized);
   }
 
+  static final RegExp _punctRe = RegExp(r'[.,!?;:]+');
+  static final RegExp _whitespaceRe = RegExp(r'\s+');
+
   static String _normalize(String text) => text
       .toLowerCase()
       .replaceAll('’', "'") // curly apostrophe → straight
-      .replaceAll(RegExp(r'[.,!?;:]+'), ' ')
-      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAll(_punctRe, ' ')
+      .replaceAll(_whitespaceRe, ' ')
       .trim();
 
   void _setPhase(VoiceConversationPhase phase,

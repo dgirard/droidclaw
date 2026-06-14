@@ -1745,21 +1745,6 @@ class AppLocalizationsIt extends AppLocalizations {
       'Le dimensioni di output sono fisse a 256 (troncamento Matryoshka).';
 
   @override
-  String get embeddingLocalAllowMetered => 'Consenti dati mobili';
-
-  @override
-  String get embeddingLocalAllowMeteredSubtitle => 'Disattivato = solo Wi-Fi';
-
-  @override
-  String get embeddingLocalDownload => 'Scarica modello';
-
-  @override
-  String get embeddingLocalCancel => 'Annulla download';
-
-  @override
-  String get embeddingLocalRetry => 'Riprova download';
-
-  @override
   String get embeddingLocalDelete => 'Elimina modello';
 
   @override
@@ -1767,21 +1752,36 @@ class AppLocalizationsIt extends AppLocalizations {
       'Eliminare il modello scaricato (~330 MB)? La ricerca semantica smetterà di funzionare finché non verrà scaricato di nuovo.';
 
   @override
-  String get embeddingLocalStateAbsent => 'Modello non scaricato';
+  String get modelDownloadAllowMetered => 'Consenti dati mobili';
 
   @override
-  String embeddingLocalStateDownloading(int pct) {
+  String get modelDownloadAllowMeteredSubtitle => 'Disattivato = solo Wi-Fi';
+
+  @override
+  String get modelDownloadDownload => 'Scarica modello';
+
+  @override
+  String get modelDownloadCancel => 'Annulla download';
+
+  @override
+  String get modelDownloadRetry => 'Riprova download';
+
+  @override
+  String get modelDownloadStateAbsent => 'Modello non scaricato';
+
+  @override
+  String modelDownloadStateDownloading(int pct) {
     return 'Download… $pct%';
   }
 
   @override
-  String get embeddingLocalStateVerifying => 'Verifica dei checksum…';
+  String get modelDownloadStateVerifying => 'Verifica dei checksum…';
 
   @override
-  String get embeddingLocalStateReady => 'Modello pronto';
+  String get modelDownloadStateReady => 'Modello pronto';
 
   @override
-  String embeddingLocalStateFailed(String error) {
+  String modelDownloadStateFailed(String error) {
     return 'Download non riuscito: $error';
   }
 

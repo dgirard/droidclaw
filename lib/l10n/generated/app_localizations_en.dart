@@ -1721,21 +1721,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Output dimensions are fixed at 256 (Matryoshka truncation).';
 
   @override
-  String get embeddingLocalAllowMetered => 'Allow mobile data';
-
-  @override
-  String get embeddingLocalAllowMeteredSubtitle => 'Off = Wi-Fi only';
-
-  @override
-  String get embeddingLocalDownload => 'Download model';
-
-  @override
-  String get embeddingLocalCancel => 'Cancel download';
-
-  @override
-  String get embeddingLocalRetry => 'Retry download';
-
-  @override
   String get embeddingLocalDelete => 'Delete model';
 
   @override
@@ -1743,21 +1728,36 @@ class AppLocalizationsEn extends AppLocalizations {
       'Delete the downloaded model (~330 MB)? Semantic search will stop working until it is downloaded again.';
 
   @override
-  String get embeddingLocalStateAbsent => 'Model not downloaded';
+  String get modelDownloadAllowMetered => 'Allow mobile data';
 
   @override
-  String embeddingLocalStateDownloading(int pct) {
+  String get modelDownloadAllowMeteredSubtitle => 'Off = Wi-Fi only';
+
+  @override
+  String get modelDownloadDownload => 'Download model';
+
+  @override
+  String get modelDownloadCancel => 'Cancel download';
+
+  @override
+  String get modelDownloadRetry => 'Retry download';
+
+  @override
+  String get modelDownloadStateAbsent => 'Model not downloaded';
+
+  @override
+  String modelDownloadStateDownloading(int pct) {
     return 'Downloading… $pct%';
   }
 
   @override
-  String get embeddingLocalStateVerifying => 'Verifying checksums…';
+  String get modelDownloadStateVerifying => 'Verifying checksums…';
 
   @override
-  String get embeddingLocalStateReady => 'Model ready';
+  String get modelDownloadStateReady => 'Model ready';
 
   @override
-  String embeddingLocalStateFailed(String error) {
+  String modelDownloadStateFailed(String error) {
     return 'Download failed: $error';
   }
 

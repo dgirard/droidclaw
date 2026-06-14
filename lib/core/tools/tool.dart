@@ -81,8 +81,13 @@ class CacheableToolWrapper extends Tool {
   @override
   String get description => inner.description;
 
+  /// Merged schema (inner params + the injected `force_fresh` flag). Computed
+  /// once — `inner.parameters` is static per tool and `getDefinitions()` reads
+  /// this 3×/agent-iteration.
   @override
-  Map<String, dynamic> get parameters {
+  late final Map<String, dynamic> parameters = _buildParameters();
+
+  Map<String, dynamic> _buildParameters() {
     final params = Map<String, dynamic>.from(inner.parameters);
     final props = <String, dynamic>{
       ...?(params['properties'] as Map?)?.cast<String, dynamic>(),

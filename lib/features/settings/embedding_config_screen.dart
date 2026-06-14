@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,6 +11,7 @@ import '../../core/services/model_download_manager.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/app_providers.dart';
 import '../../shared/constants.dart';
+import 'widgets/model_download_section.dart';
 
 /// Screen for configuring the embedding provider.
 class EmbeddingConfigScreen extends ConsumerStatefulWidget {
@@ -36,11 +35,12 @@ class _EmbeddingConfigScreenState
   int _dimensions = 768;
   bool _useOwnApiKey = false;
 
-  // Local (on-device) model state
+  // Local (on-device) model state. The download status line / progress /
+  // metered switch / download-cancel buttons live in the shared
+  // [ModelDownloadSection]; this screen keeps only the manager (for the
+  // benchmark's model dir) and the benchmark/delete extras.
   ModelDownloadManager? _modelManager;
-  StreamSubscription<ModelStatus>? _statusSub;
   ModelStatus? _modelStatus;
-  bool _allowMetered = false;
   bool _benchmarkRunning = false;
   String? _benchmarkResult;
 
@@ -100,20 +100,11 @@ class _EmbeddingConfigScreenState
 
   Future<void> _initModelManager() async {
     final manager = await ref.read(modelDownloadManagerProvider.future);
-    if (!mounted) return;
-    _modelManager = manager;
-    _statusSub = manager.statusStream.listen((status) {
-      if (status.modelId == _modelSpec.id && mounted) {
-        setState(() => _modelStatus = status);
-      }
-    });
-    final status = await manager.refreshStatus(_modelSpec);
-    if (mounted) setState(() => _modelStatus = status);
+    if (mounted) setState(() => _modelManager = manager);
   }
 
   @override
   void dispose() {
-    _statusSub?.cancel();
     _modelController.dispose();
     _apiKeyController.dispose();
     super.dispose();
@@ -241,20 +232,6 @@ class _EmbeddingConfigScreenState
       );
       Navigator.pop(context);
     }
-  }
-
-  Future<void> _downloadModel() async {
-    final manager = _modelManager;
-    if (manager == null) return;
-    try {
-      await manager.download(_modelSpec, allowMetered: _allowMetered);
-    } on ModelDownloadException {
-      // Failure state is already reflected on the status stream.
-    }
-  }
-
-  Future<void> _cancelDownload() async {
-    await _modelManager?.cancel(_modelSpec);
   }
 
   Future<void> _deleteModel() async {
@@ -641,8 +618,6 @@ class _EmbeddingConfigScreenState
   }
 
   List<Widget> _buildLocalSection(AppLocalizations l) {
-    final status = _modelStatus;
-    final state = status?.state ?? ModelState.absent;
     final theme = Theme.of(context);
 
     return [
@@ -662,79 +637,15 @@ class _EmbeddingConfigScreenState
       ),
       const SizedBox(height: 12),
 
-      // Status line
-      Row(
-        children: [
-          Icon(
-            switch (state) {
-              ModelState.ready => Icons.check_circle,
-              ModelState.failed => Icons.error,
-              ModelState.downloading ||
-              ModelState.verifying =>
-                Icons.downloading,
-              ModelState.absent => Icons.cloud_download_outlined,
-            },
-            size: 20,
-            color: switch (state) {
-              ModelState.ready => Colors.green,
-              ModelState.failed => theme.colorScheme.error,
-              _ => theme.colorScheme.onSurfaceVariant,
-            },
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(switch (state) {
-              ModelState.absent => l.embeddingLocalStateAbsent,
-              ModelState.downloading => l.embeddingLocalStateDownloading(
-                  ((status?.progress ?? 0) * 100).round()),
-              ModelState.verifying => l.embeddingLocalStateVerifying,
-              ModelState.ready => l.embeddingLocalStateReady,
-              ModelState.failed =>
-                l.embeddingLocalStateFailed(status?.error ?? ''),
-            }),
-          ),
-        ],
-      ),
-
-      if (state == ModelState.downloading) ...[
-        const SizedBox(height: 8),
-        LinearProgressIndicator(value: status?.progress ?? 0),
-      ],
-
-      if (state == ModelState.absent || state == ModelState.failed) ...[
-        const SizedBox(height: 8),
-        SwitchListTile(
-          title: Text(l.embeddingLocalAllowMetered),
-          subtitle: Text(l.embeddingLocalAllowMeteredSubtitle),
-          value: _allowMetered,
-          onChanged: (v) => setState(() => _allowMetered = v),
-          contentPadding: EdgeInsets.zero,
-        ),
-      ],
-
-      const SizedBox(height: 12),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          if (state == ModelState.absent)
-            FilledButton.icon(
-              onPressed: _modelManager == null ? null : _downloadModel,
-              icon: const Icon(Icons.download),
-              label: Text(l.embeddingLocalDownload),
-            ),
-          if (state == ModelState.failed)
-            FilledButton.icon(
-              onPressed: _modelManager == null ? null : _downloadModel,
-              icon: const Icon(Icons.refresh),
-              label: Text(l.embeddingLocalRetry),
-            ),
-          if (state == ModelState.downloading)
-            OutlinedButton.icon(
-              onPressed: _cancelDownload,
-              icon: const Icon(Icons.close),
-              label: Text(l.embeddingLocalCancel),
-            ),
+      // Shared download UI (status line + progress + metered switch +
+      // download/retry/cancel). Benchmark + delete are embedding-only and
+      // injected into the same action row when the model is ready.
+      ModelDownloadSection(
+        spec: _modelSpec,
+        manager: _modelManager,
+        onStatusChanged: (status) =>
+            setState(() => _modelStatus = status),
+        extraButtonsBuilder: (context, state) => [
           if (state == ModelState.ready) ...[
             FilledButton.tonalIcon(
               onPressed: _benchmarkRunning ? null : _runBenchmark,

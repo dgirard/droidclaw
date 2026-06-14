@@ -79,15 +79,4 @@ class SessionMetadata {
         'preview': preview,
         'summaryPreview': summaryPreview,
       };
-
-  factory SessionMetadata.fromJson(Map<String, dynamic> json) =>
-      SessionMetadata(
-        key: json['key'] as String,
-        created: DateTime.parse(json['created'] as String),
-        updated: DateTime.parse(json['updated'] as String),
-        messageCount: json['messageCount'] as int,
-        conversationMessageCount: json['conversationMessageCount'] as int,
-        preview: json['preview'] as String?,
-        summaryPreview: json['summaryPreview'] as String?,
-      );
 }

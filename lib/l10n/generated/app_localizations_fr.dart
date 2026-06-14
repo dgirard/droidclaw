@@ -1747,22 +1747,6 @@ class AppLocalizationsFr extends AppLocalizations {
       'Les dimensions de sortie sont fixées à 256 (troncature Matryoshka).';
 
   @override
-  String get embeddingLocalAllowMetered => 'Autoriser les données mobiles';
-
-  @override
-  String get embeddingLocalAllowMeteredSubtitle =>
-      'Désactivé = Wi-Fi uniquement';
-
-  @override
-  String get embeddingLocalDownload => 'Télécharger le modèle';
-
-  @override
-  String get embeddingLocalCancel => 'Annuler le téléchargement';
-
-  @override
-  String get embeddingLocalRetry => 'Réessayer le téléchargement';
-
-  @override
   String get embeddingLocalDelete => 'Supprimer le modèle';
 
   @override
@@ -1770,22 +1754,38 @@ class AppLocalizationsFr extends AppLocalizations {
       'Supprimer le modèle téléchargé (~330 Mo) ? La recherche sémantique cessera de fonctionner jusqu\'à son nouveau téléchargement.';
 
   @override
-  String get embeddingLocalStateAbsent => 'Modèle non téléchargé';
+  String get modelDownloadAllowMetered => 'Autoriser les données mobiles';
 
   @override
-  String embeddingLocalStateDownloading(int pct) {
+  String get modelDownloadAllowMeteredSubtitle =>
+      'Désactivé = Wi-Fi uniquement';
+
+  @override
+  String get modelDownloadDownload => 'Télécharger le modèle';
+
+  @override
+  String get modelDownloadCancel => 'Annuler le téléchargement';
+
+  @override
+  String get modelDownloadRetry => 'Réessayer le téléchargement';
+
+  @override
+  String get modelDownloadStateAbsent => 'Modèle non téléchargé';
+
+  @override
+  String modelDownloadStateDownloading(int pct) {
     return 'Téléchargement… $pct%';
   }
 
   @override
-  String get embeddingLocalStateVerifying =>
+  String get modelDownloadStateVerifying =>
       'Vérification des sommes de contrôle…';
 
   @override
-  String get embeddingLocalStateReady => 'Modèle prêt';
+  String get modelDownloadStateReady => 'Modèle prêt';
 
   @override
-  String embeddingLocalStateFailed(String error) {
+  String modelDownloadStateFailed(String error) {
     return 'Échec du téléchargement : $error';
   }
 
