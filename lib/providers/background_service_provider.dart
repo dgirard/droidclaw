@@ -133,7 +133,17 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
     state = state.copyWith(isRunning: true);
   }
 
-  /// Stop the service if nothing needs it (no crons, no Telegram).
+  /// Stop the service if nothing needs it (no crons, no Telegram, no wake
+  /// word). The wake word is a first-class service consumer: toggling Telegram
+  /// or cron off must NOT kill an active wake word listener, and disabling the
+  /// wake word with no other consumer stops the service cleanly.
+  ///
+  /// Note: the wake word uses its OWN dedicated microphone foreground service
+  /// (separate from this flutter_foreground_task service — see
+  /// AndroidManifest WakeWordService). The accounting here keeps the shared
+  /// service alive while the wake word is enabled so the two services have a
+  /// consistent "is any background feature on" view; the dedicated mic service
+  /// is managed by the wake word controller itself.
   Future<void> stopServiceIfIdle() async {
     final configStorage = ref.read(configStorageProvider);
     final storage = ref.read(storageServiceProvider);
@@ -142,12 +152,27 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
     final hasActiveCrons = crons.any((c) => c.enabled);
     final telegramEnabled =
         storage.getBool(AppConstants.telegramBotEnabledKey) ?? false;
+    final wakeWordEnabled = ref.read(appConfigProvider).voice.wakeWordEnabled;
 
-    if (!hasActiveCrons && !telegramEnabled) {
+    if (!hasServiceConsumer(
+      hasActiveCrons: hasActiveCrons,
+      telegramEnabled: telegramEnabled,
+      wakeWordEnabled: wakeWordEnabled,
+    )) {
       await FlutterForegroundTask.stopService();
       state = state.copyWith(isRunning: false);
     }
   }
+
+  /// Whether ANY feature still needs the shared foreground service. Pure
+  /// predicate so the consumer accounting (incl. the wake word as a
+  /// first-class consumer) is unit-testable without platform channels.
+  static bool hasServiceConsumer({
+    required bool hasActiveCrons,
+    required bool telegramEnabled,
+    required bool wakeWordEnabled,
+  }) =>
+      hasActiveCrons || telegramEnabled || wakeWordEnabled;
 
   /// Refresh the SharedPreferences cache the service isolate reads at init.
   /// Secrets are only mirrored when the service isolate's capability probe
@@ -197,6 +222,18 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
         // bump counter so CronConfigScreen can react via ref.watch().
         _reloadAfterCronCompletion();
 
+      case 'backfill_complete':
+        // The service isolate finished the charger-gated embedding backfill
+        // and the KB coverage flipped to the new embedding space. The main
+        // isolate's long-lived KnowledgeService caches its own query-space
+        // selection and would keep serving the stale/lexical space until app
+        // restart — invalidate it (mirrors the cron-completion refresh) so
+        // chat picks up the new embedding space on the next query.
+        AppLogger.instance.info(LogSource.service,
+            'Service isolate reported embedding backfill complete — '
+            'refreshing main-isolate knowledge service');
+        _refreshKnowledgeServiceAfterBackfill();
+
       case 'service_error':
         // Service isolate could not initialize its AgentLoop (e.g. missing
         // cached config). Surface it so the UI does not show a healthy
@@ -209,13 +246,30 @@ class BackgroundServiceNotifier extends Notifier<BackgroundServiceState> {
     }
   }
 
+  /// Invalidate the long-lived main-isolate KnowledgeService so its cached
+  /// query-space selection is recomputed against the now-complete embedding
+  /// space written by the service isolate's backfill (A1). Invalidating the
+  /// provider (rather than calling a refresh hook) keeps the cross-isolate
+  /// signal handling entirely in this file.
+  void _refreshKnowledgeServiceAfterBackfill() {
+    try {
+      ref.invalidate(knowledgeServiceProvider);
+    } catch (e) {
+      AppLogger.instance.warning(LogSource.service,
+          'Failed to refresh knowledge service after backfill: $e');
+    }
+  }
+
   /// Reload SharedPreferences after the service isolate updated lastRun,
   /// then bump cronCompletionCount so the UI rebuilds.
   Future<void> _reloadAfterCronCompletion() async {
     try {
       final prefs = ref.read(sharedPreferencesProvider);
       await prefs.reload();
-      // Reload session manager to pick up cron sessions from service isolate
+      // Refresh the session metadata index so the cron session written by
+      // the service isolate appears in list screens. With sessions.db (WAL)
+      // the row itself is already readable by a plain get() — this only
+      // rebuilds the in-memory index (cheap, no close/reopen).
       final sm = await ref.read(sessionManagerProvider.future);
       await sm.reload();
       state = state.copyWith(

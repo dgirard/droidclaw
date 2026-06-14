@@ -1,10 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/agent/agent_loop.dart';
+import '../core/services/voice_narrator.dart';
 import '../features/chat/message_bubble.dart';
 import '../l10n/l10n.dart';
 import '../shared/constants.dart';
 import 'app_providers.dart';
+
+/// Provenance of a chat turn. Only [voice] turns get spoken responses;
+/// typed turns (and Telegram/cron, which never reach [ChatNotifier]) are
+/// always silent.
+enum ChatTurnModality { typed, voice }
 
 /// A UI message displayed in the chat.
 class ChatMessage {
@@ -117,7 +123,14 @@ class ChatNotifier extends Notifier<ChatState> {
   }
 
   /// Send a user message and process with the agent.
-  Future<void> sendMessage(String text) async {
+  ///
+  /// [modality] is the turn's provenance: [ChatTurnModality.voice] turns
+  /// narrate non-silent tool results and the final response via
+  /// [VoiceNarrator]; typed turns never speak.
+  Future<void> sendMessage(
+    String text, {
+    ChatTurnModality modality = ChatTurnModality.typed,
+  }) async {
     if (text.trim().isEmpty || state.isProcessing) return;
 
     final userMessage = ChatMessage.user(text);
@@ -126,10 +139,22 @@ class ChatNotifier extends Notifier<ChatState> {
       isProcessing: true,
     );
 
+    VoiceNarrator? narrator;
+    if (modality == ChatTurnModality.voice) {
+      final n = ref.read(voiceNarratorProvider);
+      await n.beginTurn(ref.read(appConfigProvider).resolvedLocale);
+      narrator = n;
+    }
+
+    // Speak-tool dedup: if the agent called the `speak` tool this turn, the
+    // response is (assumed) already spoken — don't narrate the ResponseEvent.
+    var speakToolUsed = false;
+
     final agentLoop = await ref.read(agentLoopProvider.future);
     if (agentLoop == null) {
       final config = ref.read(appConfigProvider);
       final l = tr(config.resolvedLocale);
+      narrator?.narrateError(l.noProviderConfigured);
       state = state.copyWith(
         messages: [
           ...state.messages,
@@ -152,6 +177,7 @@ class ChatNotifier extends Notifier<ChatState> {
             state = state.copyWith(currentEvent: event);
 
           case ToolCallEvent():
+            if (event.name == 'speak') speakToolUsed = true;
             state = state.copyWith(
               messages: [
                 ...state.messages,
@@ -161,6 +187,11 @@ class ChatNotifier extends Notifier<ChatState> {
             );
 
           case ToolResultEvent():
+            // The speak tool's own result ("Speaking...") is not narrated —
+            // it already produced the audio itself.
+            if (event.name != 'speak') {
+              narrator?.narrateToolResult(event.result);
+            }
             if (!event.result.silent) {
               state = state.copyWith(
                 messages: [
@@ -176,6 +207,7 @@ class ChatNotifier extends Notifier<ChatState> {
             }
 
           case ResponseEvent():
+            if (!speakToolUsed) narrator?.narrateResponse(event.content);
             state = state.copyWith(
               messages: [
                 ...state.messages,
@@ -186,6 +218,8 @@ class ChatNotifier extends Notifier<ChatState> {
             );
 
           case ErrorEvent():
+            // Errors are spoken briefly on voice turns (plan R1).
+            narrator?.narrateError(event.message);
             state = state.copyWith(
               messages: [
                 ...state.messages,
@@ -198,10 +232,12 @@ class ChatNotifier extends Notifier<ChatState> {
       }
     } catch (e) {
       final config = ref.read(appConfigProvider);
+      final message = tr(config.resolvedLocale).agentError(e.toString());
+      narrator?.narrateError(message);
       state = state.copyWith(
         messages: [
           ...state.messages,
-          ChatMessage.error(tr(config.resolvedLocale).agentError(e.toString())),
+          ChatMessage.error(message),
         ],
         isProcessing: false,
         clearEvent: true,

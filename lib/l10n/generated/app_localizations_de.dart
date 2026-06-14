@@ -1106,7 +1106,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get agentKeyBehaviors =>
-      'Key behaviors:\n- BEFORE calling any tool, check the <knowledge_context> and memory above. If they already contain the answer (address, preference, contact, etc.), respond directly — do NOT call tools for information you already have.\n- Use knowledge data as tool input when chaining: if you know the user\'s home address from the knowledge context, pass it to geocode instead of calling get_location.\n- get_location returns the device CURRENT physical position only. Use it for \"where am I now\", \"nearest X\", \"from my current position\" — never for stored addresses or known places.\n- When you need information NOT in the knowledge context, call the appropriate tool(s) immediately without asking permission.\n- Chain tools when needed: if a tool requires coordinates but you have an address (from knowledge or the user), call geocode first.\n- When the user tells you personal information to remember (e.g. \"I live at...\", \"my dentist is...\"), just acknowledge and store it via knowledge_store. Do NOT call other tools or suggest actions in response.\n- Be concise and helpful. Use markdown formatting.';
+      'Key behaviors:\n- BEFORE calling any tool, check the <knowledge_context> and memory above. If they already contain the answer (address, preference, contact, etc.), respond directly — do NOT call tools for information you already have.\n- Use knowledge data as tool input when chaining: if you know the user\'s home address from the knowledge context, pass it to geocode instead of calling get_location.\n- get_location returns the device CURRENT physical position only. Use it for \"where am I now\", \"nearest X\", \"from my current position\" — never for stored addresses or known places.\n- When you need information NOT in the knowledge context, call the appropriate tool(s) immediately without asking permission.\n- Chain tools when needed: if a tool requires coordinates but you have an address (from knowledge or the user), call geocode first.\n- When the user tells you personal information to remember (e.g. \"I live at...\", \"my dentist is...\"), just acknowledge and store it via knowledge_store. Do NOT call other tools or suggest actions in response.\n- Several tools cache recent results for efficiency (weather, transit, etc.). When the user explicitly wants current/live data, pass force_fresh: true to bypass the cache and fetch fresh data.\n- Be concise and helpful. Use markdown formatting.';
 
   @override
   String get agentRespondInstructions =>
@@ -1265,6 +1265,44 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get chatSpeechUnavailable =>
       'Spracherkennung auf diesem Gerät nicht verfügbar';
+
+  @override
+  String get voiceSpeaking => 'Sprachausgabe...';
+
+  @override
+  String get voiceStopSpeaking => 'Vorlesen stoppen';
+
+  @override
+  String get voiceLinkWord => 'Link';
+
+  @override
+  String voiceLanguageUnavailable(String language) {
+    return 'Keine Stimme für \"$language\" verfügbar — Standardstimme wird verwendet';
+  }
+
+  @override
+  String get voiceTtsUnavailable =>
+      'Sprachausgabe ist auf diesem Gerät nicht verfügbar';
+
+  @override
+  String get voiceConvListening => 'Ich höre zu… sprich jetzt';
+
+  @override
+  String get voiceConvProcessing => 'Denke nach…';
+
+  @override
+  String get voiceConvSpeaking => 'Spreche… zum Unterbrechen tippen';
+
+  @override
+  String get voiceConvExit => 'Sprachgespräch beenden';
+
+  @override
+  String get voiceClarificationPrompt =>
+      'Das habe ich nicht verstanden, kannst du es wiederholen?';
+
+  @override
+  String get voiceConvNotUnderstood =>
+      'Ich habe dich immer noch nicht verstanden — Sprachgespräch beendet';
 
   @override
   String get agentSummarizeInstructions => 'Write the summary in German.';
@@ -1690,4 +1728,184 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get embeddingSaved => 'Embedding-Anbieter gespeichert';
+
+  @override
+  String get embeddingProviderLocal => 'Lokal (auf dem Gerät)';
+
+  @override
+  String get embeddingLocalSection => 'Modell auf dem Gerät';
+
+  @override
+  String get embeddingLocalConsent =>
+      'EmbeddingGemma 300M wird von Hugging Face heruntergeladen (~330 MB). Der Download nutzt nur WLAN, sofern du mobile Daten nicht erlaubst. Nach dem Download funktioniert die semantische Suche vollständig offline und ohne API-Schlüssel.';
+
+  @override
+  String get embeddingLocalDimensionsNote =>
+      'Die Ausgabedimensionen sind auf 256 festgelegt (Matryoshka-Kürzung).';
+
+  @override
+  String get embeddingLocalDelete => 'Modell löschen';
+
+  @override
+  String get embeddingLocalDeleteConfirm =>
+      'Heruntergeladenes Modell löschen (~330 MB)? Die semantische Suche funktioniert erst nach erneutem Download wieder.';
+
+  @override
+  String get modelDownloadAllowMetered => 'Mobile Daten erlauben';
+
+  @override
+  String get modelDownloadAllowMeteredSubtitle => 'Aus = nur WLAN';
+
+  @override
+  String get modelDownloadDownload => 'Modell herunterladen';
+
+  @override
+  String get modelDownloadCancel => 'Download abbrechen';
+
+  @override
+  String get modelDownloadRetry => 'Download wiederholen';
+
+  @override
+  String get modelDownloadStateAbsent => 'Modell nicht heruntergeladen';
+
+  @override
+  String modelDownloadStateDownloading(int pct) {
+    return 'Wird heruntergeladen… $pct%';
+  }
+
+  @override
+  String get modelDownloadStateVerifying => 'Prüfsummen werden verifiziert…';
+
+  @override
+  String get modelDownloadStateReady => 'Modell bereit';
+
+  @override
+  String get modelDownloadStateUnverified =>
+      'Heruntergeladen, aber nicht verifiziert — protokollierte Prüfsummen anheften, um zu aktivieren';
+
+  @override
+  String get agentKbStatusSemanticUnavailable =>
+      '<kb_status>semantic search unavailable (embedding model not ready); knowledge retrieval is keyword-only</kb_status>';
+
+  @override
+  String modelDownloadStateFailed(String error) {
+    return 'Download fehlgeschlagen: $error';
+  }
+
+  @override
+  String get embeddingLocalBenchmark => 'Latenz-Benchmark ausführen';
+
+  @override
+  String embeddingLocalBenchmarkResult(int ms, int runs, String verdict) {
+    return 'Median $ms ms über $runs Durchläufe — $verdict';
+  }
+
+  @override
+  String get embeddingLocalVerdictFast => 'schnell (als Standard geeignet)';
+
+  @override
+  String get embeddingLocalVerdictAcceptable => 'akzeptabel (Opt-in)';
+
+  @override
+  String get embeddingLocalVerdictSlow => 'langsam (nur Offline-Fallback)';
+
+  @override
+  String get embeddingBackfillSection =>
+      'Neuberechnung der Wissensbasis-Embeddings';
+
+  @override
+  String get embeddingBackfillHint =>
+      'Berechnet gespeichertes Wissen im Embedding-Raum des gespeicherten Anbieters neu. Bis zum Abschluss nutzt die semantische Suche weiter den vorherigen Raum. Läuft auch automatisch beim Laden, wenn der lokale Anbieter ausgewählt ist.';
+
+  @override
+  String embeddingBackfillStatus(int done, int total) {
+    return '$done / $total Entitäten im aktiven Raum';
+  }
+
+  @override
+  String get embeddingBackfillComplete =>
+      'Alle Entitäten sind im aktiven Embedding-Raum';
+
+  @override
+  String get embeddingBackfillStart => 'Jetzt neu berechnen';
+
+  @override
+  String get embeddingBackfillCancel => 'Stoppen';
+
+  @override
+  String get settingsVoice => 'Sprache & Aktivierungswort';
+
+  @override
+  String get settingsVoiceSubtitle => '„Hey Claw“ freihändig (experimentell)';
+
+  @override
+  String get voiceTitle => 'Sprache & Aktivierungswort';
+
+  @override
+  String get voiceSave => 'Speichern';
+
+  @override
+  String get voiceSaved => 'Spracheinstellungen gespeichert';
+
+  @override
+  String get voiceWakeWordDescription =>
+      'Wenn aktiviert, hört der Assistent auf ein gesprochenes Schlüsselwort, wacht freihändig auf und wechselt dann in den Sprachdialogmodus. Experimentelle Funktion, standardmäßig deaktiviert.';
+
+  @override
+  String get voiceWakeWordEnable => 'Aktivierungswort aktivieren';
+
+  @override
+  String get voiceWakeWordEnableSubtitle =>
+      'Standardmäßig aus. Das Aktivieren startet einen dedizierten Mikrofondienst.';
+
+  @override
+  String get voiceWakeWordKeyword => 'Aktivierungswort';
+
+  @override
+  String get voiceWakeWordKeywordHint => 'z. B. Hey Claw';
+
+  @override
+  String get voiceWakeWordKeywordHelp =>
+      'Beliebige kurze gesprochene Phrase. Kurze, unverwechselbare Phrasen lösen weniger Fehlauslösungen aus.';
+
+  @override
+  String get voiceWakeWordMicIndicator =>
+      'Solange das Aktivierungswort aktiv ist, zeigt Android einen dauerhaften grünen Mikrofonpunkt in der Statusleiste — Ihr Telefon hört auf dem Gerät nur auf das Schlüsselwort. Nichts wird aufgezeichnet oder gesendet. Es gibt keinen „Stopp“-Button in der Benachrichtigung; der einzige Schalter ist dieser Schieberegler.';
+
+  @override
+  String get voiceWakeWordRebootLimitation =>
+      'Nach einem Neustart bleibt das Aktivierungswort inaktiv, bis Sie die App einmal öffnen. Android erlaubt keinem Mikrofondienst, im Hintergrund zu starten; er kann nur aus dem Vordergrund (neu) gestartet werden.';
+
+  @override
+  String get voiceWakeWordRebootStatus =>
+      'Aktivierungswort inaktiv, bis die App geöffnet wird';
+
+  @override
+  String get voiceWakeWordUnavailable =>
+      'Das Aktivierungswort ist in diesem Build nicht verfügbar.';
+
+  @override
+  String get voiceWakeWordModelSection => 'Aktivierungswort-Modell';
+
+  @override
+  String get voiceWakeWordModelConsent =>
+      'Ein kleines On-Device-Schlüsselwortmodell (~25 MB) wird aus den sherpa-onnx-Releases heruntergeladen. Nur WLAN, sofern Sie keine mobilen Daten erlauben. Die Erkennung läuft vollständig offline.';
+
+  @override
+  String get voiceWakeWordSpikeNote =>
+      'Die On-Device-Tauglichkeit (Akku, Fehlauslösungen, Verhalten des Mikrofondienstes) wird vor der Aktivierung durch einen On-Device-Spike geprüft. Siehe die Spike-Anleitung, um das Urteil zu lesen.';
+
+  @override
+  String get voiceWakeWordRunGuidance => 'Spike-Anleitung';
+
+  @override
+  String voiceWakeWordStatusListening(String keyword) {
+    return 'Höre auf „$keyword“';
+  }
+
+  @override
+  String get voiceWakeWordStatusSuspended => 'Pausiert (Audio in Verwendung)';
+
+  @override
+  String get voiceWakeWordStatusStopped => 'Gestoppt';
 }

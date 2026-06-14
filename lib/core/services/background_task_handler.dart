@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:meta/meta.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../l10n/l10n.dart';
@@ -12,11 +14,14 @@ import '../config/cron_config.dart';
 import '../config/log_entry.dart';
 import '../../shared/constants.dart';
 import '../../features/telegram/telegram_api.dart';
+import '../knowledge/services/embedding_backfill_service.dart';
+import '../providers/embedding_provider_factory.dart';
+import '../session/database/sessions_db_path.dart';
 import '../session/isolate_persistence/durable_trigger_queue.dart';
-import '../session/isolate_persistence/hive_path_resolver.dart';
 import '../session/session_manager.dart';
 import 'app_logger.dart';
 import 'llm_trace_logger.dart';
+import 'model_download_manager.dart';
 import 'service_secret_reader.dart';
 
 /// Top-level callback for the foreground service isolate.
@@ -68,6 +73,20 @@ class BackgroundTaskHandler extends TaskHandler {
   int _kgPurgeCounter = 0;
   static const _kgPurgeIntervalSeconds = 86400; // daily
 
+  // Versioned re-embed backfill toward the local embedding space (U3):
+  // charger-gated slice, checked every 30 min on the same counter idiom.
+  int _kgBackfillCounter = 0;
+  bool _kgBackfillRunning = false;
+  EmbeddingBackfillService? _backfillService;
+
+  /// Embedding dimensions [_backfillService] was created with (C2/A4/R3).
+  /// If the user changes embedding dims in settings mid-run, the cached
+  /// service (and its LocalEmbeddingProvider) would keep writing vectors at
+  /// the OLD dim, producing mixed-space provenance the query guard rejects.
+  /// We compare this against the current cached dims each slice and rebuild
+  /// the service when they differ. Null until the service is first created.
+  int? _backfillServiceDims;
+
   static const _maxBackoff = Duration(seconds: 60);
   static const _baseBackoff = Duration(seconds: 2);
   static const _disconnectedThreshold = 10;
@@ -80,7 +99,7 @@ class BackgroundTaskHandler extends TaskHandler {
     // result below is visible in the persistent log)
     final workspacePath = prefs.getString(AppConstants.cachedWorkspacePathKey);
     if (workspacePath != null) {
-      final appDir = HivePathResolver.hiveDirFromWorkspace(workspacePath);
+      final appDir = SessionsDbPath.dirFromWorkspace(workspacePath);
       AppLogger.init(dirPath: appDir, isolateName: 'service');
       await AppLogger.instance.purge();
 
@@ -174,6 +193,14 @@ class BackgroundTaskHandler extends TaskHandler {
       if (_kgPurgeCounter >= _kgPurgeIntervalSeconds) {
         _kgPurgeCounter = 0;
         _runKgPurge();
+      }
+
+      // Re-embed backfill slice (charger-gated) every 30 minutes
+      _kgBackfillCounter++;
+      if (_kgBackfillCounter >=
+          AppConstants.knowledgeBackfillCheckIntervalSeconds) {
+        _kgBackfillCounter = 0;
+        _maybeRunBackfillSlice();
       }
     }
 
@@ -366,16 +393,156 @@ class BackgroundTaskHandler extends TaskHandler {
     }
   }
 
+  /// Pure decision for the scheduled backfill slice (unit-testable with
+  /// injected inputs): run ONLY when the device is charging, the user has
+  /// configured the local embedding provider, its model files are on disk,
+  /// and the target space does not yet cover the whole KB.
+  @visibleForTesting
+  static bool shouldRunBackfillSlice({
+    required bool charging,
+    required bool localProviderConfigured,
+    required bool localModelReady,
+    required bool backfillIncomplete,
+  }) =>
+      charging &&
+      localProviderConfigured &&
+      localModelReady &&
+      backfillIncomplete;
+
+  /// Whether a cached backfill service built for [serviceDims] is stale
+  /// relative to the [currentDims] now configured (C2/A4/R3). A null
+  /// [serviceDims] means no service is cached yet (nothing to rebuild). When
+  /// this returns true the caller must drop the cached service so it (and its
+  /// dimension-bound LocalEmbeddingProvider) is re-created at the new dims —
+  /// otherwise it would keep writing OLD-dim vectors, producing the
+  /// mixed-space provenance the query guard rejects.
+  @visibleForTesting
+  static bool backfillServiceDimsStale({
+    required int? serviceDims,
+    required int currentDims,
+  }) =>
+      serviceDims != null && serviceDims != currentDims;
+
+  /// Check the charger+idle gate and run one backfill slice if it passes.
+  ///
+  /// The scheduled job specifically targets the LOCAL embedding space (the
+  /// cloud→local cutover): it never runs unless the local provider is the
+  /// configured one, so it cannot drain a healthy cloud space. Manual
+  /// backfills for any provider are available in the embedding settings
+  /// screen. Best-effort: every failure is logged and retried at the next
+  /// 30-min tick.
+  Future<void> _maybeRunBackfillSlice() async {
+    if (_kgBackfillRunning) return;
+    final knowledgeService = _agentLoop?.knowledgeService;
+    if (knowledgeService == null) return;
+    _kgBackfillRunning = true;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // SharedPreferences is mirror-written by the main isolate; reload so a
+      // dimension change made in settings mid-run is visible here (C2/A4/R3).
+      await prefs.reload();
+      final workspacePath =
+          prefs.getString(AppConstants.cachedWorkspacePathKey);
+      final localProviderConfigured =
+          prefs.getString(AppConstants.cachedEmbeddingProviderKey) ==
+              AppConstants.localEmbeddingProviderName;
+
+      var localModelReady = false;
+      const spec = ModelSpec.embeddingGemmaInt8;
+      String? modelsRoot;
+      if (localProviderConfigured && workspacePath != null) {
+        modelsRoot = ModelDownloadManager.rootFromWorkspace(workspacePath);
+        localModelReady = ModelDownloadManager.isReadySync(
+            modelsRootDir: modelsRoot, spec: spec);
+      }
+
+      var charging = false;
+      try {
+        final state = await Battery().batteryState;
+        charging =
+            state == BatteryState.charging || state == BatteryState.full;
+      } catch (e) {
+        // No battery signal (probe failure) → treat as not charging.
+        AppLogger.instance.debug(LogSource.service,
+            'Battery state unavailable, skipping backfill slice: $e');
+      }
+
+      if (!localProviderConfigured || !localModelReady || !charging) return;
+
+      final currentDims =
+          prefs.getInt(AppConstants.cachedEmbeddingDimensionsKey) ??
+              AppConstants.localEmbeddingDimensions;
+
+      // C2/A4/R3: if the configured dims changed since the cached service was
+      // built, drop it so it (and its dimension-bound provider) is re-created
+      // at the new dims — never keep writing OLD-dim vectors mid-run.
+      if (backfillServiceDimsStale(
+          serviceDims: _backfillServiceDims, currentDims: currentDims)) {
+        AppLogger.instance.info(LogSource.service,
+            'Embedding dimensions changed '
+            '($_backfillServiceDims → $currentDims) — rebuilding backfill '
+            'service to avoid mixed-space provenance');
+        _backfillService = null;
+      }
+
+      final service = _backfillService ??= EmbeddingBackfillService(
+        db: knowledgeService.db,
+        provider: EmbeddingProviderFactory.create(
+          providerName: AppConstants.localEmbeddingProviderName,
+          dimensions: currentDims,
+          localModelDir: p.join(modelsRoot!, spec.id),
+        ),
+        embeddingModel: prefs.getString(AppConstants.cachedEmbeddingModelKey) ??
+            AppConstants.localEmbeddingModelId,
+      );
+      _backfillServiceDims = currentDims;
+
+      // charging / localProviderConfigured / localModelReady were all verified
+      // by the early-return above; only the backfill-incomplete precondition
+      // remains to check here. (shouldRunBackfillSlice is kept as the tested
+      // helper encoding the full predicate.)
+      final before = await service.progress();
+      if (before.isComplete) return;
+
+      final after = await service.runSlice();
+      if (after.isComplete) {
+        // The long-lived KnowledgeService caches its query-space selection;
+        // coverage just flipped, so re-resolve (and log) the new space.
+        await knowledgeService.resolveQuerySpace(refresh: true);
+        // A1: the MAIN isolate's long-lived KnowledgeService caches its own
+        // query-space selection and would keep serving the stale/lexical
+        // space until app restart. Mirror the cron-completion cross-isolate
+        // signal so the main isolate can refresh its query space (invalidate
+        // knowledgeServiceProvider) and chat picks up the new embedding space.
+        FlutterForegroundTask.sendDataToMain({
+          'type': 'backfill_complete',
+        });
+      }
+    } catch (e) {
+      AppLogger.instance.warning(LogSource.service,
+          'KG embedding backfill slice failed (will retry): $e');
+    } finally {
+      _kgBackfillRunning = false;
+    }
+  }
+
   Future<void> _runKgPurge() async {
     try {
       final cutoff = DateTime.now()
               .subtract(Duration(days: AppConstants.knowledgeDecayHalfLifeDays))
               .millisecondsSinceEpoch ~/
           1000;
-      final purged = await _agentLoop!.knowledgeService!.db.purgeColdEntities(cutoff);
+      final purged = await _agentLoop!.knowledgeService!.purgeColdEntities(cutoff);
       if (purged > 0) {
         AppLogger.instance.info(LogSource.service,
             'KG purge: $purged cold entities deactivated');
+      }
+      // Episodic memory eviction (U4): TTL is the eviction boundary.
+      final evicted = await _agentLoop!.episodeStore?.purgeExpired() ?? 0;
+      if (evicted > 0) {
+        AppLogger.instance.info(LogSource.service,
+            'KG purge: $evicted expired episodes evicted');
       }
     } catch (e) {
       AppLogger.instance.warning(LogSource.service,
@@ -526,16 +693,18 @@ class BackgroundTaskHandler extends TaskHandler {
   }
 
   /// Persist-then-notify invariant for the cron-session cross-isolate
-  /// handoff. The session save (an awaited write + fsync) MUST complete
-  /// before the main isolate is notified: if the notification raced ahead of
-  /// the disk flush, the main isolate would re-read the box *before* the
-  /// bytes land and the cron session would be invisible until the next
-  /// reload — a field incident class that is otherwise unreproducible
-  /// locally (see docs/solutions/database-issues/
-  /// session-data-loss-hive-flush-and-destructive-reads.md). If the save
-  /// throws, [notify] is never invoked — the main isolate must never be told
-  /// to reload state that was never written. The same invariant applies to
-  /// the pending-trigger handoff in [_checkCrons].
+  /// handoff. The session save (an awaited, committed write) MUST complete
+  /// before the main isolate is notified: if the notification raced ahead
+  /// of the commit, the main isolate would refresh its index *before* the
+  /// row lands and the cron session would be invisible until the next
+  /// refresh — a field incident class from the Hive era that is otherwise
+  /// unreproducible locally (see docs/solutions/database-issues/
+  /// session-data-loss-hive-flush-and-destructive-reads.md; sessions.db/WAL
+  /// makes a committed row immediately visible cross-isolate, but the
+  /// ordering invariant stays load-bearing). If the save throws, [notify]
+  /// is never invoked — the main isolate must never be told to refresh
+  /// state that was never written. The same invariant applies to the
+  /// pending-trigger handoff in [_checkCrons].
   ///
   /// Static and injectable so the invariant is unit-testable without a
   /// FlutterForegroundTask harness ([notify] is

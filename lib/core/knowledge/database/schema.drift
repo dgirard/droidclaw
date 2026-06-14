@@ -8,6 +8,11 @@ CREATE TABLE entities (
   summary       TEXT,
   properties    TEXT    NOT NULL DEFAULT '{}',
   embedding     BLOB,
+  -- Embedding provenance (v4): the space a vector belongs to. NULL iff
+  -- embedding is NULL. Vectors from different (model, dim) spaces must
+  -- never be compared (see KnowledgeService.resolveQuerySpace).
+  embedding_model TEXT,
+  embedding_dim   INTEGER,
   -- Bi-temporal
   created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now')),
   valid_at      INTEGER,
@@ -40,6 +45,9 @@ CREATE TABLE relations (
   weight        REAL    NOT NULL DEFAULT 1.0,
   properties    TEXT    NOT NULL DEFAULT '{}',
   embedding     BLOB,
+  -- Embedding provenance (v4) — see entities.embedding_model.
+  embedding_model TEXT,
+  embedding_dim   INTEGER,
   -- Bi-temporal
   created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now')),
   valid_at      INTEGER,
@@ -104,6 +112,9 @@ CREATE TABLE summary_nodes (
   level         INTEGER NOT NULL DEFAULT 0,
   summary_text  TEXT    NOT NULL,
   embedding     BLOB,
+  -- Embedding provenance (v4) — see entities.embedding_model.
+  embedding_model TEXT,
+  embedding_dim   INTEGER,
   member_ids    TEXT    NOT NULL DEFAULT '[]',
   cluster_label INTEGER,
   created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now')),
@@ -112,6 +123,30 @@ CREATE TABLE summary_nodes (
 
 CREATE INDEX idx_summary_parent ON summary_nodes(parent_id);
 CREATE INDEX idx_summary_level ON summary_nodes(level);
+
+-- ══════════════════════════════════════════════
+-- EPISODES (v5 — episodic tool-result cache, U4)
+-- One row per (tool, canonical-args digest, location cell). result_redacted
+-- passes TraceRedactor at write time; expires_at = created_at + per-tool TTL
+-- (AppConstants.episodeTtlSeconds). The UNIQUE key powers upsert dedup:
+-- re-recording refreshes timestamp + payload. context_key is '' for
+-- non-geo-keyed tools (a real NULL would defeat the UNIQUE constraint —
+-- SQLite treats NULLs as distinct).
+-- ══════════════════════════════════════════════
+CREATE TABLE episodes (
+  id              INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  tool            TEXT    NOT NULL,
+  args_digest     TEXT    NOT NULL,
+  context_key     TEXT,
+  result_redacted TEXT    NOT NULL,
+  is_error        INTEGER NOT NULL DEFAULT 0,
+  session_key     TEXT,
+  created_at      INTEGER NOT NULL,
+  expires_at      INTEGER NOT NULL,
+  UNIQUE(tool, args_digest, context_key)
+);
+
+CREATE INDEX idx_episodes_expires ON episodes(expires_at);
 
 -- ══════════════════════════════════════════════
 -- FTS5 — Full-text search

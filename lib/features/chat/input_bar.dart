@@ -6,6 +6,16 @@ import '../../l10n/l10n.dart';
 class InputBar extends StatefulWidget {
   final void Function(String text) onSend;
   final VoidCallback? onMicToggle;
+
+  /// Long-press on the mic button — enters hands-free voice conversation
+  /// mode (U5). Tap keeps the existing single-shot dictation behavior.
+  final VoidCallback? onMicLongPress;
+
+  /// Fired on every user/IME edit of the text field — NOT on programmatic
+  /// [InputBarState.setText] (speech-to-text fills). Used by the chat screen
+  /// to stop narration and demote a pending voice turn to typed.
+  final VoidCallback? onUserTyped;
+
   final bool enabled;
   final bool isListening;
 
@@ -13,6 +23,8 @@ class InputBar extends StatefulWidget {
     super.key,
     required this.onSend,
     this.onMicToggle,
+    this.onMicLongPress,
+    this.onUserTyped,
     this.enabled = true,
     this.isListening = false,
   });
@@ -94,7 +106,10 @@ class InputBarState extends State<InputBar> {
               maxLines: 5,
               minLines: 1,
               textInputAction: TextInputAction.newline,
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) {
+                widget.onUserTyped?.call();
+                setState(() {});
+              },
               decoration: InputDecoration(
                 hintText: l.chatInputHint,
                 border: OutlineInputBorder(
@@ -138,17 +153,22 @@ class InputBarState extends State<InputBar> {
       );
     }
 
-    // Mic button — green when idle, red when listening
-    return IconButton.filled(
-      icon: Icon(widget.isListening ? Icons.mic : Icons.mic_none),
-      style: IconButton.styleFrom(
-        backgroundColor: widget.isListening
-            ? theme.colorScheme.error
-            : Colors.green,
-        foregroundColor: Colors.white,
+    // Mic button — green when idle, red when listening.
+    // Tap: single-shot dictation. Long-press: voice conversation mode.
+    return GestureDetector(
+      onLongPress:
+          widget.enabled ? widget.onMicLongPress : null,
+      child: IconButton.filled(
+        icon: Icon(widget.isListening ? Icons.mic : Icons.mic_none),
+        style: IconButton.styleFrom(
+          backgroundColor: widget.isListening
+              ? theme.colorScheme.error
+              : Colors.green,
+          foregroundColor: Colors.white,
+        ),
+        onPressed: widget.enabled ? widget.onMicToggle : null,
+        tooltip: widget.isListening ? l.chatListening : l.chatVoiceInput,
       ),
-      onPressed: widget.enabled ? widget.onMicToggle : null,
-      tooltip: widget.isListening ? l.chatListening : l.chatVoiceInput,
     );
   }
 }

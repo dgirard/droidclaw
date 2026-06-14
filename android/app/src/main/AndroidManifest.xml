@@ -18,6 +18,12 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <!-- U7 wake word: a SECOND, dedicated foreground service of type
+         microphone hosts the always-listening KWS capture. It is started
+         ONLY from the app foreground (Android 14+ forbids background start of
+         a microphone-type FGS) and is therefore dead after reboot until the
+         app is opened once — documented & surfaced in Settings → Voice. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
     <application
         android:label="ARaccoon"
         android:name="${applicationName}"
@@ -73,6 +79,36 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+        <!-- U7 wake word: dedicated microphone foreground service.
+
+             WHY A SEPARATE NATIVE SERVICE (not the flutter_foreground_task
+             service): flutter_foreground_task owns com.pravera...ForegroundService
+             and that service boot-starts (autoRunOnBoot for cron/Telegram).
+             A microphone-type FGS CANNOT be background-started on Android 14+,
+             so adding "microphone" to the existing service's serviceTypes
+             would make its boot-start crash. The plan's decision (KTD) is a
+             SEPARATE service started from the foreground only — implemented as
+             this dedicated Kotlin foreground service, mirroring the
+             RadioPlaybackService pattern. It is NOT exported (unlike the
+             media service, the system never binds to it) and carries no
+             notification "stop" action (documented UI learning: the only off
+             switch is the Settings → Voice toggle).
+
+             SPIKE-GATED: the native service body and the Dart<->native PCM
+             bridge ship once spike S2 confirms on-device viability (mic FGS
+             survives backgrounding + battery within
+             wakeWordMaxBatteryPctPerDay). Until then this declaration reserves
+             the manifest entry and the Dart arbitration layer
+             (lib/core/services/wake_word_service.dart) runs against seams. The
+             service class is commented out so the build does not require a
+             not-yet-written Kotlin class.
+        -->
+        <!--
+        <service
+            android:name=".WakeWordService"
+            android:foregroundServiceType="microphone"
+            android:exported="false" />
+        -->
         <!-- flutter_local_notifications receivers -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"

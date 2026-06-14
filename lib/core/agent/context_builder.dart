@@ -35,7 +35,17 @@ class ContextBuilder {
   ///
   /// [knowledgeContext] is an optional XML block from the Knowledge Graph,
   /// injected when KG is enabled and relevant entities are found.
-  Future<String> buildSystemPrompt({String? knowledgeContext}) async {
+  ///
+  /// [semanticSearchAvailable] mirrors `KnowledgeService.hasEmbedder`: when
+  /// false, the embedding model is not ready, so KG retrieval silently
+  /// degrades to lexical (keyword) matching only. A `<kb_status>` note is then
+  /// injected (just before the LANGUAGE REQUIREMENT block) so the agent does
+  /// NOT answer as if it had full semantic recall. Defaults to true so callers
+  /// that don't thread it through are unaffected.
+  Future<String> buildSystemPrompt({
+    String? knowledgeContext,
+    bool semanticSearchAvailable = true,
+  }) async {
     final buffer = StringBuffer();
 
     // 1. Identity section
@@ -93,7 +103,16 @@ class ContextBuilder {
       buffer.writeln();
     }
 
-    // 8. Language instruction — positioned last for maximum LLM influence
+    // 8. KB degradation status — placed BEFORE the language requirement so the
+    // three-layer locale contract stays last. When the embedding model is not
+    // ready, retrieval is keyword-only; tell the agent so it doesn't claim
+    // full semantic recall.
+    if (!semanticSearchAvailable) {
+      buffer.writeln(tr(locale).agentKbStatusSemanticUnavailable);
+      buffer.writeln();
+    }
+
+    // 9. Language instruction — positioned last for maximum LLM influence
     // Use triple reinforcement: the directive in the identity, tool result language note,
     // and this final instruction all work together
     buffer.writeln('=== LANGUAGE REQUIREMENT ===');

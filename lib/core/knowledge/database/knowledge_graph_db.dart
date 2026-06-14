@@ -6,6 +6,8 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
 import '../../../shared/constants.dart';
+import '../../config/log_entry.dart';
+import '../../services/app_logger.dart';
 
 part 'knowledge_graph_db.g.dart';
 
@@ -34,7 +36,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
   KnowledgeGraphDB.forExecutor(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
   static QueryExecutor _openConnection(String dbPath) {
     return driftDatabase(
@@ -55,6 +57,53 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
             await _dropFts5TablesAndTriggers();
             await _createFts5Tables();
           }
+          if (from < 4) {
+            // v4: per-row embedding provenance (U3). Vectors from different
+            // embedding spaces (model, dim) must never be cosine-compared,
+            // so every embedding-bearing table records the space its vector
+            // belongs to.
+            //
+            // Existing rows: the migration runs in SQL and cannot know the
+            // Dart-side embedding config, so pre-v4 vectors are annotated
+            // with the AppConstants.knowledgeLegacyEmbeddingModel marker
+            // ('legacy:pre-v4') as the best guess for "whatever provider was
+            // configured before the upgrade". The dimension IS knowable from
+            // the data itself: blobs are Float32 little-endian, so
+            // length(embedding) / 4 is ground truth.
+            //
+            // Atomicity (DM-01): the whole block runs in ONE transaction so a
+            // process kill mid-block leaves user_version at 3 and the upgrade
+            // retries cleanly instead of bricking the KB with a half-applied
+            // column add. Belt-and-suspenders: PRAGMA table_info() guards each
+            // ADD COLUMN so a half-applied state from an OLDER (pre-transaction)
+            // build still heals rather than throwing "duplicate column name".
+            await _migrateV4EmbeddingProvenance();
+          }
+          if (from < 5) {
+            // v5: episodic tool-result cache (U4). Mirrors the episodes
+            // definition in schema.drift. Wrapped in a transaction so a kill
+            // between the CREATE TABLE and the CREATE INDEX cannot leave a
+            // table without its index and still bump user_version to 5.
+            await transaction(() async {
+              await customStatement('''
+                CREATE TABLE IF NOT EXISTS episodes (
+                  id              INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                  tool            TEXT    NOT NULL,
+                  args_digest     TEXT    NOT NULL,
+                  context_key     TEXT,
+                  result_redacted TEXT    NOT NULL,
+                  is_error        INTEGER NOT NULL DEFAULT 0,
+                  session_key     TEXT,
+                  created_at      INTEGER NOT NULL,
+                  expires_at      INTEGER NOT NULL,
+                  UNIQUE(tool, args_digest, context_key)
+                )
+              ''');
+              await customStatement(
+                  'CREATE INDEX IF NOT EXISTS idx_episodes_expires '
+                  'ON episodes(expires_at)');
+            });
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
@@ -62,6 +111,62 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
           await customStatement('PRAGMA busy_timeout = 5000');
         },
       );
+
+  /// v4 embedding-provenance migration, atomic + idempotent (DM-01, DM-03).
+  ///
+  /// All statements run in ONE transaction: a kill mid-block rolls back and
+  /// leaves user_version at 3, so the next open retries cleanly. Each
+  /// ADD COLUMN is guarded by [_columnExists] so a half-applied state left by
+  /// an OLDER (pre-transaction) build heals instead of throwing
+  /// "duplicate column name". After the legacy backfill, a provenance guard
+  /// (DM-03) asserts no embedded row was left without a model label — if it
+  /// finds one, it throws, rolling the whole transaction back so the marker
+  /// never advances to 4 with unlabeled vectors.
+  Future<void> _migrateV4EmbeddingProvenance() async {
+    await transaction(() async {
+      for (final table in ['entities', 'relations', 'summary_nodes']) {
+        if (!await _columnExists(table, 'embedding_model')) {
+          await customStatement(
+              'ALTER TABLE $table ADD COLUMN embedding_model TEXT');
+        }
+        if (!await _columnExists(table, 'embedding_dim')) {
+          await customStatement(
+              'ALTER TABLE $table ADD COLUMN embedding_dim INTEGER');
+        }
+        await customStatement(
+          "UPDATE $table SET "
+          "embedding_model = '${AppConstants.knowledgeLegacyEmbeddingModel}', "
+          'embedding_dim = length(embedding) / 4 '
+          'WHERE embedding IS NOT NULL AND embedding_model IS NULL');
+      }
+
+      // DM-03 provenance guard: a botched backfill must never set
+      // user_version=4 with embedding vectors that lack a space label.
+      for (final table in ['entities', 'relations', 'summary_nodes']) {
+        final row = await customSelect(
+          'SELECT COUNT(*) AS cnt FROM $table '
+          'WHERE embedding IS NOT NULL AND embedding_model IS NULL',
+        ).getSingle();
+        final unlabeled = row.read<int>('cnt');
+        if (unlabeled != 0) {
+          AppLogger.instance.error(
+            LogSource.app,
+            'KG v4 migration aborted: $unlabeled embedded $table row(s) '
+            'left without an embedding_model — rolling back.',
+          );
+          throw StateError(
+              'KG v4 migration: $unlabeled unlabeled embedding(s) in $table');
+        }
+      }
+    });
+  }
+
+  /// True if [table] already has a column named [column] (via
+  /// `PRAGMA table_info`). Used to make the v4 ADD COLUMN steps idempotent.
+  Future<bool> _columnExists(String table, String column) async {
+    final rows = await customSelect('PRAGMA table_info($table)').get();
+    return rows.any((r) => r.read<String>('name') == column);
+  }
 
   /// Drop FTS5 triggers and virtual tables (inverse of [_createFts5Tables]).
   Future<void> _dropFts5TablesAndTriggers() async {
@@ -642,7 +747,8 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
       [nowEpoch, entityId],
     );
     await customStatement(
-      'UPDATE entities SET is_active = 0, embedding = NULL WHERE id = ?',
+      'UPDATE entities SET is_active = 0, embedding = NULL, '
+      'embedding_model = NULL, embedding_dim = NULL WHERE id = ?',
       [entityId],
     );
     await customStatement(
@@ -882,7 +988,8 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
 
       // 11. Nullify primary's embedding (stale after merge)
       await customStatement(
-        'UPDATE entities SET embedding = NULL WHERE id = ?',
+        'UPDATE entities SET embedding = NULL, embedding_model = NULL, '
+        'embedding_dim = NULL WHERE id = ?',
         [primaryId],
       );
 
@@ -935,29 +1042,50 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
     });
   }
 
-  /// Update embedding BLOB for an entity.
-  Future<void> updateEntityEmbedding(int entityId, Uint8List embedding) async {
+  /// Update embedding BLOB for an entity, stamping its provenance (U3).
+  ///
+  /// [model] and [dim] identify the embedding space the vector belongs to
+  /// (provider id + output dimensionality) — they are required so no vector
+  /// can ever be written without a space.
+  Future<void> updateEntityEmbedding(
+    int entityId,
+    Uint8List embedding, {
+    required String model,
+    required int dim,
+  }) async {
     await customStatement(
-      'UPDATE entities SET embedding = ? WHERE id = ?',
-      [embedding, entityId],
+      'UPDATE entities SET embedding = ?, embedding_model = ?, '
+      'embedding_dim = ? WHERE id = ?',
+      [embedding, model, dim, entityId],
     );
   }
 
-  /// One keyset page of active entity embeddings, ordered by id, strictly
-  /// after [afterId] (U14). Drives the paged cosine scan in
-  /// `KnowledgeService.queryRelevant` (every active embedding, at most
-  /// [pageSize] BLOBs in memory at a time — no silent cap, no fully
-  /// materialized embedding list) and the bounded dedup pre-filter scan in
+  /// One keyset page of active entity embeddings belonging to ONE embedding
+  /// space, ordered by id, strictly after [afterId] (U14, space filter U3).
+  /// Drives the paged cosine scan in `KnowledgeService.queryRelevant` (every
+  /// active embedding of the query space, at most [pageSize] BLOBs in memory
+  /// at a time) and the bounded dedup pre-filter scan in
   /// `CandidateGenerator.findCandidates`.
+  ///
+  /// The WHERE on (embedding_model, embedding_dim) is the structural
+  /// guarantee that no scan ever mixes vectors from two embedding spaces.
   Future<List<({int id, Uint8List embedding})>> getActiveEntityEmbeddingsPage({
     required int afterId,
     required int pageSize,
+    required String model,
+    required int dim,
   }) async {
     final results = await customSelect(
       'SELECT id, embedding FROM entities '
-      'WHERE is_active = 1 AND embedding IS NOT NULL AND id > ? '
+      'WHERE is_active = 1 AND embedding IS NOT NULL '
+      'AND embedding_model = ? AND embedding_dim = ? AND id > ? '
       'ORDER BY id LIMIT ?',
-      variables: [Variable.withInt(afterId), Variable.withInt(pageSize)],
+      variables: [
+        Variable.withString(model),
+        Variable.withInt(dim),
+        Variable.withInt(afterId),
+        Variable.withInt(pageSize),
+      ],
     ).get();
 
     return results.map((r) {
@@ -966,6 +1094,80 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
         embedding: r.read<Uint8List>('embedding'),
       );
     }).toList();
+  }
+
+  /// Row counts per embedding space among active entities (U3).
+  ///
+  /// One row per distinct (embedding_model, embedding_dim) pair, descending
+  /// by count. Feeds the query-space selection in
+  /// `KnowledgeService.resolveQuerySpace` and the backfill progress UI.
+  Future<List<({String model, int dim, int count})>>
+      getEmbeddingSpaceCounts() async {
+    final rows = await customSelect(
+      'SELECT embedding_model, embedding_dim, COUNT(*) AS cnt FROM entities '
+      'WHERE is_active = 1 AND embedding IS NOT NULL '
+      'GROUP BY embedding_model, embedding_dim ORDER BY cnt DESC',
+    ).get();
+    return [
+      for (final r in rows)
+        (
+          // Pre-v4 rows are annotated by the migration, so model/dim are
+          // never NULL when embedding is set; coalesce defensively anyway.
+          model: r.readNullable<String>('embedding_model') ??
+              AppConstants.knowledgeLegacyEmbeddingModel,
+          dim: r.readNullable<int>('embedding_dim') ?? 0,
+          count: r.read<int>('cnt'),
+        ),
+    ];
+  }
+
+  /// Count active embedded entities NOT in the target space (U3 backfill).
+  Future<int> countEntitiesNeedingReembed({
+    required String targetModel,
+    required int targetDim,
+  }) async {
+    final row = await customSelect(
+      'SELECT COUNT(*) AS cnt FROM entities '
+      'WHERE is_active = 1 AND embedding IS NOT NULL '
+      'AND (embedding_model IS NOT ? OR embedding_dim IS NOT ?)',
+      variables: [
+        Variable.withString(targetModel),
+        Variable.withInt(targetDim),
+      ],
+    ).getSingle();
+    return row.read<int>('cnt');
+  }
+
+  /// One batch of active embedded entities NOT in the target space, with the
+  /// fields needed to rebuild their embedding text (U3 backfill). Ordered by
+  /// id for determinism; the job is resumable by construction because every
+  /// successfully re-embedded row stops matching the WHERE clause.
+  Future<List<({int id, String name, String entityType, String? summary})>>
+      getEntitiesNeedingReembed({
+    required String targetModel,
+    required int targetDim,
+    required int batchSize,
+  }) async {
+    final rows = await customSelect(
+      'SELECT id, name, entity_type, summary FROM entities '
+      'WHERE is_active = 1 AND embedding IS NOT NULL '
+      'AND (embedding_model IS NOT ? OR embedding_dim IS NOT ?) '
+      'ORDER BY id LIMIT ?',
+      variables: [
+        Variable.withString(targetModel),
+        Variable.withInt(targetDim),
+        Variable.withInt(batchSize),
+      ],
+    ).get();
+    return [
+      for (final r in rows)
+        (
+          id: r.read<int>('id'),
+          name: r.read<String>('name'),
+          entityType: r.read<String>('entity_type'),
+          summary: r.readNullable<String>('summary'),
+        ),
+    ];
   }
 
   /// Delete all data (forget everything).
@@ -983,6 +1185,7 @@ class KnowledgeGraphDB extends _$KnowledgeGraphDB {
       await customStatement('DELETE FROM aliases');
       await customStatement('DELETE FROM summary_nodes');
       await customStatement('DELETE FROM entities');
+      await customStatement('DELETE FROM episodes');
     });
     // 4. Recreate empty FTS5 tables + triggers
     await _createFts5Tables();

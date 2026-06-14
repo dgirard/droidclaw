@@ -170,7 +170,7 @@ class Session {
     return removed;
   }
 
-  /// Serialize to JSON for Hive storage.
+  /// Serialize to JSON for persistence (the sessions.db payload column).
   Map<String, dynamic> toJson() => {
         'key': key,
         'messages': _messages.map((m) => m.toJson()).toList(),

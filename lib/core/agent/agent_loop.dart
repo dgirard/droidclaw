@@ -9,6 +9,7 @@ import '../config/app_config.dart';
 import '../config/llm_trace.dart';
 import '../config/log_entry.dart';
 import '../knowledge/models/ranked_result.dart';
+import '../knowledge/services/episode_store.dart';
 import '../knowledge/services/ingestion_pipeline.dart';
 import '../knowledge/services/knowledge_service.dart';
 import '../providers/llm_provider.dart';
@@ -49,7 +50,17 @@ class ToolCallEvent extends AgentEvent {
 class ToolResultEvent extends AgentEvent {
   final String name;
   final ToolResult result;
-  const ToolResultEvent({required this.name, required this.result});
+
+  /// The arguments the tool was (or, on a cache hit, would have been)
+  /// executed with — `force_fresh` already stripped. Additive (U4): existing
+  /// consumers switch on the event type and ignore unknown fields.
+  final Map<String, dynamic> arguments;
+
+  const ToolResultEvent({
+    required this.name,
+    required this.result,
+    this.arguments = const {},
+  });
 }
 
 class ErrorEvent extends AgentEvent {
@@ -67,6 +78,11 @@ class AgentLoop {
   final KnowledgeService? knowledgeService;
   final IngestionPipeline? ingestionPipeline;
 
+  /// Episodic memory (U4): when non-null, cacheable read-only tool calls are
+  /// intercepted BEFORE execution (fresh episode → served from cache) and
+  /// recorded after a successful execution.
+  final EpisodeStore? episodeStore;
+
   AgentLoop({
     required this.provider,
     required this.config,
@@ -75,6 +91,7 @@ class AgentLoop {
     required this.contextBuilder,
     this.knowledgeService,
     this.ingestionPipeline,
+    this.episodeStore,
   });
 
   /// Process a user message and yield agent events.
@@ -153,9 +170,16 @@ class AgentLoop {
       }
     }
 
-    // Build system prompt (with optional KG context)
+    // Build system prompt (with optional KG context). When the KG is
+    // configured but its embedder isn't ready, retrieval silently degrades to
+    // lexical-only — surface that to the agent via a <kb_status> note so it
+    // doesn't answer as if it had full semantic recall. (No KG at all → no
+    // degradation note; nothing changes.)
+    final semanticSearchAvailable =
+        knowledgeService == null || knowledgeService!.hasEmbedder;
     final systemPrompt = await contextBuilder.buildSystemPrompt(
       knowledgeContext: kgContext,
+      semanticSearchAvailable: semanticSearchAvailable,
     );
 
     // Add user message to session
@@ -287,12 +311,67 @@ class AgentLoop {
       for (final toolCall in response.toolCalls) {
         yield ToolCallEvent(name: toolCall.name, arguments: toolCall.arguments);
 
-        final result = await tools.execute(toolCall.name, toolCall.arguments);
+        // Episodic interception (U4): strip the cache-control param FIRST so
+        // neither the cache key nor the tool ever sees it, then serve a
+        // fresh episode instead of re-executing a cacheable read-only tool.
+        final args = Map<String, dynamic>.from(toolCall.arguments);
+        final forceFresh = args.remove('force_fresh') == true;
+
+        ToolResult result;
+        Episode? episode;
+        if (episodeStore != null &&
+            !forceFresh &&
+            EpisodeStore.isCacheable(toolCall.name)) {
+          try {
+            episode = await episodeStore!.lookup(toolCall.name, args);
+          } catch (e) {
+            AppLogger.instance.warning(LogSource.agent,
+                'Episode lookup failed for ${toolCall.name}: $e',
+                sessionKey: sessionKey);
+          }
+        }
+
+        if (episode != null) {
+          final ageMin =
+              DateTime.now().difference(episode.createdAt).inMinutes;
+          result = ToolResult.dual(
+            forLLM: '(cached result from $ageMin min ago — pass '
+                'force_fresh=true if staleness matters)\n'
+                '${episode.resultRedacted}',
+            forUser: '${episode.resultRedacted} (cached, ${ageMin}min)',
+          );
+          AppLogger.instance.debug(LogSource.agent,
+              'Tool ${toolCall.name}: served from episode cache '
+              '(age=${ageMin}min)');
+        } else {
+          result = await tools.execute(toolCall.name, args);
+          if (episodeStore != null && !result.isError) {
+            // record() is a structural no-op for non-cacheable tools, error
+            // results, and geo-keyed tools with no known location cell.
+            try {
+              await episodeStore!
+                  .record(toolCall.name, args, result, sessionKey: sessionKey);
+            } catch (e) {
+              AppLogger.instance.warning(LogSource.agent,
+                  'Episode record failed for ${toolCall.name}: $e',
+                  sessionKey: sessionKey);
+            }
+          }
+        }
+
+        // A successful device-location reading updates the geo context that
+        // keys weather/transit/directions episodes.
+        if (!result.isError) {
+          episodeStore?.maybeUpdateLocationContext(
+              toolCall.name, result.forLLM);
+        }
+
         AppLogger.instance.debug(LogSource.agent,
             'Tool ${toolCall.name} result: '
             '${result.forLLM.length} chars, error=${result.isError}');
 
-        yield ToolResultEvent(name: toolCall.name, result: result);
+        yield ToolResultEvent(
+            name: toolCall.name, result: result, arguments: args);
 
         // Add tool result to session
         session.addMessage(Message(
@@ -302,12 +381,11 @@ class AgentLoop {
           name: toolCall.name,
         ));
       }
-      // Persist once after the tool batch, WITHOUT fsync (~10-50ms each on
-      // Android): the awaited Hive put survives a process kill via the OS
-      // page cache; the residual power-loss window is accepted for
-      // reproducible tool results. The turn always ends in a flushed save
-      // (final response / error / max-iterations). See the flush policy on
-      // SessionManager.
+      // Persist once after the tool batch, marked mid-turn (flush: false).
+      // The awaited WAL commit survives a process kill; the residual
+      // power-loss window is accepted for reproducible tool results. The
+      // turn always ends in a turn-ending save (final response / error /
+      // max-iterations). See the durability policy on SessionManager.
       await sessions.save(session, flush: false);
     }
 
@@ -368,6 +446,29 @@ class AgentLoop {
           'KG query expansion failed, using raw query: $e');
     }
     return userMessage;
+  }
+
+  /// Fire-and-forget KG extraction over the conversation text a
+  /// summarization is about to drop (U4). Role-prefixed and capped by the
+  /// caller. Errors are logged, never surfaced — same posture as
+  /// [_extractAsync].
+  void _ingestCompressedHistoryAsync(
+      String compressedText, String summary, String sessionKey) {
+    Future(() async {
+      try {
+        final count = await ingestionPipeline!.extractAndStore(
+          userMessage: compressedText,
+          assistantResponse: summary,
+          sessionKey: sessionKey,
+        );
+        AppLogger.instance.debug(LogSource.agent,
+            'Summarization ingestion: $count items stored '
+            '(session=$sessionKey, ${compressedText.length} chars)');
+      } catch (e) {
+        AppLogger.instance.warning(LogSource.agent,
+            'Summarization ingestion failed: $e', sessionKey: sessionKey);
+      }
+    });
   }
 
   /// Fire-and-forget async Knowledge Graph extraction.
@@ -488,6 +589,18 @@ class AgentLoop {
       ));
 
       session.summary = response.content;
+
+      // U4: the compressed-away conversation becomes knowledge instead of
+      // being dropped. Fire-and-forget (logged), capped, only after a
+      // SUCCESSFUL summary — the fallback path below has no LLM available.
+      if (ingestionPipeline != null) {
+        final capped = summaryContent.length >
+                AppConstants.episodeSummarizationIngestMaxChars
+            ? summaryContent.substring(
+                0, AppConstants.episodeSummarizationIngestMaxChars)
+            : summaryContent;
+        _ingestCompressedHistoryAsync(capped, response.content, sessionKey);
+      }
     } catch (_) {
       // If summarization fails, just set a basic summary from truncated messages
       final firstUserContent = messagesToSummarize

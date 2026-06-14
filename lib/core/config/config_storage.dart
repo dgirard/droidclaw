@@ -117,6 +117,22 @@ class ConfigStorage {
       AppConstants.cachedEmbeddingApiKeyKey,
       apiKey);
 
+  /// Mirror the wake word feature flags into plain SharedPreferences so the
+  /// service isolate can decide whether to host the KWS listener without
+  /// parsing the config JSON blob. These are NOT secrets (a feature toggle and
+  /// a keyword) — cleartext is correct here; do NOT route them through the
+  /// secret-mirror machinery. Call after every save of a [VoiceConfig].
+  Future<void> mirrorWakeWordFlags(AppConfig config) async {
+    await _storage.setBool(
+        AppConstants.cachedWakeWordEnabledKey, config.voice.wakeWordEnabled);
+    await _storage.setString(
+        AppConstants.cachedWakeWordKeywordKey, config.voice.effectiveKeyword);
+  }
+
+  /// Read the mirrored wake word enabled flag (service isolate / accounting).
+  bool get wakeWordEnabledMirror =>
+      _storage.getBool(AppConstants.cachedWakeWordEnabledKey) ?? false;
+
   /// Write the capability-probe value to secure storage. The service isolate
   /// reads it back to decide whether it can use secure storage directly
   /// instead of the cleartext SharedPreferences mirrors.

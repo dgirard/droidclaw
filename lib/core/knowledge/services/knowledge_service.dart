@@ -62,6 +62,98 @@ class KnowledgeService {
     this.embeddingScanPageSize = AppConstants.knowledgeEmbeddingScanPageSize,
   });
 
+  /// The embedding space the configured provider writes to:
+  /// (providerId, outputDimensions). Null without an embedder.
+  ({String model, int dim})? get activeSpace => embeddingProvider == null
+      ? null
+      : (
+          model: embeddingProvider!.providerId,
+          dim: embeddingProvider!.outputDimensions,
+        );
+
+  QuerySpaceSelection? _querySpace;
+
+  /// The query-space selection currently in effect (null until the first
+  /// vector query resolved it, or when the KB has no embeddings / no
+  /// embedder). Exposed for the backfill UI and tests.
+  QuerySpaceSelection? get currentQuerySpace => _querySpace;
+
+  /// Pick the embedding space that vector scans will use (U3 query guard).
+  ///
+  /// Rule: the active space (the provider's own) wins when its row count is
+  /// >= every other space's count; otherwise the dominant space (most rows)
+  /// serves queries — typically the legacy/majority space while a re-embed
+  /// backfill toward the active space is still incomplete. Scans then filter
+  /// on exactly that one (model, dim) pair, so vectors from two spaces are
+  /// never cosine-compared. A non-active query space is only *usable* when
+  /// its dimensionality matches the provider's query vectors (the
+  /// legacy-marker case, where pre-v4 rows are the best guess for the
+  /// currently configured provider); otherwise [queryRelevant] degrades to
+  /// lexical retrieval until the backfill completes.
+  ///
+  /// The selection is cached once made (counts queries on every retrieval
+  /// would be wasteful); callers that change the space population in bulk
+  /// (EmbeddingBackfillService on completion, the embedding settings screen)
+  /// must call this with [refresh] = true or rebuild the service. An empty
+  /// KB is never cached, so the first ingested embeddings are picked up.
+  Future<QuerySpaceSelection?> resolveQuerySpace({bool refresh = false}) async {
+    final active = activeSpace;
+    if (active == null) return null;
+    if (_querySpace != null && !refresh) return _querySpace;
+
+    final counts = await db.getEmbeddingSpaceCounts();
+    if (counts.isEmpty) {
+      _querySpace = null; // not cached: re-checked until embeddings exist
+      return null;
+    }
+
+    final total = counts.fold<int>(0, (a, s) => a + s.count);
+    final activeCount = counts
+        .where((s) => s.model == active.model && s.dim == active.dim)
+        .fold<int>(0, (a, s) => a + s.count);
+    final maxOther = counts
+        .where((s) => s.model != active.model || s.dim != active.dim)
+        .fold<int>(0, (a, s) => a > s.count ? a : s.count);
+
+    final ({String model, int dim, int count}) chosen;
+    if (activeCount >= maxOther) {
+      chosen = (model: active.model, dim: active.dim, count: activeCount);
+    } else {
+      chosen = counts.first; // count-descending: the dominant space
+    }
+
+    _querySpace = QuerySpaceSelection(
+      model: chosen.model,
+      dim: chosen.dim,
+      rowCount: chosen.count,
+      totalEmbedded: total,
+      isActiveSpace:
+          chosen.model == active.model && chosen.dim == active.dim,
+      usable: chosen.dim == active.dim,
+    );
+
+    final qs = _querySpace!;
+    if (qs.isActiveSpace) {
+      AppLogger.instance.info(
+        LogSource.agent,
+        'KG query space: active space ${qs.model}/${qs.dim}d '
+        '(${qs.rowCount}/${qs.totalEmbedded} embedded entities)',
+      );
+    } else {
+      AppLogger.instance.warning(
+        LogSource.agent,
+        'KG query space: backfill toward ${active.model}/${active.dim}d is '
+        'incomplete ($activeCount/${qs.totalEmbedded}) — '
+        '${qs.usable ? 'queries stay on the dominant space '
+            '${qs.model}/${qs.dim}d (${qs.rowCount} rows)' : 'dominant space '
+            '${qs.model}/${qs.dim}d is dimension-incompatible with the '
+            'provider; retrieval is lexical-only until the backfill '
+            'completes'}',
+      );
+    }
+    return _querySpace;
+  }
+
   /// Query the knowledge graph for entities relevant to a text query.
   ///
   /// Returns ranked entities with attached facts and relations,
@@ -114,6 +206,10 @@ class KnowledgeService {
     _lastQueryVectorPathFailed = false;
     if (hasEmbedder) {
       try {
+        // The query embed runs unconditionally (U12 contract: an embed
+        // failure here flags the degraded path so callers retry with LLM
+        // keyword expansion). The U3 query guard then decides whether any
+        // stored space can legitimately be scanned with this vector.
         final queryResult = await embeddingProvider!.embed(
           texts: [query],
           model: embeddingModel,
@@ -122,11 +218,26 @@ class KnowledgeService {
         );
         if (queryResult.embeddings.isNotEmpty) {
           final queryVec = Float32List.fromList(queryResult.embeddings.first);
-          // Same candidate-pool multiplier as the FTS path above: the
-          // downstream getEntitiesByIds/findNeighborsBatch IN-lists are
-          // documented as top-K-sized, so the vector pool must be capped too.
-          vectorScores.addAll(
-              await _scanEmbeddings(queryVec, maxCandidates: limit * 3));
+          // U3 query guard: scan exactly one embedding space. When the
+          // space serving queries cannot match the provider's query vectors
+          // (mid backfill after a provider flip), skip the scan entirely —
+          // never cosine across spaces — and flag the degradation so
+          // callers retry with lexical query expansion.
+          final selection = await resolveQuerySpace();
+          if (selection == null) {
+            // No stored embeddings at all — nothing to scan, not a failure.
+          } else if (!selection.usable || queryVec.length != selection.dim) {
+            _lastQueryVectorPathFailed = true;
+          } else {
+            // Same candidate-pool multiplier as the FTS path above: the
+            // downstream getEntitiesByIds/findNeighborsBatch IN-lists are
+            // documented as top-K-sized, so the vector pool is capped too.
+            vectorScores.addAll(await _scanEmbeddings(
+              queryVec,
+              maxCandidates: limit * 3,
+              space: selection,
+            ));
+          }
         }
       } catch (e) {
         _lastQueryVectorPathFailed = true;
@@ -302,9 +413,12 @@ class KnowledgeService {
   @visibleForTesting
   int lastVectorCandidateCount = 0;
 
-  /// Cosine-scan ALL active entity embeddings against [queryVec], in keyset
-  /// pages of [embeddingScanPageSize] rows (U14), keeping only the
-  /// [maxCandidates] best-scoring entities above the similarity threshold.
+  /// Cosine-scan ALL active entity embeddings of the query [space] against
+  /// [queryVec], in keyset pages of [embeddingScanPageSize] rows (U14),
+  /// keeping only the [maxCandidates] best-scoring entities above the
+  /// similarity threshold. The space filter lives in the page loader's WHERE
+  /// clause, so no vector from another space can ever enter the comparison
+  /// (U3).
   ///
   /// Replaces the old single `getActiveEntityEmbeddings(limit: 1000)` load,
   /// which silently ignored every entity past the first 1000 and kept the
@@ -323,6 +437,7 @@ class KnowledgeService {
   Future<Map<int, double>> _scanEmbeddings(
     Float32List queryVec, {
     required int maxCandidates,
+    required QuerySpaceSelection space,
   }) async {
     var top = <({int id, double sim})>[];
     var afterId = 0;
@@ -330,6 +445,8 @@ class KnowledgeService {
       final page = await db.getActiveEntityEmbeddingsPage(
         afterId: afterId,
         pageSize: embeddingScanPageSize,
+        model: space.model,
+        dim: space.dim,
       );
       if (page.isEmpty) break;
       for (final entry in page) {
@@ -383,6 +500,14 @@ class KnowledgeService {
       );
     }
     return updates.length;
+  }
+
+  /// Deactivate cold entities last accessed before [olderThanEpoch] (the
+  /// scheduled KG purge). Thin delegate so callers (e.g. the background task
+  /// handler's `_runKgPurge`) never reach through [db] directly — mirrors how
+  /// [recalculateDecay] wraps a db op.
+  Future<int> purgeColdEntities(int olderThanEpoch) async {
+    return await db.purgeColdEntities(olderThanEpoch);
   }
 
   /// Get entity count (active only).
@@ -622,4 +747,47 @@ class KnowledgeService {
     'lo', 'gli', 'io', 'lui', 'lei', 'noi', 'voi',
     'non', 'che', 'chi', 'per', 'tra', 'fra', 'come', 'dove',
   };
+}
+
+/// The embedding space selected to serve vector queries, with the counts
+/// that justified the choice (U3). See [KnowledgeService.resolveQuerySpace].
+class QuerySpaceSelection {
+  /// Provider id of the selected space (or the legacy migration marker).
+  final String model;
+
+  /// Vector dimensionality of the selected space.
+  final int dim;
+
+  /// Active embedded entities in the selected space.
+  final int rowCount;
+
+  /// Active entities with any embedding, across all spaces.
+  final int totalEmbedded;
+
+  /// True when the selected space is the configured provider's own space.
+  final bool isActiveSpace;
+
+  /// True when the selected space can be scanned with this provider's query
+  /// vectors (dimensionality match). False mid-backfill after a provider
+  /// flip: the dominant space then has a different dim and retrieval is
+  /// lexical-only until the backfill completes.
+  final bool usable;
+
+  /// True when every embedded entity lives in the selected space — the
+  /// "complete coverage" cutover criterion for the backfill.
+  bool get isComplete => rowCount == totalEmbedded;
+
+  const QuerySpaceSelection({
+    required this.model,
+    required this.dim,
+    required this.rowCount,
+    required this.totalEmbedded,
+    required this.isActiveSpace,
+    required this.usable,
+  });
+
+  @override
+  String toString() =>
+      'QuerySpaceSelection($model/${dim}d, $rowCount/$totalEmbedded rows, '
+      'active=$isActiveSpace, usable=$usable)';
 }

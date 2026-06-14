@@ -1,0 +1,44 @@
+{
+  "_comment": [
+    "Tokenizer parity fixtures for EmbeddingGemma (google/embeddinggemma-300m vocabulary).",
+    "Each case's 'ids' must be the exact token ids produced by the Python AutoTokenizer",
+    "(WITH special tokens, i.e. tokenizer(text)['input_ids']). Empty 'ids' = placeholder:",
+    "the parity test skips itself with a reason until they are generated.",
+    "Generate with:",
+    "  pip install transformers sentencepiece && python3 -c \"import json; from transformers import AutoTokenizer; p='test/fixtures/embeddinggemma_tokenizer_fixtures.json'; d=json.load(open(p)); t=AutoTokenizer.from_pretrained('onnx-community/embeddinggemma-300m-ONNX'); [c.update(ids=t(c['text'])['input_ids']) for c in d['cases']]; json.dump(d, open(p,'w'), ensure_ascii=False, indent=2)\""
+  ],
+  "cases": [
+    {
+      "text": "task: search result | query: Where do I live?",
+      "ids": []
+    },
+    {
+      "text": "title: none | text: Didier lives in Paris.",
+      "ids": []
+    },
+    {
+      "text": "task: search result | query: Quelle est la météo demain à Lyon ?",
+      "ids": []
+    },
+    {
+      "text": "title: none | text: L'anniversaire de Noé est en décembre, c'est très important.",
+      "ids": []
+    },
+    {
+      "text": "Hello, world! 123 + 456 = ???",
+      "ids": []
+    },
+    {
+      "text": "Café crème, œuf, garçon — àéîöü",
+      "ids": []
+    },
+    {
+      "text": "Great job 👍🎉 let's celebrate 🥳",
+      "ids": []
+    },
+    {
+      "text": "tokenizer.json https://example.com/path?q=1&lang=fr",
+      "ids": []
+    }
+  ]
+}

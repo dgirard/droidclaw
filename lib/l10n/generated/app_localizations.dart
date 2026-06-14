@@ -2057,7 +2057,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentKeyBehaviors.
   ///
   /// In en, this message translates to:
-  /// **'Key behaviors:\n- BEFORE calling any tool, check the <knowledge_context> and memory above. If they already contain the answer (address, preference, contact, etc.), respond directly — do NOT call tools for information you already have.\n- Use knowledge data as tool input when chaining: if you know the user\'s home address from the knowledge context, pass it to geocode instead of calling get_location.\n- get_location returns the device CURRENT physical position only. Use it for \"where am I now\", \"nearest X\", \"from my current position\" — never for stored addresses or known places.\n- When you need information NOT in the knowledge context, call the appropriate tool(s) immediately without asking permission.\n- Chain tools when needed: if a tool requires coordinates but you have an address (from knowledge or the user), call geocode first.\n- When the user tells you personal information to remember (e.g. \"I live at...\", \"my dentist is...\"), just acknowledge and store it via knowledge_store. Do NOT call other tools or suggest actions in response.\n- Be concise and helpful. Use markdown formatting.'**
+  /// **'Key behaviors:\n- BEFORE calling any tool, check the <knowledge_context> and memory above. If they already contain the answer (address, preference, contact, etc.), respond directly — do NOT call tools for information you already have.\n- Use knowledge data as tool input when chaining: if you know the user\'s home address from the knowledge context, pass it to geocode instead of calling get_location.\n- get_location returns the device CURRENT physical position only. Use it for \"where am I now\", \"nearest X\", \"from my current position\" — never for stored addresses or known places.\n- When you need information NOT in the knowledge context, call the appropriate tool(s) immediately without asking permission.\n- Chain tools when needed: if a tool requires coordinates but you have an address (from knowledge or the user), call geocode first.\n- When the user tells you personal information to remember (e.g. \"I live at...\", \"my dentist is...\"), just acknowledge and store it via knowledge_store. Do NOT call other tools or suggest actions in response.\n- Several tools cache recent results for efficiency (weather, transit, etc.). When the user explicitly wants current/live data, pass force_fresh: true to bypass the cache and fetch fresh data.\n- Be concise and helpful. Use markdown formatting.'**
   String get agentKeyBehaviors;
 
   /// No description provided for @agentRespondInstructions.
@@ -2329,6 +2329,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Speech recognition unavailable on this device'**
   String get chatSpeechUnavailable;
+
+  /// No description provided for @voiceSpeaking.
+  ///
+  /// In en, this message translates to:
+  /// **'Speaking...'**
+  String get voiceSpeaking;
+
+  /// No description provided for @voiceStopSpeaking.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop speaking'**
+  String get voiceStopSpeaking;
+
+  /// No description provided for @voiceLinkWord.
+  ///
+  /// In en, this message translates to:
+  /// **'link'**
+  String get voiceLinkWord;
+
+  /// No description provided for @voiceLanguageUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No voice available for \"{language}\" — using the default voice'**
+  String voiceLanguageUnavailable(String language);
+
+  /// No description provided for @voiceTtsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Text-to-speech is unavailable on this device'**
+  String get voiceTtsUnavailable;
+
+  /// No description provided for @voiceConvListening.
+  ///
+  /// In en, this message translates to:
+  /// **'Listening… speak now'**
+  String get voiceConvListening;
+
+  /// No description provided for @voiceConvProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking…'**
+  String get voiceConvProcessing;
+
+  /// No description provided for @voiceConvSpeaking.
+  ///
+  /// In en, this message translates to:
+  /// **'Speaking… tap to interrupt'**
+  String get voiceConvSpeaking;
+
+  /// No description provided for @voiceConvExit.
+  ///
+  /// In en, this message translates to:
+  /// **'End voice conversation'**
+  String get voiceConvExit;
+
+  /// No description provided for @voiceClarificationPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Sorry, I didn\'t catch that. Could you say it again?'**
+  String get voiceClarificationPrompt;
+
+  /// No description provided for @voiceConvNotUnderstood.
+  ///
+  /// In en, this message translates to:
+  /// **'I still couldn\'t understand you — voice conversation ended'**
+  String get voiceConvNotUnderstood;
 
   /// No description provided for @agentSummarizeInstructions.
   ///
@@ -3067,6 +3133,312 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Embedding provider saved'**
   String get embeddingSaved;
+
+  /// No description provided for @embeddingProviderLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'Local (on-device)'**
+  String get embeddingProviderLocal;
+
+  /// No description provided for @embeddingLocalSection.
+  ///
+  /// In en, this message translates to:
+  /// **'On-device model'**
+  String get embeddingLocalSection;
+
+  /// No description provided for @embeddingLocalConsent.
+  ///
+  /// In en, this message translates to:
+  /// **'EmbeddingGemma 300M will be downloaded from Hugging Face (~330 MB). The download uses Wi-Fi only unless you allow mobile data. Once downloaded, semantic search works fully offline, without any API key.'**
+  String get embeddingLocalConsent;
+
+  /// No description provided for @embeddingLocalDimensionsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Output dimensions are fixed at 256 (Matryoshka truncation).'**
+  String get embeddingLocalDimensionsNote;
+
+  /// No description provided for @embeddingLocalDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete model'**
+  String get embeddingLocalDelete;
+
+  /// No description provided for @embeddingLocalDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the downloaded model (~330 MB)? Semantic search will stop working until it is downloaded again.'**
+  String get embeddingLocalDeleteConfirm;
+
+  /// No description provided for @modelDownloadAllowMetered.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow mobile data'**
+  String get modelDownloadAllowMetered;
+
+  /// No description provided for @modelDownloadAllowMeteredSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Off = Wi-Fi only'**
+  String get modelDownloadAllowMeteredSubtitle;
+
+  /// No description provided for @modelDownloadDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download model'**
+  String get modelDownloadDownload;
+
+  /// No description provided for @modelDownloadCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel download'**
+  String get modelDownloadCancel;
+
+  /// No description provided for @modelDownloadRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry download'**
+  String get modelDownloadRetry;
+
+  /// No description provided for @modelDownloadStateAbsent.
+  ///
+  /// In en, this message translates to:
+  /// **'Model not downloaded'**
+  String get modelDownloadStateAbsent;
+
+  /// No description provided for @modelDownloadStateDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading… {pct}%'**
+  String modelDownloadStateDownloading(int pct);
+
+  /// No description provided for @modelDownloadStateVerifying.
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying checksums…'**
+  String get modelDownloadStateVerifying;
+
+  /// No description provided for @modelDownloadStateReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Model ready'**
+  String get modelDownloadStateReady;
+
+  /// No description provided for @modelDownloadStateUnverified.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloaded but unverified — pin the logged checksums to enable'**
+  String get modelDownloadStateUnverified;
+
+  /// No description provided for @agentKbStatusSemanticUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'<kb_status>semantic search unavailable (embedding model not ready); knowledge retrieval is keyword-only</kb_status>'**
+  String get agentKbStatusSemanticUnavailable;
+
+  /// No description provided for @modelDownloadStateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Download failed: {error}'**
+  String modelDownloadStateFailed(String error);
+
+  /// No description provided for @embeddingLocalBenchmark.
+  ///
+  /// In en, this message translates to:
+  /// **'Run latency benchmark'**
+  String get embeddingLocalBenchmark;
+
+  /// No description provided for @embeddingLocalBenchmarkResult.
+  ///
+  /// In en, this message translates to:
+  /// **'Median {ms} ms over {runs} runs — {verdict}'**
+  String embeddingLocalBenchmarkResult(int ms, int runs, String verdict);
+
+  /// No description provided for @embeddingLocalVerdictFast.
+  ///
+  /// In en, this message translates to:
+  /// **'fast (suitable as default)'**
+  String get embeddingLocalVerdictFast;
+
+  /// No description provided for @embeddingLocalVerdictAcceptable.
+  ///
+  /// In en, this message translates to:
+  /// **'acceptable (opt-in)'**
+  String get embeddingLocalVerdictAcceptable;
+
+  /// No description provided for @embeddingLocalVerdictSlow.
+  ///
+  /// In en, this message translates to:
+  /// **'slow (offline fallback only)'**
+  String get embeddingLocalVerdictSlow;
+
+  /// No description provided for @embeddingBackfillSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge base re-embedding'**
+  String get embeddingBackfillSection;
+
+  /// No description provided for @embeddingBackfillHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-embeds stored knowledge into the saved provider\'s embedding space. Until it completes, semantic search keeps using the previous space. Also runs automatically while charging when the local provider is selected.'**
+  String get embeddingBackfillHint;
+
+  /// No description provided for @embeddingBackfillStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} / {total} entities in the active space'**
+  String embeddingBackfillStatus(int done, int total);
+
+  /// No description provided for @embeddingBackfillComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'All entities are in the active embedding space'**
+  String get embeddingBackfillComplete;
+
+  /// No description provided for @embeddingBackfillStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Backfill now'**
+  String get embeddingBackfillStart;
+
+  /// No description provided for @embeddingBackfillCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get embeddingBackfillCancel;
+
+  /// No description provided for @settingsVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice & wake word'**
+  String get settingsVoice;
+
+  /// No description provided for @settingsVoiceSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hands-free \"Hey Claw\" (experimental)'**
+  String get settingsVoiceSubtitle;
+
+  /// No description provided for @voiceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice & wake word'**
+  String get voiceTitle;
+
+  /// No description provided for @voiceSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get voiceSave;
+
+  /// No description provided for @voiceSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice settings saved'**
+  String get voiceSaved;
+
+  /// No description provided for @voiceWakeWordDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'When enabled, the assistant listens for a spoken keyword and wakes hands-free, then enters voice conversation mode. This is an experimental feature, off by default.'**
+  String get voiceWakeWordDescription;
+
+  /// No description provided for @voiceWakeWordEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable wake word'**
+  String get voiceWakeWordEnable;
+
+  /// No description provided for @voiceWakeWordEnableSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Off by default. Turning it on starts a dedicated microphone service.'**
+  String get voiceWakeWordEnableSubtitle;
+
+  /// No description provided for @voiceWakeWordKeyword.
+  ///
+  /// In en, this message translates to:
+  /// **'Wake keyword'**
+  String get voiceWakeWordKeyword;
+
+  /// No description provided for @voiceWakeWordKeywordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Hey Claw'**
+  String get voiceWakeWordKeywordHint;
+
+  /// No description provided for @voiceWakeWordKeywordHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Any short spoken phrase. Shorter, distinctive phrases trigger fewer false wakes.'**
+  String get voiceWakeWordKeywordHelp;
+
+  /// No description provided for @voiceWakeWordMicIndicator.
+  ///
+  /// In en, this message translates to:
+  /// **'While the wake word is active, Android shows a permanent green microphone dot in the status bar — your phone is listening on-device for the keyword only. Nothing is recorded or sent anywhere. There is no \"stop\" button in the notification; the only off switch is this toggle.'**
+  String get voiceWakeWordMicIndicator;
+
+  /// No description provided for @voiceWakeWordRebootLimitation.
+  ///
+  /// In en, this message translates to:
+  /// **'After a reboot, the wake word stays inactive until you open the app once. Android does not allow a microphone service to start in the background, so it can only be (re)started from the foreground.'**
+  String get voiceWakeWordRebootLimitation;
+
+  /// No description provided for @voiceWakeWordRebootStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Wake word inactive until the app is opened'**
+  String get voiceWakeWordRebootStatus;
+
+  /// No description provided for @voiceWakeWordUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Wake word is unavailable on this build.'**
+  String get voiceWakeWordUnavailable;
+
+  /// No description provided for @voiceWakeWordModelSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Wake word model'**
+  String get voiceWakeWordModelSection;
+
+  /// No description provided for @voiceWakeWordModelConsent.
+  ///
+  /// In en, this message translates to:
+  /// **'A small on-device keyword model (~25 MB) is downloaded from the sherpa-onnx releases. Wi-Fi only unless you allow mobile data. Detection runs fully offline.'**
+  String get voiceWakeWordModelConsent;
+
+  /// No description provided for @voiceWakeWordSpikeNote.
+  ///
+  /// In en, this message translates to:
+  /// **'On-device viability (battery, false wakes, mic service behavior) is validated by an on-device spike before this ships enabled. See the spike guidance for how to read the verdict.'**
+  String get voiceWakeWordSpikeNote;
+
+  /// No description provided for @voiceWakeWordRunGuidance.
+  ///
+  /// In en, this message translates to:
+  /// **'Spike guidance'**
+  String get voiceWakeWordRunGuidance;
+
+  /// No description provided for @voiceWakeWordStatusListening.
+  ///
+  /// In en, this message translates to:
+  /// **'Listening for \"{keyword}\"'**
+  String voiceWakeWordStatusListening(String keyword);
+
+  /// No description provided for @voiceWakeWordStatusSuspended.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused (audio in use)'**
+  String get voiceWakeWordStatusSuspended;
+
+  /// No description provided for @voiceWakeWordStatusStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get voiceWakeWordStatusStopped;
 }
 
 class _AppLocalizationsDelegate

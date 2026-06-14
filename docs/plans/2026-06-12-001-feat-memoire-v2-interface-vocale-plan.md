@@ -1,7 +1,7 @@
 ---
 title: "feat: Mémoire v2 + Interface vocale"
 type: feat
-status: active
+status: completed
 date: 2026-06-12
 origin: docs/ideation/2026-06-12-memoire-v2-et-interface-vocale-ideation.md
 ---

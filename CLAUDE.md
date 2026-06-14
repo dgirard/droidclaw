@@ -27,7 +27,7 @@ adb logcat -s flutter | grep '\[AgentLoop\]'
 
 ```
 lib/
-├── main.dart                    # Entry point (init Hive + SharedPrefs)
+├── main.dart                    # Entry point (init loggers + SharedPrefs)
 ├── app.dart                     # MaterialApp, routing, Material 3 theme
 ├── core/                        # Business logic (NO Flutter UI imports)
 │   ├── agent/                   # AgentLoop, ContextBuilder, MemoryManager, ServiceAgentFactory
@@ -36,15 +36,14 @@ lib/
 │   ├── net/                     # RetryingHttpClient (shared retry policy), UrlGuard
 │   ├── providers/               # LLM + Embedding abstraction (Anthropic, HTTP, Gemini, factory)
 │   ├── services/                # BackgroundTaskHandler, AudioManagerChannel
-│   ├── session/                 # Session + SessionManager (Hive persistence)
+│   ├── session/                 # Session + SessionManager (SQLite/WAL sessions.db, sync reader, Hive migrator)
 │   ├── skills/                  # Three-tier loader + installer
 │   └── tools/                   # Tool interface + 31 implementations
 ├── features/                    # Screens and platform features
-│   ├── chat/                    # Chat screen, message bubbles, history
+│   ├── chat/                    # Chat screen, message bubbles, history, VoiceConversationController + SpeechToTextSttEngine
 │   ├── onboarding/              # First-launch setup
 │   ├── settings/                # Provider, tools, skills, cron, Telegram, routing
-│   ├── telegram/                # Bot API, bot manager, rate limiter
-│   └── voice/                   # Voice input (STT via Groq Whisper)
+│   └── telegram/                # Bot API, bot manager, rate limiter
 ├── providers/                   # Riverpod: app, chat, background service, Telegram
 ├── data/local/                  # StorageService (SharedPrefs + SecureStorage)
 └── shared/                      # Constants
@@ -70,7 +69,7 @@ final fooProvider = StateNotifierProvider<FooNotifier, FooState>(...);
 
 ### Async Providers
 
-`sessionManagerProvider` and `toolRegistryProvider` are `FutureProvider` (Hive init, workspace path). Access with `.future`:
+`sessionManagerProvider` and `toolRegistryProvider` are `FutureProvider` (sessions.db open + migration, workspace path). Access with `.future`:
 
 ```dart
 final sessions = await ref.watch(sessionManagerProvider.future);
@@ -128,11 +127,22 @@ sealed class AgentEvent {}
 
 Both chat UI and Telegram consume the same `Stream<AgentEvent>`.
 
+### Voice (U1/U5/U7)
+
+On-device, main-isolate-only voice loop (Telegram/cron/subagent paths never reach it). STT is `package:speech_to_text` (NOT Groq Whisper). Three testable seams keep the platform engines + mic out of unit tests:
+
+- **TtsEngine → `VoiceNarrator`** (`lib/core/services/voice_narrator.dart`): narrates a voice turn's tool results + final response. Utterances are queued in an internal FIFO and spoken sequentially; `narrate*` methods enqueue and return immediately. `FlutterTtsEngine` is the production seam impl. Degradations (no voice for locale, broken engine) are surfaced as `VoiceNarratorState`, never thrown.
+- **SttEngine → `VoiceConversationController`** (`lib/features/chat/voice_conversation_controller.dart`): drives the listen→transcribe→respond→re-listen loop. `SpeechToTextSttEngine` is the production seam impl.
+- **KeywordDetector + AudioSource → `WakeWordService`** (`lib/core/services/wake_word_service.dart`): hands-free wake-word activation; both the detector engine and the mic source are injected seams.
+
+**Half-duplex invariant:** narration (TTS) and listening (STT) never run at once. The controller awaits `narrator.idle` before re-listening (`_reListenAfterTurn`), and any user input (tap / first keystroke) or lifecycle pause calls `narrator.stop()`. A hung TTS must therefore never block the idle completer — `VoiceNarrator.dispose()` best-effort stops the engine and completes any pending idle waiter.
+
 ### Embedding Provider Architecture
 
 Multi-provider embedding abstraction mirroring the LLM provider pattern:
 
 - `EmbeddingProvider` (interface) → `BaseCloudEmbeddingProvider` (shared retry) → `GeminiEmbeddingProvider` / `OpenAIEmbeddingProvider`
+- `LocalEmbeddingProvider` (`provider: 'local'`, opt-in): on-device EmbeddingGemma 308M int8 ONNX (flutter_onnxruntime + dart_sentencepiece_tokenizer), no API key, 256-dim MRL output, EmbeddingGemma prompt prefixes by taskType; the 3 model files (~330 MB) are downloaded + SHA-256-verified by `ModelDownloadManager` into `droidclaw_models/` next to the workspace (DataWiper never deletes them — deletion is an explicit settings action)
 - `EmbeddingProviderFactory.create()` routes by provider name
 - Gemini uses native REST API (`generativelanguage.googleapis.com/v1beta`), NOT the OpenAI-compatible chat endpoint
 - Config in `AppConfig.embedding` (`EmbeddingConfig`: provider, model, dimensions, useOwnApiKey)
@@ -200,7 +210,7 @@ For tools needing an API key that must work in both isolates:
 
 - **No shell execution** on Android — no exec/shell tools
 - **Summarization**: triggers at 20+ messages OR estimated tokens > 75% of maxTokens, keeps last 4 messages
-- **Sessions**: the Hive `sessions` box stores session JSON (key = sessionKey) AND lightweight metadata sidecars (key = `__meta__:` + sessionKey, `AppConstants.sessionMetaKeyPrefix`) used for lazy history loading; session keys must never start with `__meta__:`
+- **Sessions**: `sessions.db` (Drift/SQLite WAL, `lib/core/session/database/`) stores one row per session: full JSON payload + metadata columns used for lazy history loading. Sync reads go through a read-only `package:sqlite3` connection (`SyncSessionReader`) — Drift is async-only but `get`/`getOrCreate` are sync. Both isolates open independent WAL connections (KG pattern). NEVER add `VACUUM` (heir of the Hive `compact()` ban). The legacy Hive box is migrated one-shot by `HiveToSqliteMigrator` (race-safe via in-DB marker); `.hive.backup` files are kept 2-3 releases
 - **Web scraping**: try `web_scrape` first (lightweight HTTP), fall back to `web_scrape_js` (WebView) for JS-rendered pages. Max 15K chars.
 - **Telegram**: long polling (not webhook) via foreground service with `remoteMessaging|location` types (no 6h limit). Dual-isolate architecture.
 - **API keys**: stored in `FlutterSecureStorage`, never in `SharedPreferences` or config JSON
@@ -212,6 +222,6 @@ For tools needing an API key that must work in both isolates:
 - Manual `fromJson()` / `toJson()` — no code generation (freezed/hive_generator removed)
 - `AppConstants` in `lib/shared/constants.dart` for all magic values
 - `AppLogger.instance.debug/info/warning/error(LogSource.xxx, ...)` for logging (`lib/core/services/app_logger.dart`) — `print` only inside the logger sinks, with `// ignore: avoid_print`
-- Config persisted in `SharedPreferences`, secrets in `FlutterSecureStorage`, sessions in Hive
+- Config persisted in `SharedPreferences`, secrets in `FlutterSecureStorage`, sessions in SQLite (`sessions.db`)
 - `docs/solutions/` — documented solutions to past problems (bugs, architecture patterns, design decisions), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
 - All tool names are snake_case: `web_search`, `web_scrape`, `web_scrape_js`, `file`, `get_location`, `get_address`, `subagent`, `message`, `clipboard`, `device_info`, `speak`, `open_app`, `set_alarm`, `notifications`, `contacts`, `calendar`, `ocr`, `qr_generate`, `pick_image`, `volume_control`, `get_directions`, `geocode`, `get_transit`, `weather`, `get_datetime`, `knowledge_search`, `knowledge_store`, `kb_query`, `radio`, `proof_editor`, `dream`

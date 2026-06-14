@@ -9,6 +9,7 @@ class AppConfig {
   final ToolsConfig tools;
   final KnowledgeConfig knowledge;
   final EmbeddingConfig embedding;
+  final VoiceConfig voice;
 
   /// Locale setting: 'en', 'fr', or 'system' (follow device language).
   final String locale;
@@ -19,6 +20,7 @@ class AppConfig {
     this.tools = const ToolsConfig(),
     this.knowledge = const KnowledgeConfig(),
     this.embedding = const EmbeddingConfig(),
+    this.voice = const VoiceConfig(),
     this.locale = 'system',
   });
 
@@ -28,6 +30,7 @@ class AppConfig {
         tools: const ToolsConfig(),
         knowledge: const KnowledgeConfig(),
         embedding: const EmbeddingConfig(),
+        voice: const VoiceConfig(),
         locale: 'system',
       );
 
@@ -51,6 +54,9 @@ class AppConfig {
             ? EmbeddingConfig.fromJson(
                 json['embedding'] as Map<String, dynamic>)
             : const EmbeddingConfig(),
+        voice: json['voice'] != null
+            ? VoiceConfig.fromJson(json['voice'] as Map<String, dynamic>)
+            : const VoiceConfig(),
         locale: json['locale'] as String? ?? 'system',
       );
 
@@ -60,6 +66,7 @@ class AppConfig {
         'tools': tools.toJson(),
         'knowledge': knowledge.toJson(),
         'embedding': embedding.toJson(),
+        'voice': voice.toJson(),
         'locale': locale,
       };
 
@@ -69,6 +76,7 @@ class AppConfig {
     ToolsConfig? tools,
     KnowledgeConfig? knowledge,
     EmbeddingConfig? embedding,
+    VoiceConfig? voice,
     String? locale,
   }) =>
       AppConfig(
@@ -77,6 +85,7 @@ class AppConfig {
         tools: tools ?? this.tools,
         knowledge: knowledge ?? this.knowledge,
         embedding: embedding ?? this.embedding,
+        voice: voice ?? this.voice,
         locale: locale ?? this.locale,
       );
 
@@ -233,7 +242,8 @@ class ToolsConfig {
 
 /// Embedding provider configuration.
 class EmbeddingConfig {
-  /// Provider name: 'gemini', 'openai', 'openrouter', '' (disabled).
+  /// Provider name: 'gemini', 'openai', 'openrouter', 'local' (on-device
+  /// EmbeddingGemma — no API key, dimensions fixed at 256), '' (disabled).
   final String provider;
 
   /// Model identifier (e.g. 'gemini-embedding-001').
@@ -353,4 +363,53 @@ class KnowledgeConfig {
         'it' => 'Italian',
         _ => 'English',
       };
+}
+
+/// Voice / hands-free configuration (U7 wake word).
+///
+/// All fields are NON-secret feature flags persisted in the config JSON
+/// (SharedPreferences) — never secure storage. Wake word is OFF by default:
+/// a non-viable wake word (failed spike S2, slow device, OEM that kills the
+/// mic FGS) must never degrade the rest of the app.
+class VoiceConfig {
+  /// Master opt-in for the wake word listener. OFF by default — turning it on
+  /// is what starts the dedicated microphone foreground service (only from
+  /// the app foreground; Android 14+ forbids background start of a
+  /// microphone-type FGS). When false, no mic service runs and no KWS model
+  /// is required: the app behaves exactly as if U7 did not exist.
+  final bool wakeWordEnabled;
+
+  /// Free-text wake keyword (open-vocabulary KWS). Empty → falls back to
+  /// [AppConstants.wakeWordDefaultKeyword] at listener init.
+  final String wakeWordKeyword;
+
+  const VoiceConfig({
+    this.wakeWordEnabled = false,
+    this.wakeWordKeyword = AppConstants.wakeWordDefaultKeyword,
+  });
+
+  /// The effective keyword (never empty).
+  String get effectiveKeyword => wakeWordKeyword.trim().isEmpty
+      ? AppConstants.wakeWordDefaultKeyword
+      : wakeWordKeyword.trim();
+
+  factory VoiceConfig.fromJson(Map<String, dynamic> json) => VoiceConfig(
+        wakeWordEnabled: json['wake_word_enabled'] as bool? ?? false,
+        wakeWordKeyword: json['wake_word_keyword'] as String? ??
+            AppConstants.wakeWordDefaultKeyword,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'wake_word_enabled': wakeWordEnabled,
+        'wake_word_keyword': wakeWordKeyword,
+      };
+
+  VoiceConfig copyWith({
+    bool? wakeWordEnabled,
+    String? wakeWordKeyword,
+  }) =>
+      VoiceConfig(
+        wakeWordEnabled: wakeWordEnabled ?? this.wakeWordEnabled,
+        wakeWordKeyword: wakeWordKeyword ?? this.wakeWordKeyword,
+      );
 }

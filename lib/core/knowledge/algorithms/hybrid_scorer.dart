@@ -10,6 +10,13 @@ import 'dart:math';
 ///
 /// Full mode weights: 0.30 BM25 + 0.30 vector + 0.25 activation + 0.15 decay
 /// Degraded mode (no embeddings): 0.55 BM25 + 0.30 activation + 0.15 decay
+///
+/// Embedding-space note (U3): all four signals are min-max normalized over
+/// the candidate set before fusion, so the weights themselves are agnostic
+/// to the cosine distribution of the embedding space in use. What IS
+/// distribution-sensitive is the candidate-pool admission threshold
+/// upstream ([AppConstants.knowledgeVectorSimilarityThreshold]) — see the
+/// recalibration note there for the 256-dim local space.
 class HybridScorer {
   // Full mode weights (with vector similarity)
   static const double _wBm25Full = 0.30;

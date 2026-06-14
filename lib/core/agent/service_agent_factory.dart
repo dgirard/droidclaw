@@ -6,15 +6,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/local/storage_service.dart';
 import '../../shared/constants.dart';
 import '../config/app_config.dart';
+import '../config/log_entry.dart';
+import '../services/app_logger.dart';
+import '../services/model_download_manager.dart';
 import '../knowledge/database/knowledge_graph_db.dart';
 import '../knowledge/services/entity_extractor.dart';
 import '../knowledge/services/entity_resolver.dart';
+import '../knowledge/services/episode_store.dart';
 import '../knowledge/services/ingestion_pipeline.dart';
 import '../knowledge/services/knowledge_service.dart';
 import '../providers/embedding_provider.dart';
 import '../providers/embedding_provider_factory.dart';
 import '../providers/provider_factory.dart';
-import '../session/isolate_persistence/hive_path_resolver.dart';
+import '../session/database/sessions_db_path.dart';
 import '../session/session_manager.dart';
 import '../skills/skill_loader.dart';
 import '../tools/datetime_tool.dart';
@@ -54,8 +58,9 @@ class ServiceAgentFactory {
   /// Create a fully-initialized AgentLoop.
   ///
   /// All parameters come from SharedPreferences (cached by the main isolate).
-  /// The Hive directory is derived from [workspacePath] by [SessionManager]
-  /// via `HivePathResolver`, so both isolates share the same session data.
+  /// The sessions.db directory is derived from [workspacePath] by
+  /// [SessionManager] via `SessionsDbPath`, so both isolates open their own
+  /// WAL connection on the same database file.
   static Future<AgentLoop> create({
     required SharedPreferences prefs,
     required String apiKey,
@@ -74,8 +79,10 @@ class ServiceAgentFactory {
     String embeddingApiBase = '',
     bool embeddingUseOwnKey = false,
   }) async {
-    // 1. Initialize Hive (plain Dart — no initFlutter): SessionManager
-    //    resolves the shared Hive directory from the workspace path.
+    // 1. Open the sessions database: SessionManager resolves the shared
+    //    sessions.db directory from the workspace path (and runs the
+    //    one-shot Hive→SQLite migration if this isolate is first — e.g.
+    //    autoRunOnBoot started the service before the app).
     final sessionManager = SessionManager();
     await sessionManager.init(workspacePath: workspacePath);
 
@@ -149,7 +156,7 @@ class ServiceAgentFactory {
     }
     if (!disabled.contains('proof_editor')) {
       final proofStorePath = p.join(
-          HivePathResolver.hiveDirFromWorkspace(workspacePath),
+          SessionsDbPath.dirFromWorkspace(workspacePath),
           'proof_documents.json');
       registry.register(ProofEditorTool(
         store: ProofDocumentStore(proofStorePath),
@@ -171,9 +178,38 @@ class ServiceAgentFactory {
     // - VolumeControlTool (MethodChannel registered on Activity FlutterEngine only)
     // - RadioTool (MediaSessionService requires Activity FlutterEngine)
 
-    // 4b. Embedding provider (pure HTTP — works in service isolate)
+    // 4b. Embedding provider. Cloud providers are pure HTTP and always work
+    // here. The 'local' provider needs the flutter_onnxruntime plugin, which
+    // is registered on the service FlutterEngine via GeneratedPluginRegistrant
+    // but is NOT documented to work there — so creation (and the disk check)
+    // is wrapped in try/catch with a null fallback: cron turns degrade to
+    // lexical-only KG search instead of failing. Note the ONNX session loads
+    // lazily, so a plugin failure can also surface at first embed() — those
+    // land in the existing degraded-retrieval paths.
     EmbeddingProvider? embeddingProviderInstance;
-    if (embeddingProvider.isNotEmpty) {
+    if (embeddingProvider == AppConstants.localEmbeddingProviderName) {
+      try {
+        final modelsRoot =
+            ModelDownloadManager.rootFromWorkspace(workspacePath);
+        const spec = ModelSpec.embeddingGemmaInt8;
+        if (ModelDownloadManager.isReadySync(
+            modelsRootDir: modelsRoot, spec: spec)) {
+          embeddingProviderInstance = EmbeddingProviderFactory.create(
+            providerName: embeddingProvider,
+            dimensions: embeddingDimensions,
+            localModelDir: p.join(modelsRoot, spec.id),
+          );
+        } else {
+          AppLogger.instance.warning(LogSource.service,
+              'Local embedding model not downloaded — KG search is '
+              'lexical-only in the service isolate');
+        }
+      } catch (e) {
+        AppLogger.instance.warning(LogSource.service,
+            'Local embedding provider unavailable in service isolate: $e');
+        embeddingProviderInstance = null;
+      }
+    } else if (embeddingProvider.isNotEmpty) {
       final embKey = embeddingUseOwnKey ? embeddingApiKey : apiKey;
       if (embKey != null && embKey.isNotEmpty) {
         embeddingProviderInstance = EmbeddingProviderFactory.create(
@@ -188,11 +224,16 @@ class ServiceAgentFactory {
     // 4c. Knowledge Graph tools (with optional vector search via embeddings)
     KnowledgeService? knowledgeService;
     IngestionPipeline? ingestionPipeline;
+    EpisodeStore? episodeStore;
     final kgEnabled = prefs.getBool(AppConstants.cachedKnowledgeEnabledKey) ?? false;
     if (kgEnabled) {
       try {
         final dbPath = p.join(workspacePath, AppConstants.knowledgeDbFilename);
         final kgDb = KnowledgeGraphDB(dbPath);
+        // Episodic memory (U4): the service isolate opens its own WAL
+        // connection, so episodes written by cron turns are visible to the
+        // main isolate (and vice versa).
+        episodeStore = EpisodeStore(kgDb);
         knowledgeService = KnowledgeService(
           db: kgDb,
           embeddingProvider: embeddingProviderInstance,
@@ -237,6 +278,7 @@ class ServiceAgentFactory {
         }
       } catch (_) {
         // KG init failed in service isolate — continue without it
+        episodeStore = null;
       }
     }
 
@@ -250,7 +292,7 @@ class ServiceAgentFactory {
     final memoryManager = MemoryManager(storageService);
     final skillLoader = SkillLoader(storageService);
     final proofStorePath = p.join(
-        HivePathResolver.hiveDirFromWorkspace(workspacePath),
+        SessionsDbPath.dirFromWorkspace(workspacePath),
         'proof_documents.json');
     final contextBuilder = ContextBuilder(
       memoryManager: memoryManager,
@@ -271,6 +313,7 @@ class ServiceAgentFactory {
       contextBuilder: contextBuilder,
       knowledgeService: knowledgeService,
       ingestionPipeline: ingestionPipeline,
+      episodeStore: episodeStore,
     );
   }
 }

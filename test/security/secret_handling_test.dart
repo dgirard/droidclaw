@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:drift/native.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:droidclaw/core/config/app_config.dart';
@@ -555,7 +554,8 @@ void main() {
       );
 
       final sessions = SessionManager();
-      await sessions.init();
+      await sessions.init(directory: hive.dir.path);
+      addTearDown(sessions.close);
       await sessions.save(sessions.getOrCreate('default'));
 
       var tracesCleared = false;
@@ -588,68 +588,78 @@ void main() {
       expect(logsCleared, isTrue);
     });
 
-    test('degraded sessions box (closed handle): wipeAll records the '
-        'sessions failure AND deletes the box files anyway', () async {
+    test('degraded sessions store (closed connections): wipeAll records '
+        'the sessions failure AND deletes the database files anyway',
+        () async {
       final hive = await HiveTestHarness.create();
       addTearDown(hive.dispose);
 
       final (cs, storage, _) = await buildStorage();
 
       final sessions = SessionManager();
-      await sessions.init();
+      await sessions.init(directory: hive.dir.path);
+      addTearDown(sessions.close);
       await sessions.save(sessions.getOrCreate('default'));
-      final boxFile = File('${hive.dir.path}/${SessionManager.boxName}.hive');
-      expect(boxFile.existsSync(), isTrue,
-          reason: 'precondition: the persisted box file exists on disk');
+      final dbFile =
+          File('${hive.dir.path}/${AppConstants.sessionsDbFilename}');
+      expect(dbFile.existsSync(), isTrue,
+          reason: 'precondition: the database file exists on disk');
+      // A leftover Hive backup from the U6 migration must be wiped too.
+      final hiveBackup = File(
+          '${hive.dir.path}/${SessionManager.boxName}.hive.backup');
+      await hiveBackup.writeAsString('legacy conversations');
 
-      // Degrade the manager: its handle is now closed (the reload-recovery
-      // end state), so deleteAllSessions cannot reach the on-disk records.
-      await Hive.close();
+      // Degrade the manager: its connections are closed (the wiped/
+      // degraded end state), so deleteAllSessions cannot reach the on-disk
+      // rows.
+      await sessions.close();
 
       final wiper = DataWiper(
         storage: storage,
         configStorage: cs,
         sessions: sessions,
-        sessionsBoxPath: '${hive.dir.path}/${SessionManager.boxName}',
+        sessionsDbPath: dbFile.path,
       );
 
       final failures = await wiper.wipeAll();
 
       expect(failures, contains('sessions'),
-          reason: 'the degraded box clear must be reported, not silently '
-              'counted as success');
+          reason: 'the degraded database clear must be reported, not '
+              'silently counted as success');
       // The file-level fallback still removed the conversations from disk.
-      expect(boxFile.existsSync(), isFalse);
-      expect(
-          File('${hive.dir.path}/${SessionManager.boxName}.lock').existsSync(),
-          isFalse);
+      expect(dbFile.existsSync(), isFalse);
+      expect(File('${dbFile.path}-wal').existsSync(), isFalse);
+      expect(hiveBackup.existsSync(), isFalse);
     });
 
-    test('healthy sessions box: wipeAll also removes the box file set '
-        '(no recoverable bytes left behind)', () async {
+    test('healthy sessions store: wipeAll also removes the database file '
+        'set (no recoverable bytes left behind)', () async {
       final hive = await HiveTestHarness.create();
       addTearDown(hive.dispose);
 
       final (cs, storage, _) = await buildStorage();
 
       final sessions = SessionManager();
-      await sessions.init();
+      await sessions.init(directory: hive.dir.path);
+      addTearDown(sessions.close);
       await sessions.save(sessions.getOrCreate('default'));
-      final boxFile = File('${hive.dir.path}/${SessionManager.boxName}.hive');
-      expect(boxFile.existsSync(), isTrue);
+      final dbFile =
+          File('${hive.dir.path}/${AppConstants.sessionsDbFilename}');
+      expect(dbFile.existsSync(), isTrue);
 
       final wiper = DataWiper(
         storage: storage,
         configStorage: cs,
         sessions: sessions,
-        sessionsBoxPath: '${hive.dir.path}/${SessionManager.boxName}',
+        sessionsDbPath: dbFile.path,
       );
 
       final failures = await wiper.wipeAll();
 
       expect(failures, isEmpty);
       expect(sessions.getAllSessionMetadata(), isEmpty);
-      expect(boxFile.existsSync(), isFalse);
+      expect(dbFile.existsSync(), isFalse);
+      expect(File('${dbFile.path}-wal').existsSync(), isFalse);
     });
 
     test('deletes the knowledge DB file when no service is open', () async {
@@ -759,7 +769,8 @@ void main() {
       final cs = ConfigStorage(storage);
 
       final sessions = SessionManager();
-      await sessions.init();
+      await sessions.init(directory: hive.dir.path);
+      addTearDown(sessions.close);
       await sessions.save(sessions.getOrCreate('default'));
 
       final wiper = DataWiper(

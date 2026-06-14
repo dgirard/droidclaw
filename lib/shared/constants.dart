@@ -45,10 +45,33 @@ class AppConstants {
   // Session
   static const String defaultSessionKey = 'default';
 
-  /// Reserved Hive key prefix for per-session metadata records in the
-  /// `sessions` box (lazy load: list/history screens read these instead of
-  /// decoding full message histories). Session keys must never start with it.
+  /// Reserved key prefix of the per-session metadata sidecar records in the
+  /// LEGACY `sessions` Hive box. Only read by the Hive→SQLite migrator (U6),
+  /// which skips these sidecars when copying session records. Session keys
+  /// must never start with it.
   static const String sessionMetaKeyPrefix = '__meta__:';
+
+  /// File name of the sessions SQLite database (U6 — successor of the Hive
+  /// `sessions` box). Lives in the directory the Hive box lived in
+  /// (the workspace parent = the app documents directory).
+  static const String sessionsDbFilename = 'sessions.db';
+
+  /// `app_state` key of the one-shot Hive→SQLite migration marker inside
+  /// sessions.db. Value [sessionsMigrationDone] once the copy is verified.
+  static const String sessionsMigrationMarkerKey = 'hive_to_sqlite_migration';
+
+  /// Marker value meaning the Hive→SQLite session migration completed and
+  /// was verified — sessions.db is the single source of truth.
+  static const String sessionsMigrationDone = 'done';
+
+  /// Suffix appended to the legacy Hive box files after a verified
+  /// migration (`sessions.hive` → `sessions.hive.backup`). Kept for 2-3
+  /// releases as a recovery escape hatch, then deleted in a follow-up.
+  static const String sessionsHiveBackupSuffix = '.backup';
+
+  /// Number of migrated sessions spot-checked (decode + content comparison
+  /// against the Hive source) before the migration marker is set.
+  static const int sessionsMigrationSpotCheckCount = 5;
 
   /// Max characters of message/summary text kept in a session metadata
   /// preview (the History screen itself truncates further for display).
@@ -97,7 +120,39 @@ class AppConstants {
 
   /// Minimum cosine similarity for an entity embedding to enter the
   /// retrieval candidate pool (vector path of [queryRelevant]).
+  ///
+  /// U3 calibration note: this value was tuned implicitly against the
+  /// 768-dim Gemini cosine distribution. The 256-dim MRL-truncated local
+  /// space (EmbeddingGemma) has a different similarity distribution, so it
+  /// may need on-device recalibration after the cutover. The trigger is the
+  /// "LOCAL EMBEDDING BENCHMARK VERDICT" log line emitted by the embedding
+  /// config screen: once the local space serves queries on a real KB,
+  /// compare golden-query recall against the cloud baseline and adjust here.
+  /// Deliberately NOT made space-aware yet — a per-space threshold map would
+  /// be speculative without on-device data.
   static const double knowledgeVectorSimilarityThreshold = 0.5;
+
+  /// Provenance marker stamped by the v3→v4 KG migration on embedding rows
+  /// written before per-row provenance existed. The SQL migration cannot
+  /// know the Dart-side embedding config, so legacy rows get this marker and
+  /// `embedding_dim = length(embedding) / 4` (Float32 LE — the blob byte
+  /// length is ground truth). The query guard treats the legacy space as the
+  /// best guess for "whatever provider was configured at migration time"
+  /// when it is the dominant space (see KnowledgeService.resolveQuerySpace).
+  static const String knowledgeLegacyEmbeddingModel = 'legacy:pre-v4';
+
+  /// Entities re-embedded per provider call during a backfill
+  /// (EmbeddingBackfillService) — one batched embed() per batch.
+  static const int knowledgeBackfillBatchSize = 32;
+
+  /// Max batches processed per backfill slice. A slice is one scheduled
+  /// charging-window wake (service isolate) or one UI progress step; the
+  /// job is resumable by construction, so slices can stay small.
+  static const int knowledgeBackfillSliceMaxBatches = 10;
+
+  /// Service-isolate check interval for the charger-gated backfill slice
+  /// (counter on the 1s onRepeatEvent tick, like KG decay/purge).
+  static const int knowledgeBackfillCheckIntervalSeconds = 1800;
 
   /// Number of top-ranked candidates used to seed spreading activation.
   static const int knowledgeActivationSeedCount = 5;
@@ -238,10 +293,261 @@ class AppConstants {
   static const double dedupFactMatchWeight = 0.6;
   static const double dedupFactKeyJaccardWeight = 0.4;
 
+  // Episodic memory (U4 — tool-result cache in the KG database)
+
+  /// Tool classification: cacheable read-only tools → TTL in seconds.
+  /// TTL is the EVICTION boundary by volatility; a served cache hit is always
+  /// annotated with its age so the LLM can judge staleness itself ("weather
+  /// from 40 min ago"). Tools absent from this map are NEVER cached: every
+  /// side-effecting tool (message, speak, open_app, set_alarm, notifications,
+  /// clipboard, volume_control, radio, proof_editor, dream, knowledge_store,
+  /// qr_generate, pick_image, ocr, subagent, file), `get_datetime` (trivial),
+  /// `get_location` (local sensor read, fast and free — and TraceRedactor's
+  /// phone pattern would redact the stored coordinates, making the cached
+  /// payload useless), and `kb_query`/`knowledge_search` (already the memory).
+  static const Map<String, int> episodeTtlSeconds = {
+    'weather': 3600, // 1h, geo-keyed
+    'get_transit': 1800, // 30min, geo-keyed
+    'get_directions': 1800, // 30min, geo-keyed
+    'geocode': 2592000, // 30d — addresses don't move
+    'get_address': 2592000, // 30d
+    'web_search': 43200, // 12h
+    'web_scrape': 86400, // 24h
+    'web_scrape_js': 86400, // 24h
+    'device_info': 604800, // 7d
+    'contacts': 86400, // 24h, summary-only (forUser, never forLLM bodies)
+    'calendar': 900, // 15min, summary-only
+  };
+
+  /// Tools whose cache key includes the device location cell in addition to
+  /// the args digest — otherwise "what's the weather?" after a train ride
+  /// answers for the departure city. No known cell → no caching
+  /// (correctness first).
+  static const Set<String> episodeGeoKeyedTools = {
+    'weather',
+    'get_transit',
+    'get_directions',
+  };
+
+  /// Tools whose episodes store ONLY the redacted `forUser` summary — the
+  /// structured `forLLM` bodies (full contact/event listings) are never
+  /// persisted.
+  static const Set<String> episodeSummaryOnlyTools = {'contacts', 'calendar'};
+
+  /// Decimal places kept on lat/lon for the episode location cell
+  /// (2 decimals ≈ 1.1 km).
+  static const int episodeLocationCellDecimals = 2;
+
+  /// Cap on the compressed-away conversation text sent to
+  /// `IngestionPipeline.extractAndStore` after a summarization (U4).
+  static const int episodeSummarizationIngestMaxChars = 8000;
+
   // Security: one-time wipe of cleartext secret mirrors that earlier versions
   // wrote to SharedPreferences and never cleared on key delete/rotate.
   static const String secretsCacheMigratedKey = 'secrets_cache_migrated_v1';
 
   // file tool: cap on a single write so the LLM cannot fill the workspace.
   static const int fileWriteMaxChars = 2000000;
+
+  // Voice narration (U1 — TTS for voice-initiated turns, main isolate only)
+
+  /// Max characters of a single narrated utterance (same cap as the speak
+  /// tool — Android TTS rejects longer input).
+  static const int ttsNarrationMaxChars = 5000;
+
+  /// Errors are spoken briefly: cap on narrated error text.
+  static const int ttsErrorNarrationMaxChars = 300;
+
+  /// TTS speech rate (matches the speak tool).
+  static const double ttsSpeechRate = 0.5;
+
+  /// Android TextToSpeech.QUEUE_ADD — if utterances ever overlap they queue
+  /// instead of cutting each other (VoiceNarrator already serializes them).
+  static const int ttsQueueModeAdd = 1;
+
+  /// App locale code → BCP-47 tag for the platform TTS engine.
+  static const Map<String, String> ttsLocaleTags = {
+    'en': 'en-US',
+    'fr': 'fr-FR',
+    'es': 'es-ES',
+    'de': 'de-DE',
+    'it': 'it-IT',
+  };
+
+  // Voice conversation mode (U5 — hands-free turn-taking)
+
+  /// Endpointing: silence after speech that ends a listen session.
+  static const Duration voiceListenPauseFor = Duration(seconds: 3);
+
+  /// Hard cap on a single STT listen session.
+  static const Duration voiceListenFor = Duration(seconds: 30);
+
+  /// Follow-up window after the spoken answer: silence for this long closes
+  /// the conversation silently (Alexa Follow-Up pattern — no reprompt).
+  static const Duration voiceFollowUpWindow = Duration(seconds: 7);
+
+  /// Empty/garbage STT sessions tolerated before conversation mode exits
+  /// with a visual fallback (first strike gets one spoken clarification).
+  static const int voiceMaxStrikes = 2;
+
+  /// Exit phrases per app locale code, matched (normalized: lowercased,
+  /// trimmed, trailing punctuation stripped, curly apostrophes straightened)
+  /// against the FULL final STT utterance before it is sent to the agent.
+  ///
+  /// These are MATCHING TOKENS, not display strings — they live here instead
+  /// of the ARB files on purpose: localizers must never "translate" them
+  /// independently of what the speech recognizer actually produces.
+  static const Map<String, List<String>> voiceExitPhrases = {
+    'fr': ['stop', 'merci', "c'est tout", 'termine', 'terminé'],
+    'en': ['stop', 'thanks', 'thank you', "that's all"],
+    'es': ['stop', 'para', 'gracias', 'eso es todo', 'termina'],
+    'de': ['stopp', 'stop', 'danke', 'das ist alles', 'beenden'],
+    'it': ['stop', 'grazie', 'è tutto', 'basta così', 'termina'],
+  };
+
+  // Local embedding provider (U2 — EmbeddingGemma 308M ONNX, on-device)
+
+  /// EmbeddingConfig.provider value selecting the on-device provider.
+  static const String localEmbeddingProviderName = 'local';
+
+  /// Provenance id stored alongside vectors produced by the local provider.
+  static const String localEmbeddingProviderId =
+      'local:embeddinggemma-300m-int8';
+
+  /// Model identifier shown in config (also the on-disk model directory name).
+  static const String localEmbeddingModelId = 'embeddinggemma-300m-int8';
+
+  /// MRL-truncated output dimensionality of the local provider. EmbeddingGemma
+  /// natively outputs 768 dims; Matryoshka truncation to 256 + L2 renorm is
+  /// the documented efficient configuration (HF model card).
+  static const int localEmbeddingDimensions = 256;
+
+  /// Max token ids fed to the encoder (EmbeddingGemma context length).
+  static const int localEmbeddingMaxTokens = 2048;
+
+  /// EmbeddingGemma prompt prefixes (HF model card,
+  /// onnx-community/embeddinggemma-300m-ONNX "Usage" section):
+  /// queries use "task: search result | query: ", documents use
+  /// "title: none | text: ".
+  static const String localEmbeddingQueryPrefix =
+      'task: search result | query: ';
+  static const String localEmbeddingDocumentPrefix = 'title: none | text: ';
+
+  /// Latency thresholds (ms, median over the integrated benchmark) deciding
+  /// the verdict for the local provider on this device:
+  /// < [localEmbeddingLatencyGoodMs] → fast enough to be a default;
+  /// < [localEmbeddingLatencyAcceptableMs] → acceptable as opt-in;
+  /// above → offline fallback only.
+  static const int localEmbeddingLatencyGoodMs = 150;
+  static const int localEmbeddingLatencyAcceptableMs = 300;
+
+  /// Integrated benchmark: warmup runs (excluded) + measured runs (median).
+  static const int localEmbeddingBenchmarkWarmupRuns = 3;
+  static const int localEmbeddingBenchmarkRuns = 20;
+
+  // Model download manager (large cached assets, shared with future models)
+
+  /// Root directory name for downloaded models. Lives NEXT TO the workspace
+  /// (in the app documents dir), not inside it: DataWiper wipes workspace
+  /// contents, and models are cached assets, not user data.
+  static const String modelsDirName = 'droidclaw_models';
+
+  /// SHA-256 placeholder marker: verification runs in log-only warn mode and
+  /// prints the computed hash so it can be pinned here after the first
+  /// verified download. A real (pinned) hash mismatch rejects the file.
+  static const String modelSha256Placeholder =
+      'TODO-pin-on-first-verified-download';
+
+  // EmbeddingGemma int8 ONNX export — onnx-community/embeddinggemma-300m-ONNX.
+  // int8 (model_quantized) preferred per HF discussion #15 (q4 exports target
+  // transformers.js and may not load on ORT mobile); q4f16 is the alternate.
+  static const String embeddingGemmaRepoBase =
+      'https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main';
+  static const String embeddingGemmaModelFilename = 'model_quantized.onnx';
+  static const String embeddingGemmaModelDataFilename =
+      'model_quantized.onnx_data';
+  static const String embeddingGemmaTokenizerFilename = 'tokenizer.json';
+  static const String embeddingGemmaModelUrl =
+      '$embeddingGemmaRepoBase/onnx/model_quantized.onnx';
+  static const String embeddingGemmaModelDataUrl =
+      '$embeddingGemmaRepoBase/onnx/model_quantized.onnx_data';
+  static const String embeddingGemmaTokenizerUrl =
+      '$embeddingGemmaRepoBase/tokenizer.json';
+
+  // Exact sizes from the HF repo tree (used for download progress weighting
+  // and the consent text).
+  static const int embeddingGemmaModelBytes = 567874;
+  static const int embeddingGemmaModelDataBytes = 308890624;
+  static const int embeddingGemmaTokenizerBytes = 20323312;
+  static const int embeddingGemmaTotalBytes = embeddingGemmaModelBytes +
+      embeddingGemmaModelDataBytes +
+      embeddingGemmaTokenizerBytes;
+
+  // SHA-256 hashes — log-only until pinned (see modelSha256Placeholder).
+  static const String embeddingGemmaModelSha256 = modelSha256Placeholder;
+  static const String embeddingGemmaModelDataSha256 = modelSha256Placeholder;
+  static const String embeddingGemmaTokenizerSha256 = modelSha256Placeholder;
+
+  // Wake word (U7 — sherpa_onnx KeywordSpotter, gated on spike S2)
+
+  /// SharedPreferences key mirroring [VoiceConfig.wakeWordEnabled] for the
+  /// service isolate (NOT a secret — a feature flag, mirrored so the
+  /// background task handler can decide whether to host the KWS listener
+  /// without reading the JSON config blob). Cleartext is fine.
+  static const String cachedWakeWordEnabledKey = 'cached_wake_word_enabled';
+
+  /// SharedPreferences key mirroring [VoiceConfig.wakeWordKeyword].
+  static const String cachedWakeWordKeywordKey = 'cached_wake_word_keyword';
+
+  /// Default wake keyword (free-text, user-editable). Open-vocabulary KWS, so
+  /// any short phrase works; this is the product default ("Hey Claw").
+  static const String wakeWordDefaultKeyword = 'hey claw';
+
+  /// PCM sample rate the KeywordSpotter expects (sherpa streaming models are
+  /// trained at 16 kHz mono int16).
+  static const int wakeWordSampleRate = 16000;
+
+  /// Audio frame size (samples) fed to the spotter per accept-waveform call.
+  /// 100 ms at 16 kHz — small enough for low detection latency, large enough
+  /// to keep the FFI call rate modest.
+  static const int wakeWordFrameSamples = 1600;
+
+  /// Battery budget gate for the spike verdict: if the 24 h duty-cycle costs
+  /// MORE than this percentage of battery per day, the wake word fails the
+  /// spike and falls back to "screen-on only" mode or is abandoned
+  /// (documented in tool/SPIKE_WAKE_WORD.md).
+  static const double wakeWordMaxBatteryPctPerDay = 3.0;
+
+  /// On-device KWS model (sherpa-onnx open-vocabulary keyword spotter). The
+  /// files MUST live in the same directory (the encoder/decoder/joiner refer
+  /// to each other and to tokens.txt by sibling filename). URLs and hashes
+  /// are pinned once the spike picks the final model; until then the manager
+  /// runs in log-only hash mode (modelSha256Placeholder).
+  static const String wakeWordModelId = 'sherpa-kws-zipformer-en';
+  static const String wakeWordModelRepoBase =
+      'https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models';
+
+  static const String wakeWordEncoderFilename =
+      'encoder-epoch-12-avg-2-chunk-16-left-64.onnx';
+  static const String wakeWordDecoderFilename =
+      'decoder-epoch-12-avg-2-chunk-16-left-64.onnx';
+  static const String wakeWordJoinerFilename =
+      'joiner-epoch-12-avg-2-chunk-16-left-64.onnx';
+  static const String wakeWordTokensFilename = 'tokens.txt';
+
+  /// Placeholder asset sizes (progress weighting only — refined at spike).
+  static const int wakeWordEncoderBytes = 13107200;
+  static const int wakeWordDecoderBytes = 2097152;
+  static const int wakeWordJoinerBytes = 9437184;
+  static const int wakeWordTokensBytes = 4096;
+  static const int wakeWordTotalBytes = wakeWordEncoderBytes +
+      wakeWordDecoderBytes +
+      wakeWordJoinerBytes +
+      wakeWordTokensBytes;
+
+  // SHA-256 hashes — log-only until pinned by the spike (modelSha256Placeholder).
+  static const String wakeWordEncoderSha256 = modelSha256Placeholder;
+  static const String wakeWordDecoderSha256 = modelSha256Placeholder;
+  static const String wakeWordJoinerSha256 = modelSha256Placeholder;
+  static const String wakeWordTokensSha256 = modelSha256Placeholder;
 }

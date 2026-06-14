@@ -1,6 +1,7 @@
 import '../../shared/constants.dart';
 import 'embedding_provider.dart';
 import 'gemini_embedding_provider.dart';
+import 'local_embedding_provider.dart';
 import 'openai_embedding_provider.dart';
 
 /// Factory to create embedding providers by name.
@@ -8,13 +9,33 @@ class EmbeddingProviderFactory {
   EmbeddingProviderFactory._();
 
   /// Create an embedding provider from config.
+  ///
+  /// [apiKey] is required for cloud providers; the `'local'` provider needs
+  /// [localModelDir] (directory of the downloaded EmbeddingGemma files)
+  /// instead.
   static EmbeddingProvider create({
     required String providerName,
-    required String apiKey,
+    String? apiKey,
     String? apiBase,
     int dimensions = 768,
+    String? localModelDir,
   }) {
     final lower = providerName.toLowerCase();
+
+    if (lower == AppConstants.localEmbeddingProviderName) {
+      if (localModelDir == null || localModelDir.isEmpty) {
+        throw ArgumentError(
+            'localModelDir is required for the local embedding provider');
+      }
+      return LocalEmbeddingProvider(
+        modelDir: localModelDir,
+        dimensions: dimensions,
+      );
+    }
+
+    if (apiKey == null || apiKey.isEmpty) {
+      throw ArgumentError('apiKey is required for provider "$providerName"');
+    }
 
     if (lower == 'gemini') {
       return GeminiEmbeddingProvider(
@@ -47,6 +68,8 @@ class EmbeddingProviderFactory {
         'openai' => 'text-embedding-3-small',
         'openrouter' => 'openai/text-embedding-3-small',
         'together' => 'togethercomputer/m2-bert-80M-8k-retrieval',
+        AppConstants.localEmbeddingProviderName =>
+          AppConstants.localEmbeddingModelId,
         _ => 'text-embedding-3-small',
       };
 }

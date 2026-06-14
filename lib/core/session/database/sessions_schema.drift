@@ -1,0 +1,35 @@
+-- Sessions store (U6 — Hive → SQLite migration).
+--
+-- One row per conversation session. The full Session JSON is stored verbatim
+-- in `payload` (mirroring the Hive value model — a deliberately low-risk
+-- first migration); the remaining columns are the metadata the History/cron
+-- list screens need, computed on every save so startup never decodes a
+-- message history (lazy load, U13). The old Hive `__meta__:` sidecar records
+-- became these columns.
+-- NOTE: the PK column is `session_key`, not `key` — drift's codegen
+-- silently drops columns named `key` (same reason the KG table uses
+-- `fact_key`).
+CREATE TABLE sessions (
+  session_key                TEXT    NOT NULL PRIMARY KEY,
+  -- Full Session JSON (Session.toJson). Single source of message history.
+  payload                    TEXT    NOT NULL,
+  -- Metadata columns (SessionMetadata) — kept in sync with payload by
+  -- SessionManager.save (one UPSERT writes both).
+  created                    INTEGER NOT NULL,
+  updated                    INTEGER NOT NULL,
+  message_count              INTEGER NOT NULL DEFAULT 0,
+  conversation_message_count INTEGER NOT NULL DEFAULT 0,
+  preview                    TEXT,
+  summary_preview            TEXT
+) AS SessionRow;
+
+CREATE INDEX idx_sessions_updated ON sessions(updated DESC);
+
+-- Tiny key/value table for database-scoped state. Today it only holds the
+-- one-shot Hive→SQLite migration marker (AppConstants.sessionsMigrationMarkerKey)
+-- — the SQLite-transactional race guard between the two FlutterEngines
+-- (a SharedPreferences flag is not atomic between them).
+CREATE TABLE app_state (
+  state_key TEXT NOT NULL PRIMARY KEY,
+  value     TEXT NOT NULL
+) AS AppStateRow;

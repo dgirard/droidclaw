@@ -11,13 +11,18 @@ import '../core/config/config_storage.dart';
 import '../core/knowledge/database/knowledge_graph_db.dart';
 import '../core/knowledge/services/entity_extractor.dart';
 import '../core/knowledge/services/entity_resolver.dart';
+import '../core/knowledge/services/episode_store.dart';
 import '../core/knowledge/services/ingestion_pipeline.dart';
 import '../core/knowledge/services/kb_maintenance_service.dart';
 import '../core/knowledge/services/knowledge_service.dart';
 import '../core/providers/embedding_provider.dart';
 import '../core/providers/embedding_provider_factory.dart';
+import '../core/config/log_entry.dart';
 import '../core/providers/llm_provider.dart';
 import '../core/providers/provider_factory.dart';
+import '../core/services/app_logger.dart';
+import '../core/services/model_download_manager.dart';
+import '../core/services/voice_narrator.dart';
 import '../core/session/session_manager.dart';
 import '../core/tools/knowledge_query_tool.dart';
 import '../core/tools/knowledge_search_tool.dart';
@@ -83,12 +88,26 @@ class AppConfigNotifier extends Notifier<AppConfig> {
   void update(AppConfig config) => state = config;
 }
 
-/// Session manager — initialized asynchronously (opens Hive box).
+/// Session manager — initialized asynchronously (opens sessions.db and runs
+/// the one-shot Hive→SQLite migration when needed). The workspace path
+/// gives the SAME directory derivation as the service isolate
+/// (single-source, see SessionsDbPath), so both FlutterEngines open the
+/// same database file.
 final sessionManagerProvider = FutureProvider<SessionManager>((ref) async {
+  final workspacePath = await ref.watch(storageServiceProvider).workspacePath;
   final manager = SessionManager();
-  await manager.init();
+  await manager.init(workspacePath: workspacePath);
   ref.onDispose(() => manager.flush());
   return manager;
+});
+
+/// Voice narrator — speaks agent output for voice-initiated turns (U1).
+/// Main isolate only; lives for the app lifetime so the TTS engine is
+/// initialized once. Tests override it with a fake [TtsEngine].
+final voiceNarratorProvider = Provider<VoiceNarrator>((ref) {
+  final narrator = VoiceNarrator(engine: FlutterTtsEngine());
+  ref.onDispose(narrator.dispose);
+  return narrator;
 });
 
 /// Memory manager.
@@ -312,12 +331,47 @@ final llmProviderProvider = FutureProvider<LLMProvider?>((ref) async {
   );
 });
 
-/// Embedding provider — created from embedding config + API key.
-/// Returns null when no embedding provider is configured.
+/// Model download manager — large cached assets (EmbeddingGemma, future
+/// models). Root lives NEXT TO the workspace so DataWiper never touches it.
+final modelDownloadManagerProvider =
+    FutureProvider<ModelDownloadManager>((ref) async {
+  final storage = ref.watch(storageServiceProvider);
+  final workspacePath = await storage.workspacePath;
+  final manager = ModelDownloadManager(
+    modelsRootDir: ModelDownloadManager.rootFromWorkspace(workspacePath),
+  );
+  ref.onDispose(manager.dispose);
+  return manager;
+});
+
+/// Embedding provider — created from embedding config + API key (cloud) or
+/// the downloaded on-device model ('local').
+/// Returns null when no embedding provider is configured, or when the local
+/// model is not downloaded yet (state is surfaced in the embedding settings
+/// screen — never silently broken at query time).
 final embeddingProviderProvider =
     FutureProvider<EmbeddingProvider?>((ref) async {
   final config = ref.watch(appConfigProvider);
   if (config.embedding.provider.isEmpty) return null;
+
+  if (config.embedding.provider == AppConstants.localEmbeddingProviderName) {
+    final manager = await ref.watch(modelDownloadManagerProvider.future);
+    const spec = ModelSpec.embeddingGemmaInt8;
+    if (!await manager.isReady(spec)) {
+      AppLogger.instance.warning(
+          LogSource.app,
+          'Embedding provider is "local" but the model is not downloaded — '
+          'semantic search disabled (Settings → Embeddings to download)');
+      return null;
+    }
+    final provider = EmbeddingProviderFactory.create(
+      providerName: config.embedding.provider,
+      dimensions: config.embedding.dimensions,
+      localModelDir: manager.modelDir(spec),
+    );
+    ref.onDispose(() => provider.dispose());
+    return provider;
+  }
 
   final configStorage = ref.read(configStorageProvider);
   final String? apiKey;
@@ -408,6 +462,12 @@ final agentLoopProvider = FutureProvider<AgentLoop?>((ref) async {
       ? await ref.watch(ingestionPipelineProvider.future)
       : null;
 
+  // Episodic memory (U4) — lives in the KG database, so it follows the same
+  // enabled/disabled switch.
+  final kgDbForEpisodes = await ref.watch(knowledgeGraphDbProvider.future);
+  final episodeStore =
+      kgDbForEpisodes != null ? EpisodeStore(kgDbForEpisodes) : null;
+
   final agentLoop = AgentLoop(
     provider: provider,
     config: config,
@@ -416,6 +476,7 @@ final agentLoopProvider = FutureProvider<AgentLoop?>((ref) async {
     contextBuilder: contextBuilder,
     knowledgeService: kgService2,
     ingestionPipeline: ingestionPipeline,
+    episodeStore: episodeStore,
   );
 
   // Wire SubagentTool executor: creates a fresh session, processes the task,
